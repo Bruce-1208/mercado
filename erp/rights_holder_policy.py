@@ -2,6 +2,7 @@
 from erp import mercadolibre_collection_store as products
 from erp import mercadolibre_store_link_store as links
 from erp.short_transaction import run as short_transaction
+from erp import product_title_index
 
 
 def lock_matching_products(cursor, organization_key, title, fields):
@@ -13,7 +14,19 @@ def lock_matching_products(cursor, organization_key, title, fields):
           for field in ("title_es", "title_pt")],
     ])
     scope = (organization_key, title, title, title)
-    cursor.execute(f"SELECT id FROM `{products.PRODUCT_TABLE}` WHERE organization_key=%s AND ({predicate})", scope)
+    if product_title_index.available(cursor):
+        # Hashes only select candidates. The locked read below still compares
+        # every full title byte-for-byte, including translation and scope checks.
+        branches = [
+            f"SELECT id FROM `{products.PRODUCT_TABLE}` FORCE INDEX (`{index}`) "
+            f"WHERE organization_key=%s AND `{column}`=UNHEX(MD5(%s))"
+            for index, column in zip(product_title_index.INDEXES, product_title_index.COLUMNS)
+        ]
+        cursor.execute(' UNION ALL '.join(branches), (organization_key, title) * 3)
+    else:
+        # Older installations remain compatible until the explicit online
+        # migration is applied; never leave runaway scans after socket timeout.
+        cursor.execute(f"SELECT /*+ MAX_EXECUTION_TIME(10000) */ id FROM `{products.PRODUCT_TABLE}` WHERE organization_key=%s AND ({predicate})", scope)
     ids = sorted({row['id'] for row in cursor.fetchall() or []})
     if not ids:
         return []
@@ -47,7 +60,10 @@ def mark_products_infringing(title, *, organization_key="wuhan-zeshun", connecti
         connection.commit()
         return short_transaction(connection, update)
     except BaseException:
-        connection.rollback()
+        try:
+            connection.rollback()
+        except Exception:
+            pass  # A broken socket must not replace the original query error.
         raise
     finally:
         connection.close()
@@ -58,12 +74,16 @@ def same_title_links(title, organization_key, *, connection_factory=None):
     try:
         with connection.cursor() as cursor:
             links.ensure_store_link_table(cursor)
+            indexed = product_title_index.links_available(cursor)
+            index = f"FORCE INDEX (`{product_title_index.LINK_INDEX}`) " if indexed else ""
+            candidate = "links.`rights_title_hash`=UNHEX(MD5(%s)) AND " if indexed else ""
             cursor.execute(
-                f"SELECT links.* FROM `{links.STORE_LINK_TABLE}` AS links "
+                f"SELECT /*+ MAX_EXECUTION_TIME(10000) */ links.*, tokens.`enabled` AS `store_enabled` "
+                f"FROM `{links.STORE_LINK_TABLE}` AS links {index}"
                 "INNER JOIN `mercado_store_tokens` AS tokens ON tokens.`id` = links.`token_id` "
-                "WHERE BINARY TRIM(links.`title`) = BINARY %s "
+                f"WHERE {candidate}BINARY TRIM(links.`title`) = BINARY %s "
                 "AND COALESCE(NULLIF(NULLIF(tokens.`organization_key`, 'default'), ''), 'wuhan-zeshun') = %s "
-                "ORDER BY links.`token_id`, links.`id`", (title, organization_key),
+                "ORDER BY links.`token_id`, links.`id`", ((title,) if indexed else ()) + (title, organization_key),
             )
             return list(cursor.fetchall() or [])
     finally:

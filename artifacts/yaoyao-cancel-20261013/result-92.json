@@ -1,0 +1,38 @@
+{
+  "id": 92,
+  "name": "遥遥领先16",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3632853016",
+      "before": 89,
+      "local_id": 730,
+      "jobs": [
+        "893b02795c4a4e94b9595fca40ab4a51"
+      ],
+      "remaining": 40
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3632853016",
+      "before": 0,
+      "local_id": 1352,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site": "MLB",
+      "seller_id": "3632853018",
+      "before": 0,
+      "local_id": 1353,
+      "jobs": [],
+      "remaining": 0
+    }
+  ]
+}

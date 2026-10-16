@@ -1,0 +1,631 @@
+[
+  {
+    "id": 122,
+    "name": "遥遥领先10号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 85,
+    "name": "遥遥领先11号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 86,
+    "name": "遥遥领先12号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 87,
+    "name": "遥遥领先13号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 88,
+    "name": "遥遥领先14号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 91,
+    "name": "遥遥领先15",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 92,
+    "name": "遥遥领先16",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 93,
+    "name": "遥遥领先17",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 63,
+    "name": "遥遥领先1号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 65,
+    "name": "遥遥领先2号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 68,
+    "name": "遥遥领先3号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 71,
+    "name": "遥遥领先4号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 120,
+    "name": "遥遥领先5号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 121,
+    "name": "遥遥领先6号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 81,
+    "name": "遥遥领先7号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 82,
+    "name": "遥遥领先8号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  },
+  {
+    "id": 83,
+    "name": "遥遥领先9号店",
+    "enabled": true,
+    "sites": [
+      {
+        "site_id": "MLM",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLB",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLC",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MCO",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLA",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      },
+      {
+        "site_id": "MLU",
+        "salesperson": "管理员",
+        "group_name": "遥遥领先"
+      }
+    ]
+  }
+]

@@ -1,0 +1,409 @@
+[
+  {
+    "page": "account_billing",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "account_billing-view-0",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "account_billing-view-1",
+    "width": 320,
+    "fields": [
+      {
+        "id": "print-wallet-record-order",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 90
+      },
+      {
+        "id": "print-wallet-record-date-from",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 266
+      },
+      {
+        "id": "print-wallet-record-date-to",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 266
+      },
+      {
+        "id": "print-wallet-record-printer",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 266
+      },
+      {
+        "id": "print-wallet-record-kind",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 266
+      }
+    ]
+  },
+  {
+    "page": "account_profile",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "ai_billing",
+    "width": 320,
+    "fields": [
+      {
+        "id": "ai-billing-keyword",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 150
+      },
+      {
+        "id": "ai-billing-start-date",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 262
+      },
+      {
+        "id": "ai-billing-end-date",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 262
+      },
+      {
+        "id": "ai-billing-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 262
+      }
+    ]
+  },
+  {
+    "page": "ai_video_details",
+    "width": 320,
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 112
+      },
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 268
+      },
+      {
+        "id": "",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 268
+      },
+      {
+        "id": "",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 268
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price",
+    "width": 320,
+    "fields": [
+      {
+        "id": "task-scope",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "all",
+        "width": 104
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-view-0",
+    "width": 320,
+    "fields": [
+      {
+        "id": "task-scope",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "all",
+        "width": 104
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-view-1",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "ai_weight_price-view-2",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "ai_weight_price-view-3",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "automation_center",
+    "width": 320,
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 146
+      },
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 258
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 258
+      }
+    ]
+  },
+  {
+    "page": "clearance_alerts",
+    "width": 320,
+    "fields": [
+      {
+        "id": "ca-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 88
+      },
+      {
+        "id": "ca-store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 266
+      }
+    ]
+  },
+  {
+    "page": "employee_tasks",
+    "width": 320,
+    "fields": [
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "active",
+        "width": 224
+      }
+    ]
+  },
+  {
+    "page": "infraction_dashboard",
+    "width": 320,
+    "fields": [
+      {
+        "id": "search-input",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 150
+      },
+      {
+        "id": "days-select",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "30",
+        "width": 262
+      }
+    ]
+  },
+  {
+    "page": "integration_settings",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "login",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "mercado_action_center",
+    "width": 320,
+    "fields": [
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "active",
+        "width": 224
+      }
+    ]
+  },
+  {
+    "page": "mercado_collection_detail",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "mercado_promotions",
+    "width": 320,
+    "fields": [
+      {
+        "id": "searchFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 150
+      },
+      {
+        "id": "storeTrigger",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 262
+      },
+      {
+        "id": "salespersonFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 262
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-view-0",
+    "width": 320,
+    "fields": [
+      {
+        "id": "searchFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 150
+      },
+      {
+        "id": "storeTrigger",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 262
+      },
+      {
+        "id": "salespersonFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 262
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-view-1",
+    "width": 320,
+    "fields": [
+      {
+        "id": "itemProductFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 234
+      },
+      {
+        "id": "itemIdFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 234
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-view-2",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "price_competition",
+    "width": 320,
+    "fields": [
+      {
+        "id": "search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 150
+      },
+      {
+        "id": "store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 262
+      }
+    ]
+  },
+  {
+    "page": "print_wallet",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "product_diagnosis",
+    "width": 320,
+    "fields": [
+      {
+        "id": "pd-search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 150
+      },
+      {
+        "id": "pd-store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 262
+      }
+    ]
+  },
+  {
+    "page": "register",
+    "width": 320,
+    "fields": []
+  },
+  {
+    "page": "size_charts",
+    "width": 320,
+    "fields": []
+  }
+]

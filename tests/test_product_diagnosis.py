@@ -86,6 +86,50 @@ def test_user_product_uses_new_resource_and_local_locale():
     assert client.calls[-1][2]["params"] == {"locale": "es_MX"}
 
 
+@pytest.mark.parametrize("value,expected_status", [(100, "ok"), (0, "ok"), (-1, "no_data")])
+def test_user_product_array_matches_up_identity(value, expected_status):
+    client = Client({
+        "/marketplace/items/MLM1": {"id": "MLM1", "status": "active", "available_quantity": 3, "user_product_id": "MLMU25"},
+        "/item/MLM1/performance": {"score": 95},
+        "/marketplace/user_products/MLMU25/purchase_experience": [
+            {"up_id": "MLBU25", "reputation": {"value": 30, "color": "red"}},
+            {"up_id": "MLMU25", "item_id": "MLM2", "reputation": {"value": 30, "color": "red"}},
+            {"up_id": "MLMU25", "reputation": {"value": value, "color": "green"}},
+        ],
+    })
+    row = service.collect_product(client, base_item(), {})
+    assert row["sources"]["experience"]["status"] == expected_status
+    assert row["experience_score"] == (value if value >= 0 else None)
+    assert not row["issues"]
+
+
+def test_user_product_array_never_uses_another_products_score():
+    client = Client({
+        "/marketplace/items/MLM1": {"id": "MLM1", "status": "active", "available_quantity": 3, "user_product_id": "MLMU25"},
+        "/item/MLM1/performance": {"score": 95},
+        "/marketplace/user_products/MLMU25/purchase_experience": [
+            {"up_id": "MLMU26", "reputation": {"value": 100, "color": "green"}},
+        ],
+    })
+    row = service.collect_product(client, base_item(), {})
+    assert row["experience_score"] is None
+    assert row["risk"] == "pending"
+
+
+@pytest.mark.parametrize("error,status,message", [
+    ("失败 (404): Not found entity: User Product performance not found", "no_data", "平台尚未生成此商品的刊登质量评分"),
+    ("失败 (HTTP 404): not_found", "no_data", "平台尚未生成此商品的刊登质量评分"),
+    ("失败 (400): Entity not calculated: Product items are not supported", "unsupported", "此商品模型不支持该接口"),
+    ("失败 (HTTP 400): Entity not calculated: Product items are not supported", "unsupported", "此商品模型不支持该接口"),
+    ("失败 (HTTP 403): denied", "restricted", "店铺模式或应用权限不支持此接口"),
+    ("access token 已失效，且未配置完整的 refresh token/client id/client secret", "error", "店铺授权已失效，请刷新授权后重新诊断"),
+])
+def test_actual_api_errors_keep_specific_safe_reason(error, status, message):
+    path = "/item/MLM1/performance"
+    client = Client({path: RuntimeError(error + " SECRET")})
+    assert service._read(client, path) == {"status": status, "message": message}
+
+
 def test_legacy_experience_selects_exact_local_item_and_keeps_sample_insufficiency():
     client = Client({"/marketplace/items/MLM1": {"id": "MLM1", "status": "active", "cbt_item_id": "CBT10"},
         "/item/MLM1/performance": {"score": 80},
@@ -177,6 +221,26 @@ def test_worker_resumes_without_skipping_items_and_fails_closed_for_revoked_stor
     service.run_scan(store.next_run(), store)
     assert store.runs([1])[0]["status"] == "failed"
     assert store.list_page([1])["total"] == 2
+
+
+def test_long_scan_renews_expiring_token_before_next_product(tmp_path, monkeypatch):
+    from bit import clearance_sources, sync_capacity
+    store = DiagnosisStore(tmp_path / "diagnosis.sqlite3")
+    store.create_run([{"token_id": 1}], "operator")
+    monkeypatch.setattr(service, "current_stores", lambda ids: {1: {"id": 1}})
+    clients = iter([("old", {"expires_at": datetime.now() - timedelta(minutes=1)}),
+                    ("renewed", {"expires_at": datetime.now() + timedelta(hours=6)})])
+    monkeypatch.setattr(clearance_sources, "_client_for_store", lambda token: next(clients))
+    monkeypatch.setattr(service, "load_links", lambda *args: iter([base_item(1), base_item(2)]))
+    used = []
+    def collect(client, row, summary):
+        used.append(client)
+        return evaluate(row, good_sources())
+    monkeypatch.setattr(service, "collect_product", collect)
+    monkeypatch.setattr(sync_capacity, "run_store", lambda name, token, action: action())
+    service.run_scan(store.next_run(), store)
+    assert used == ["renewed", "renewed"]
+    assert store.runs([1])[0]["status"] == "succeeded"
 
 
 def test_today_task_idempotency_and_internal_deadline(tmp_path, monkeypatch):

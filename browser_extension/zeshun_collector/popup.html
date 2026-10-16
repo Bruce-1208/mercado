@@ -13,7 +13,7 @@
       <h1>泽顺插件</h1>
       <p>商品采集工作台</p>
     </div>
-      <span class="version">v1.8.77</span>
+      <span class="version">v1.8.94</span>
   </header>
   <main>
     <section id="update-notice" class="update-notice" role="status" hidden>
@@ -280,13 +280,18 @@
         <select id="purchase-order-status"><option value="">全部泽顺订单状态</option><optgroup label="找货"><option value="@找货">全部找货</option><option value="找货-没汇总">找货-没汇总</option><option value="找货-已采购">找货-已采购</option><option value="找货-待确定">找货-待确定</option></optgroup><optgroup label="审核"><option value="@审核">全部审核</option><option value="审核-待审核">审核-待审核</option><option value="审核-已审核">审核-已审核</option></optgroup><optgroup label="转运"><option value="@转运">全部转运</option><option value="转运-待收货">转运-待收货</option><option value="转运-待出库">转运-待出库</option><option value="转运-已出库">转运-已出库</option><option value="转运-待退回">转运-待退回</option></optgroup><optgroup label="待发"><option value="@待发">全部待发</option><option value="待发">待发</option></optgroup><optgroup label="已发"><option value="@已发">全部已发</option><option value="已发-在途中">已发-在途中</option><option value="已发-异常">已发-异常</option></optgroup><optgroup label="问题"><option value="@问题">全部问题</option><option value="问题-验货异常">问题-验货异常</option><option value="问题-物流退件">问题-物流退件</option><option value="问题-亏损超重">问题-亏损超重</option></optgroup><optgroup label="交付"><option value="@交付">全部交付</option><option value="交付">交付</option></optgroup><optgroup label="取消"><option value="@取消">全部取消</option><option value="取消-发货前">取消-发货前</option><option value="取消-发货后">取消-发货后</option></optgroup></select>
         <label for="purchase-platform">采购平台</label>
         <select id="purchase-platform"><option value="1688">1688</option><option value="taobao">淘宝 / 天猫</option><option value="pdd">拼多多</option><option value="xianyu">闲鱼</option></select>
-        <div id="purchase-page-status" class="status">选择美客多下单日期范围和采购平台，仅同步范围内有采购订单号、无采购物流号的订单。</div>
+        <label for="purchase-salesperson">业务员</label>
+        <select id="purchase-salesperson" disabled><option value="">全部业务员</option></select>
+        <label for="purchase-group-name">店铺组</label>
+        <select id="purchase-group-name" disabled><option value="">全部店铺组</option></select>
+        <button id="purchase-refresh-filters" class="link-button" type="button">刷新业务员与店铺组</button>
+        <div id="purchase-page-status" class="status">按日期、订单状态、采购平台、业务员和店铺组筛选，仅同步有采购订单号、无采购物流号的订单。</div>
         <div id="purchase-task-meta" class="purchase-task-meta" hidden></div>
         <div class="purchase-actions">
           <button id="purchase-open-login" class="secondary inline-action" type="button" disabled>打开采购平台登录</button>
           <button id="purchase-confirm-login" class="primary" type="button" disabled>确定登录并开始同步</button>
         </div>
-        <button id="purchase-reset-dates" class="link-button" type="button" hidden>重新选择日期（结束等待中的任务）</button>
+        <button id="purchase-reset-dates" class="link-button" type="button" hidden>重新筛选（结束等待中的任务）</button>
         <div id="purchase-task-status" class="purchase-task-status">等待同步任务</div>
         <div id="purchase-summary" class="purchase-summary">成功 0 · 未发货 0 · 未同步 0</div>
         <div id="purchase-results" class="purchase-results"></div>
@@ -314,6 +319,7 @@
           <label class="zying-field">话术模式<select id="appeal-copy-mode"><option value="普通模式">普通模式</option><option value="AI话术模式">AI 话术模式</option></select></label>
           <label class="zying-field">循环次数<select id="appeal-loop-count"><option value="1">1 次</option><option value="10" selected>10 次</option><option value="20">20 次</option><option value="50">50 次</option><option value="permanent">永久</option></select></label>
         </div>
+        <label class="zying-field"><span><input id="appeal-screenshot-mode" type="checkbox" role="switch"> 截图模式</span><small>保存真实客服对话截图，保留聊天记录和客服窗口；无需激活码。</small></label>
         <p id="appeal-copy-hint" class="product-batch-help" hidden>使用泽顺账号在集成设置中保存的模型 Token；侵权和禁限售每组最多 3 个产品。</p>
         <label class="zying-field">临时自定义话术<textarea id="appeal-message" maxlength="10000" rows="3" placeholder="留空时沿用申诉话术库；填写后用于本次任务"></textarea></label>
         <div class="zying-actions">

@@ -27,6 +27,7 @@
         });
         container.append(details);
         const refresh = () => {
+            if (container.zsRefreshFilterSummary) return container.zsRefreshFilterSummary();
             const count = [...grid.querySelectorAll('input, select')].filter(control => {
                 if (control.closest('[hidden]')) return false;
                 return control.multiple ? [...control.selectedOptions].some(o => o.value) : Boolean(control.value);
@@ -40,7 +41,7 @@
         refresh();
     }
     foldFilters(document.querySelector('#tab-orders .order-filters'), [
-        'order-salesperson-filter', 'order-group-filter', 'order-start-date', 'order-end-date', 'order-freight-variance-filter', 'order-remark-search', 'order-purchase-platform-filter', 'order-freight-difference-min',
+        'order-salesperson-filter', 'order-group-filter', 'order-start-date', 'order-end-date', 'order-freight-variance-filter', 'order-remark-search', 'order-purchase-platform-filter', 'order-freight-difference-min', 'order-payment-release-filter',
     ], '.order-filter-field');
     const orderRegion = document.querySelector('.order-filter-region');
     if (orderRegion) {
@@ -70,6 +71,14 @@
     const supplierStatus = byId('products-1688-status');
     if (supplierFilters && supplierStatus) supplierFilters.append(supplierStatus);
 
+    // Keep ordinary filters on one scrollable row, separate from expanded filters.
+    const productFilters = byId('mercado-product-filters');
+    if (productFilters) {
+        const row = element('div', 'zs-common-filter-row');
+        [...productFilters.children].filter(node => node.matches('.market-filter-field, .market-filter-actions')).forEach(node => row.append(node));
+        productFilters.prepend(row);
+    }
+
     const card = byId('mercado-product-actions');
     const module = byId('mercado-list-module');
     if (!card || !module) return;
@@ -79,10 +88,13 @@
     bulk.append(element('summary', '', '批量编辑'));
     tools.before(bulk);
     bulk.append(tools);
+    bulk.before(byId('mercado-collection-only-actions'));
 
     const entry = button('下一步：配置发布', () => openPublish(), true);
     entry.id = 'mercado-publish-next';
     bulk.after(entry);
+    const reviewActions = ['mercado-review-publish-selected', 'mercado-review-publish-page'].map(byId);
+    entry.after(...reviewActions);
     const flow = element('ol', 'zs-publish-steps');
     flow.setAttribute('aria-label', '发布步骤');
     ['选择商品', '配置发布', '核对并上架'].forEach(text => flow.append(element('li', '', text)));
@@ -194,7 +206,7 @@
         ];
         if (mode === 'groups') pairs.push(['分配方式', selectedLabels('mercado-group-publish-mode')]);
         pairs.forEach(([label, value]) => list.append(element('dt', '', label), element('dd', '', value)));
-        review.append(list, element('p', 'zs-review-note', '上架净收益按产品分类、店铺站点和本次上架比例计算；低于最低净收益时按最低值上架。资料不完整的商品将按现有规则退回采集列表；提交前请确认商品和目标账号。'));
+        review.append(list, element('p', 'zs-review-note', '上架净收益按产品分类、店铺站点和本次上架比例计算；低于最低净收益时按最低值上架。提交后逐件复核，未通过的商品保留在产品列表并显示原因，通过后才上架；历史成功的相同账号和站点会跳过。'));
         stage = 'review';
         settings.hidden = true;
         review.hidden = false;
@@ -225,6 +237,7 @@
         const hasSelection = selectedMercadoCollectionIds.size > 0;
         module.classList.toggle('has-publish-selection', hasSelection);
         entry.hidden = !productMode;
+        reviewActions.forEach(button => { button.hidden = !productMode; });
         entry.disabled = !hasSelection || mercadoPublishRunning;
         flow.hidden = !productMode;
         bulk.hidden = !hasSelection;

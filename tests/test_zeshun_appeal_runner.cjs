@@ -73,7 +73,7 @@ test('closed selected tab is replaced with a new backend tab',async()=>{
 });
 
 test('login redirect stops before script injection or planning and persists reminder',async()=>{
-  const env=setup();
+  const env=setup();env.tabs.get(1).url='https://global-selling.mercadolibre.com/orders/omni/list';
   env.context.chrome.tabs.update=async(id,args)=>Object.assign(env.tabs.get(id),args,{
     url:'https://login.mercadolibre.com/login',status:'loading'
   });
@@ -160,6 +160,7 @@ test('stale popup identity no longer blocks start',async()=>{
 
 test('reputation navigation timeout never creates a plan or sends',async()=>{
   const env=setup();env.tabs.get(1).status='loading';
+  env.context.chrome.scripting.executeScript=async()=>[{frameId:0,result:{seller_id:'',url:env.tabs.get(1).url}}];
   await env.runner.startAppealRun({tabId:1,params});
   assert.match((await terminal(env)).error,/声誉页面打开超时/);
   assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
@@ -295,4 +296,269 @@ test('reputation collection continues automatically into appeal sending',async()
   assert.equal((await terminal(env)).status,'completed');
   assert.deepEqual(env.requests.find(r=>r.body.reputation_identifiers).body.reputation_identifiers,{MLM:{'投诉':[]}});
   assert.equal(env.sendCount,1);
+});
+
+test('new starts bind browser site accounts without an ERP token',async()=>{
+  const env=setup();
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  const context=env.requests.find(r=>r.path.endsWith('/plan-async')).body.context;
+  assert.equal(context.binding_mode,'browser');
+  assert.deepEqual(context.sites,[{site_id:'MLM',seller_id:'123'}]);
+  assert.equal(context.token_id,undefined);
+});
+
+test('browser infringement pagination submits collected facts and proceeds to sending',async()=>{
+  const env=setup();env.plan.identity.binding_mode='browser';
+  env.plan.browser_collections=[{site_id:'MLM',form:'侵权'}];
+  const inject=env.context.chrome.scripting.executeScript;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='infringement_items') {
+      const offset=options.args[1].offset;
+      assert.match(env.tabs.get(1).url,new RegExp(`tab=detections&offset=${offset}$`));
+      return [{frameId:0,result:{rows:[{case_id:`c${offset}`,product_id:`MLM123456${offset}`,title:`Hat ${offset}`,eligible:true}],total:2,limit:1,offset}}];
+    }
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  const collected=env.requests.find(r=>r.body.browser_identifiers).body;
+  assert.deepEqual(collected.browser_identifiers,{MLM:{'侵权':['MLM1234560','MLM1234561']}});
+  assert.equal(collected.browser_products.MLM1234561.title,'Hat 1');
+  assert.equal(env.sendCount,1);
+});
+
+test('incomplete or changing product pagination never starts customer chat',async()=>{
+  const env=setup();env.plan.identity.binding_mode='browser';env.plan.browser_collections=[{site_id:'MLM',form:'侵权'}];
+  const inject=env.context.chrome.scripting.executeScript;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='infringement_items') return [{frameId:0,result:{rows:[{case_id:'duplicate',product_id:'MLM1234567',eligible:true}],total:2,limit:1}}];
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.match((await terminal(env)).error,/分页重复/);
+  assert.equal(env.sendCount,0);
+  assert.equal(env.requests.some(r=>r.body.browser_identifiers),false);
+});
+
+test('browser prohibited collection opens inactive listings and automatically continues',async()=>{
+  const env=setup();env.plan.identity.binding_mode='browser';env.plan.browser_collections=[{site_id:'MLM',form:'禁限售'}];
+  const inject=env.context.chrome.scripting.executeScript;let opened=false;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='open_inactive_listings') {opened=true;return [{frameId:0,result:{selected:true}}];}
+    if(options.args[0]==='prohibited_items') {
+      assert.equal(opened,true);
+      return [{frameId:0,result:{rows:[{product_id:'MLM1234567',title:'Plain hat'}],has_next:false,fingerprint:'one'}}];
+    }
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.deepEqual(env.requests.find(r=>r.body.browser_identifiers).body.browser_identifiers,{MLM:{'禁限售':['MLM1234567']}});
+  assert.equal(env.sendCount,1);
+});
+
+test('usable reputation and help pages continue while the tab remains loading',async()=>{
+  const env=setup();env.tabs.get(1).status='loading';
+  const inject=env.context.chrome.scripting.executeScript;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='context') assert.equal(options.injectImmediately,true);
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(env.tabs.get(1).status,'loading');
+  assert.equal(env.sendCount,1);
+});
+
+test('existing reputation is reused without forcing another load',async()=>{
+  const env=setup();const update=env.context.chrome.tabs.update;const urls=[];
+  env.context.chrome.tabs.update=async(id,args)=>{urls.push(args.url);return update(id,args);};
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(urls.some(url=>url.endsWith('/reputation')),false);
+});
+
+test('new reputation tab is not immediately navigated a second time',async()=>{
+  const env=setup();env.tabs.clear();const update=env.context.chrome.tabs.update;const urls=[];
+  env.context.chrome.tabs.update=async(id,args)=>{urls.push(args.url);return update(id,args);};
+  await env.runner.startAppealRun({params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(urls.some(url=>url.endsWith('/reputation')),false);
+});
+
+test('account hydration is retried before planning without requiring complete',async()=>{
+  const env=setup();env.tabs.get(1).status='loading';const inject=env.context.chrome.scripting.executeScript;let probes=0;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='context' && ++probes<4) return [{frameId:0,result:{seller_id:'',url:env.tabs.get(1).url}}];
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.ok(probes>=4);assert.equal(env.sendCount,1);
+});
+
+test('unresponsive navigation fails with a specific error instead of remaining preparing',async()=>{
+  const env=setup();env.tabs.get(1).url='https://global-selling.mercadolibre.com/orders/omni/list';
+  env.context.chrome.tabs.update=()=>new Promise(()=>{});
+  await env.runner.startAppealRun({tabId:1,params});
+  const status=await terminal(env);
+  assert.equal(status.status,'failed');assert.match(status.error,/打开声誉页面未响应/);
+  assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
+});
+
+test('unresponsive tab inspection has a bounded wait',async()=>{
+  const env=setup();let reads=0;
+  env.context.chrome.tabs.get=async id=>++reads===1 ? env.tabs.get(id) : new Promise(()=>{});
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.match((await terminal(env)).error,/读取店铺标签页超时/);
+  assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
+});
+
+test('stopping an unresponsive context probe prevents late planning',async()=>{
+  const env=setup();let release;
+  env.context.chrome.scripting.executeScript=()=>new Promise(resolve=>{release=resolve;});
+  await env.runner.startAppealRun({tabId:1,params});
+  for(let i=0;i<20&&!release;i++) await new Promise(setImmediate);
+  assert.ok(release);
+  await env.runner.stopAppealRun();
+  assert.equal((await terminal(env)).status,'stopped');
+  release([{frameId:0,result:{seller_id:'123',site_id:'MLM',url:env.tabs.get(1).url}}]);
+  await new Promise(setImmediate);
+  assert.equal(env.requests.length,0);assert.equal(env.sendCount,0);
+});
+
+test('pending reputation navigation never binds the previous document',async()=>{
+  const env=setup();env.tabs.get(1).url='https://global-selling.mercadolibre.com/orders/omni/list';
+  const update=env.context.chrome.tabs.update, inject=env.context.chrome.scripting.executeScript;let polls=0, injected=0;
+  env.context.chrome.tabs.update=async(id,args)=>args.url.endsWith('/reputation')
+    ? Object.assign(env.tabs.get(id),{pendingUrl:args.url,status:'complete'}) : update(id,args);
+  env.context.chrome.tabs.get=async id=>{
+    const tab=env.tabs.get(id);
+    if(tab.pendingUrl && ++polls>=4) {tab.url=tab.pendingUrl;delete tab.pendingUrl;}
+    return tab;
+  };
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='context' && !injected++) assert.equal(env.tabs.get(1).url,'https://global-selling.mercadolibre.com/reputation');
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.ok(polls>=4);assert.equal(env.sendCount,1);
+});
+
+test('same-url pending reload waits for commit before reading the old document',async()=>{
+  const env=setup();env.tabs.get(1).pendingUrl=env.tabs.get(1).url;
+  const inject=env.context.chrome.scripting.executeScript;let polls=0;
+  env.context.chrome.tabs.get=async id=>{
+    const tab=env.tabs.get(id);
+    if(tab.pendingUrl && ++polls>=5) delete tab.pendingUrl;
+    return tab;
+  };
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='context') assert.equal(env.tabs.get(1).pendingUrl,undefined);
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.ok(polls>=5);assert.equal(env.sendCount,1);
+});
+
+test('complaint entry waits for hydration before collecting and sending', async()=>{
+  const env=setup();
+  env.plan.browser_collections=[{site_id:'MLM',form:'投诉'}];
+  const inject=env.context.chrome.scripting.executeScript;
+  let attempts=0;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='metric_link') return [{frameId:0,result:++attempts<3
+      ? {error:'投诉指标没有可读取的订单入口'}
+      : {url:'https://global-selling.mercadolibre.com/metrics?type=claims'}}];
+    if(options.args[0]==='orders') return [{frameId:0,result:{ids:['2000000000001234'],fingerprint:'one'}}];
+    if(options.args[0]==='next_orders') return [{frameId:0,result:{advanced:false}}];
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'completed');
+  assert.equal(attempts,3);
+  assert.deepEqual(env.requests.find(r=>r.body.reputation_identifiers).body.reputation_identifiers,
+    {MLM:{'投诉':['2000000000001234']}});
+  assert.equal(env.sendCount,1);
+});
+
+test('missing complaint entry stops after bounded retry without sending', async()=>{
+  const env=setup();
+  env.plan.browser_collections=[{site_id:'MLM',form:'投诉'}];
+  const inject=env.context.chrome.scripting.executeScript;
+  let attempts=0;
+  env.context.chrome.scripting.executeScript=async options=>{
+    if(options.args[0]==='metric_link') { attempts++; return [{frameId:0,result:{error:'投诉指标没有可读取的订单入口'}}]; }
+    return inject(options);
+  };
+  await env.runner.startAppealRun({tabId:1,params});
+  assert.equal((await terminal(env)).status,'failed');
+  assert.ok(attempts>1 && attempts<=31);
+  assert.equal(env.sendCount,0);
+  assert.equal(env.requests.some(r=>r.body.reputation_identifiers),false);
+});
+
+function screenshotMocks(env, fail = false) {
+  const shots = [], detached = [];
+  env.context.chrome.windows = {update: async () => ({})};
+  env.context.chrome.debugger = {
+    attach: async () => {},
+    sendCommand: async (target, method, options) => {
+      assert.equal(method, 'Page.captureScreenshot');
+      assert.equal(options.captureBeyondViewport, false);
+      shots.push(target.tabId);
+      if (fail) throw new Error('capture unavailable');
+      return {data: 'mock-png'};
+    },
+    detach: async target => detached.push(target.tabId)
+  };
+  env.context.chrome.downloads = {download: async options => {
+    assert.match(options.url, /^data:image\/png;base64,/);
+    assert.match(options.filename, /^zeshun-appeals\//);
+    return 77;
+  }};
+  env.plan.params.screenshot_mode = true;
+  return {shots, detached};
+}
+
+test('screenshot mode captures real bound chat, keeps tabs and never resets history across groups', async () => {
+  const env = setup({groups: 4});
+  const evidence = screenshotMocks(env);
+  await env.runner.startAppealRun({tabId: 1, params: {...params, screenshot_mode: true}});
+  const state = await terminal(env);
+  assert.equal(state.status, 'completed');
+  assert.equal(state.selection.screenshot_mode, true);
+  assert.equal(evidence.shots.length, 4);
+  assert.equal(evidence.detached.length, 4);
+  assert.equal(env.calls.filter(c => c.command === 'new_conversation').length, 0);
+  assert.ok(env.tabs.has(state.tab_id));
+  assert.notEqual(state.tab_id, 1);
+  assert.equal(env.tabs.get(state.tab_id).active, true);
+  const results = env.requests.filter(r => r.path.endsWith('/result'));
+  assert.ok(results.every(r => r.body.execution.screenshot_download_id === 77));
+});
+
+test('failed screenshot preserves confirmed send and detaches without resending', async () => {
+  const env = setup();
+  const evidence = screenshotMocks(env, true);
+  await env.runner.startAppealRun({tabId: 1, params: {...params, screenshot_mode: true}});
+  assert.equal((await terminal(env)).status, 'completed');
+  assert.equal(env.sendCount, 1);
+  assert.equal(evidence.detached.length, 1);
+  const execution = env.requests.find(r => r.path.endsWith('/result')).body.execution;
+  assert.equal(execution.acknowledged, true);
+  assert.equal(execution.screenshot_error, 'capture unavailable');
+});
+
+test('every order appeal blocks unverified sale numbers in custom text before click', async () => {
+  for (const mode of ['AI客服', '人工客服']) for (const form of ['延误', '取消率', '投诉']) {
+    const env = setup({mode});
+    Object.assign(env.plan.groups[0], {form, identifiers: ['2000000000000099'], message: '销售单号 2000000000000001 请核查'});
+    await env.runner.startAppealRun({tabId: 1, params: {...params, mode, forms: [form]}});
+    assert.equal((await terminal(env)).status, 'failed');
+    assert.equal(env.sendCount, 0);
+  }
 });

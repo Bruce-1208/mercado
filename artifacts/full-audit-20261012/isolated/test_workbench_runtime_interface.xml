@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="23" time="0.583" timestamp="2026-10-12T16:40:47.809437+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_workbench_runtime_interface" name="test_database_health_requires_shared_token_for_remote_clients" time="0.004"><failure message="AssertionError: assert {'connection_...le': 'server'} == {'role': 'ser...cal': 3, ...}}&#10;  &#10;  Omitting 3 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'database_probe': {'checked_at': '2026-10-12T08:40:47.847544+00:00',&#10;                      'detail': '检测失败：连接或查询未成功',&#10;                      'name': '业务数据库',&#10;                      'status': 'error'}}&#10;  Use -v to get more diff">tests/test_workbench_runtime_interface.py:44: in test_database_health_requires_shared_token_for_remote_clients
+    assert allowed.get_json()["data"] == {
+E   AssertionError: assert {'connection_...le': 'server'} == {'role': 'ser...cal': 3, ...}}
+E     
+E     Omitting 3 identical items, use -vv to show
+E     Left contains 1 more item:
+E     {'database_probe': {'checked_at': '2026-10-12T08:40:47.847544+00:00',
+E                         'detail': '检测失败：连接或查询未成功',
+E                         'name': '业务数据库',
+E                         'status': 'error'}}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_workbench_runtime_interface" name="test_client_mode_does_not_expose_database_routes" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_public_workbench_issues_short_lived_local_executor_token" time="0.006"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_workbench_runtime_interface.py:83: in test_public_workbench_issues_short_lived_local_executor_token
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_workbench_runtime_interface" name="test_local_executor_bridge_only_accepts_loopback_client_requests" time="0.001"><failure message="assert 308 == 403&#10; +  where 308 = &lt;WrapperTestResponse streamed [308 PERMANENT REDIRECT]&gt;.status_code">tests/test_workbench_runtime_interface.py:131: in test_local_executor_bridge_only_accepts_loopback_client_requests
+    assert denied.status_code == 403
+E   assert 308 == 403
+E    +  where 308 = &lt;WrapperTestResponse streamed [308 PERMANENT REDIRECT]&gt;.status_code</failure></testcase><testcase classname="tests.test_workbench_runtime_interface" name="test_local_executor_target_address_space_matches_browser_destination" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_public_workbench_labels_loopback_fetch_with_server_target_space" time="0.004" /><testcase classname="tests.test_workbench_runtime_interface" name="test_local_executor_context_forces_daily_task_to_local" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_client_mode_skips_all_central_background_services" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_test_server_mode_skips_all_central_background_services" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_test_server_mode_does_not_start_schedulers_on_first_request" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_test_server_mode_does_not_start_profitability_worker" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_server_mode_starts_reputation_and_order_sync_schedulers" time="0.001"><failure message="pymysql.err.OperationalError: (2003, &quot;Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)&quot;)">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/full-audit-20261012/run_regression.py:23: in isolated_connect
+    raise PermissionError("Functional regression blocks business-service networking")
+E   PermissionError: Functional regression blocks business-service networking
+
+During handling of the above exception, another exception occurred:
+tests/test_workbench_runtime_interface.py:314: in test_server_mode_starts_reputation_and_order_sync_schedulers
+    bit_interface.start_interface_background_services()
+bit/bit_interface.py:26757: in start_interface_background_services
+    bit_db_api.initialize_mercado_action_center_tables()
+bit/bit_db_api.py:3566: in initialize_mercado_action_center_tables
+    return _mercado_action_center_call("initialize", timeout=30)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_db_api.py:3474: in _mercado_action_center_call
+    return _mercado_action_center_local(operation, payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_db_api.py:3468: in _mercado_action_center_local
+    return bit_mysql.initialize_mercado_action_center_tables()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:11383: in initialize_mercado_action_center_tables
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:50: in connect
+    return get_db_connection(kwargs, priority=priority)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:286: in get_db_connection
+    return pymysql.connect(**config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)")</failure></testcase><testcase classname="tests.test_workbench_runtime_interface" name="test_database_api_health_client_uses_http_route" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_official_infraction_dashboard_client_uses_http_route" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_official_infraction_dashboard_client_supports_long_export_timeout" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_official_infraction_counts_rebuild_tuple_keys_from_http" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_collection_client_uses_server_route" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_job_timeout_is_configurable_and_bounded" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_collection_falls_back_during_rolling_deployment" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_collection_transparently_delegates_in_client_mode" time="0.000" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_server_route_reads_tokens_on_server" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_background_job_avoids_long_http_request" time="0.001" /><testcase classname="tests.test_workbench_runtime_interface" name="test_live_infraction_background_job_reuses_identical_running_scan" time="0.001" /></testsuite></testsuites>

@@ -128,6 +128,99 @@ def test_store_replaces_items_only_for_selected_promotion(tmp_path):
     }
 
 
+@pytest.mark.parametrize("single_item", [False, True])
+def test_stale_snapshot_cannot_overwrite_a_newer_local_activity_status(
+    tmp_path, monkeypatch, single_item,
+):
+    from erp import mercadolibre_promotion_store as store_module
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    campaign = _campaign(store)
+    store.replace_items(campaign, [{
+        "id": "MLM1", "status": "candidate", "price": 20,
+    }], snapshot_started_at="2026-10-14T01:00:00+00:00")
+    original = store.list_items(campaign)[0]
+
+    # The official snapshot began first and read "candidate".  Enrollment
+    # then completed locally before that slow snapshot reached replace_items.
+    stale_snapshot_started_at = "2026-10-14T01:00:01.500000+00:00"
+    monkeypatch.setattr(store_module, "_precise_now", lambda: "2026-10-14T01:00:02+00:00")
+    assert store.set_item_status(
+        campaign, "MLM1", "pending_approval", item_local_id=original["id"],
+    ) == 1
+
+    kwargs = {"item_id": "MLM1"} if single_item else {}
+    store.replace_items(campaign, [{
+        "id": "MLM1", "status": "candidate", "price": 20,
+    }], snapshot_started_at=stale_snapshot_started_at, **kwargs)
+
+    preserved = store.list_items(campaign)
+    assert len(preserved) == 1
+    assert preserved[0]["id"] == original["id"]
+    assert preserved[0]["status_raw"] == "pending_approval"
+
+    # A genuinely later official read remains authoritative, so the safeguard
+    # cannot leave the local optimistic marker stuck forever.
+    store.replace_items(campaign, [{
+        "id": "MLM1", "status": "candidate", "price": 20,
+    }], snapshot_started_at="2026-10-14T01:00:04+00:00", **kwargs)
+    refreshed = store.list_items(campaign)
+    assert len(refreshed) == 1
+    assert refreshed[0]["status_raw"] == "candidate"
+    assert refreshed[0]["id"] != original["id"]
+
+
+def test_stale_snapshot_protection_scales_and_is_scoped_per_offer(tmp_path):
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    campaign = _campaign(store)
+    rows = [
+        {
+            "id": f"MLM{index:05}", "offer_id": f"offer-{index}",
+            "status": "candidate", "price": 20,
+        }
+        for index in range(1100)
+    ]
+    # Two offers on one item exercise the complete persisted identity rather
+    # than accidentally protecting every offer for the same listing.
+    rows.extend([
+        {"id": "MLM-OFFER", "offer_id": "offer-a", "status": "candidate"},
+        {"id": "MLM-OFFER", "offer_id": "offer-b", "status": "candidate"},
+    ])
+    store.replace_items(
+        campaign, rows, snapshot_started_at="2026-10-14T01:00:00+00:00",
+    )
+    by_offer = {
+        (row["item_id"], row["offer_id"]): row
+        for row in store.list_items(campaign)
+    }
+    protected_offer_id = by_offer[("MLM-OFFER", "offer-a")]["id"]
+    with store._connect() as db:
+        db.execute(
+            "UPDATE promotion_items SET status_raw='pending_approval', last_synced_at=? "
+            "WHERE promotion_fk=? AND item_id!='MLM-OFFER'",
+            ("2026-10-14T01:00:03+00:00", campaign),
+        )
+        db.execute(
+            "UPDATE promotion_items SET status_raw='pending_approval', last_synced_at=? WHERE id=?",
+            ("2026-10-14T01:00:03+00:00", protected_offer_id),
+        )
+
+    store.replace_items(
+        campaign, rows,
+        snapshot_started_at="2026-10-14T01:00:02.500000+00:00",
+    )
+
+    current = {
+        (row["item_id"], row["offer_id"]): row
+        for row in store.list_items(campaign)
+    }
+    assert len(current) == 1102
+    assert sum(row["status_raw"] == "pending_approval" for row in current.values()) == 1101
+    assert current[("MLM-OFFER", "offer-a")]["id"] == protected_offer_id
+    assert current[("MLM-OFFER", "offer-a")]["status_raw"] == "pending_approval"
+    assert current[("MLM-OFFER", "offer-b")]["status_raw"] == "candidate"
+
+
 def test_preview_payload_round_trip(tmp_path):
     store = PromotionStore(tmp_path / "promotions.sqlite3")
     promotion_id = store.upsert_promotion(
@@ -277,6 +370,127 @@ def test_candidate_reference_net_amount_is_never_scaled_for_custom_price(tmp_pat
     assert custom["rows"][0]["net_proceeds_after"] is None
     assert official["rows"][0]["net_proceeds_after"]["amount"] == 8.4
     assert official["rows"][0]["net_proceeds_after"]["applies_to_price"] == 18
+
+
+def test_preview_reads_only_selected_local_rows_without_full_enrichment(tmp_path, monkeypatch):
+    from bit import mercado_promotions as service
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    promotion_id = _campaign(store)
+    store.replace_items(promotion_id, [
+        {"id": f"MLM{index:04}", "status": "candidate", "price": 20}
+        for index in range(1200)
+    ])
+    all_rows = store.list_items(promotion_id)
+    selected = [all_rows[17], all_rows[1017]]
+    selected_ids = [row["id"] for row in selected]
+    original_lookup = store.list_items_by_local_ids
+    lookups = []
+
+    def selected_lookup(promotion_fk, item_local_ids):
+        ids = list(item_local_ids)
+        lookups.append((promotion_fk, ids))
+        return original_lookup(promotion_fk, ids)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Preview must not scan every product or enrich remote product metadata")
+
+    monkeypatch.setattr(store, "list_items_by_local_ids", selected_lookup)
+    monkeypatch.setattr(store, "list_items", forbidden)
+    monkeypatch.setattr(service, "enrich_item_products", forbidden)
+
+    preview = service.create_preview(
+        promotion_fk=promotion_id,
+        action="enroll",
+        actor="operator",
+        store=store,
+        rows=[{"item_local_id": local_id, "deal_price": 15} for local_id in selected_ids],
+    )
+
+    assert lookups == [(promotion_id, selected_ids)]
+    assert preview["ready_count"] == 2
+    assert preview["blocked_count"] == 0
+    assert {row["item_id"] for row in preview["rows"]} == {
+        row["item_id"] for row in selected
+    }
+    saved = store.get_preview(preview["preview_id"])["payload"]
+    assert len(saved["rows"]) == 2
+    assert saved["excluded_count"] == 0
+
+
+@pytest.mark.parametrize(
+    ("promotion_fields", "intent_fields", "expected_reason"),
+    [
+        (
+            {"type": "DEAL"},
+            {"deal_price": True},
+            "请填写有效活动价",
+        ),
+        (
+            {"type": "PRICE_DISCOUNT"},
+            {
+                "deal_price": 15,
+                "start_date": "2026-13-40",
+                "finish_date": "2026-10-15",
+            },
+            "折扣日期格式无效",
+        ),
+        (
+            {"type": "DEAL", "deadline_date": "2000-01-01T00:00:00+00:00"},
+            {"deal_price": 15},
+            "活动报名截止时间已过",
+        ),
+    ],
+    ids=["json-boolean-price", "invalid-price-discount-date", "past-deadline"],
+)
+def test_invalid_enrollment_inputs_are_blocked_and_written_to_the_job_log(
+    tmp_path, promotion_fields, intent_fields, expected_reason,
+):
+    from bit import mercado_promotions as service
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    promotion_id = store.upsert_promotion(
+        token_id=1,
+        store_name="店铺 1",
+        application_id="app",
+        seller_id="1",
+        site_id="MLM",
+        row={
+            "id": "P-1",
+            "name": "活动",
+            "status": "started",
+            **promotion_fields,
+        },
+    )
+    store.replace_items(promotion_id, [{
+        "id": "MLM1",
+        "status": "candidate",
+        "price": 20,
+    }])
+    item = store.list_items(promotion_id)[0]
+
+    preview = service.create_preview(
+        promotion_fk=promotion_id,
+        action="enroll",
+        actor="operator",
+        store=store,
+        rows=[{"item_local_id": item["id"], **intent_fields}],
+    )
+
+    assert preview["ready_count"] == 0
+    assert preview["blocked_count"] == 1
+    assert preview["rows"][0]["status"] == "blocked"
+    assert expected_reason in preview["rows"][0]["reason"]
+
+    executed = service.execute_preview(
+        preview["preview_id"], actor="operator", store=store, background=False,
+    )
+    job = store.list_jobs(job_ids=[executed["job_id"]])[0]
+    assert job["status"] == "skipped"
+    assert job["total_count"] == job["blocked_count"] == 1
+    assert job["success_count"] == job["failed_count"] == job["unknown_count"] == 0
+    assert job["results"][0]["status"] == "blocked"
+    assert expected_reason in job["results"][0]["message"]
 
 
 @pytest.mark.parametrize("amount", ["NaN", "Infinity", "not a number", None])
@@ -501,6 +715,328 @@ def test_routes_return_persisted_results_and_enforce_job_store_access(tmp_path, 
     assert response.status_code == 403
 
 
+def test_job_restore_and_deep_link_items_recover_orphaned_running_jobs(tmp_path, monkeypatch):
+    from flask import Flask
+    from bit import bit_runtime_lock
+    from bit import mercado_promotion_routes as routes
+
+    monkeypatch.setattr(bit_runtime_lock, "RUNTIME_LOCK_DIR", tmp_path / "runtime-locks")
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    campaign = _campaign(store)
+    preview_id = store.create_preview(
+        actor="operator",
+        action="enroll",
+        promotion_fk=campaign,
+        payload={
+            "promotion": store.get_promotion(campaign, include_summary=False),
+            "rows": [{
+                "item_local_id": 17,
+                "item_id": "MLM17",
+                "offer_id": "",
+                "status": "ready",
+            }],
+        },
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    job_id = store.create_job(
+        preview_id=preview_id, actor="operator", action="enroll", total=1,
+    )
+    monkeypatch.setattr(routes, "PromotionStore", lambda: store)
+    app = Flask("promotion-job-recovery")
+    app.register_blueprint(routes.create_promotions_blueprint(
+        login_required=lambda fn: fn,
+        current_user=lambda: {"username": "operator"},
+        authorized_token_ids=lambda _user: [1],
+    ))
+
+    response = app.test_client().get(
+        f"/api/promotions/jobs?summary=1&job_id={job_id}",
+    )
+
+    assert response.status_code == 200
+    row = response.get_json()["data"]["rows"][0]
+    assert row["job_id"] == job_id
+    assert row["status"] == "partial"
+    assert row["unknown_count"] == row["total_count"] == 1
+    assert row["finished_at"]
+    persisted = store.list_jobs(job_ids=[job_id])[0]
+    assert persisted["results"][0]["item_id"] == "MLM17"
+    assert persisted["results"][0]["status"] == "unknown"
+
+    terminal_preview = store.create_preview(
+        actor="operator", action="enroll", promotion_fk=campaign,
+        payload={
+            "promotion": store.get_promotion(campaign, include_summary=False),
+            "rows": [{"item_id": "MLM-terminal", "status": "ready"}],
+        },
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    terminal_job = store.create_job(
+        preview_id=terminal_preview, actor="operator", action="enroll", total=1,
+    )
+    store.finish_job(terminal_job, results=[])
+    with store._connect() as db:
+        db.execute(
+            "UPDATE promotion_jobs SET total_count=1 WHERE job_id=?",
+            (terminal_job,),
+        )
+
+    deep_link_preview = store.create_preview(
+        actor="operator",
+        action="enroll",
+        promotion_fk=campaign,
+        payload={
+            "promotion": store.get_promotion(campaign, include_summary=False),
+            "rows": [{
+                "item_local_id": 18,
+                "item_id": "MLM18",
+                "offer_id": "",
+                "status": "ready",
+            }],
+        },
+        expires_at=(datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+    )
+    deep_link_job = store.create_job(
+        preview_id=deep_link_preview, actor="operator", action="enroll", total=1,
+    )
+
+    detail = app.test_client().get(f"/api/promotions/{campaign}/items")
+
+    assert detail.status_code == 200
+    detail_data = detail.get_json()["data"]
+    assert detail_data["latest_job"]["job_id"] == deep_link_job
+    assert detail_data["latest_job"]["status"] == "partial"
+    assert detail_data["latest_job"]["unknown_count"] == 1
+    untouched_terminal = store.list_jobs(job_ids=[terminal_job])[0]
+    assert untouched_terminal["total_count"] == 1
+    assert untouched_terminal["results"] == []
+
+
+def test_direct_enrollment_route_screens_rows_and_starts_one_background_job(tmp_path, monkeypatch):
+    from flask import Flask
+    from bit import mercado_promotion_routes as routes
+    from bit import mercado_promotions as service
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    promotion_id = _campaign(store)
+    store.replace_items(promotion_id, [
+        {"id": "MLM-ready", "status": "candidate", "price": 20},
+        {"id": "MLM-started", "status": "started", "price": 20},
+    ])
+    items = {row["item_id"]: row for row in store.list_items(promotion_id)}
+    execute_calls = []
+
+    def enqueue(preview_id, *, actor, store, background=False):
+        assert background is True
+        preview = store.get_preview(preview_id)
+        execute_calls.append((preview_id, actor, preview["payload"]))
+        job_id = store.create_job(
+            preview_id=preview_id,
+            actor=actor,
+            action="enroll",
+            total=len(preview["payload"]["rows"]),
+        )
+        return {"status": "running", "job_id": job_id, "total_count": 1}
+
+    monkeypatch.setattr(routes, "PromotionStore", lambda: store)
+    monkeypatch.setattr(service, "execute_preview", enqueue)
+    app = Flask(__name__)
+    app.register_blueprint(routes.create_promotions_blueprint(
+        login_required=lambda fn: fn,
+        current_user=lambda: {"username": "operator"},
+        authorized_token_ids=lambda _user: [1],
+        has_permission=lambda _user, permission: permission == "promotions.execute",
+    ))
+    response = app.test_client().post("/api/promotions/enroll", json={
+        "promotion_id": promotion_id,
+        "rows": [
+            {"item_local_id": items["MLM-ready"]["id"], "deal_price": 15},
+            {"item_local_id": items["MLM-started"]["id"], "deal_price": 15},
+        ],
+    })
+
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["status"] == "running"
+    assert data["submitted_count"] == 1
+    assert data["excluded_count"] == 1
+    assert data["excluded_reasons"] == [{
+        "reason": "当前官方状态 started 不可报名", "count": 1,
+    }]
+    assert len(execute_calls) == 1
+    assert execute_calls[0][1] == "operator"
+    assert [row["item_id"] for row in execute_calls[0][2]["rows"]] == ["MLM-ready"]
+    assert execute_calls[0][2]["excluded_count"] == 1
+    jobs = store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0]["job_id"] == data["job_id"]
+    assert jobs[0]["status"] == "running"
+    assert jobs[0]["total_count"] == 1
+
+
+def test_direct_enrollment_route_keeps_permission_and_store_scope(tmp_path, monkeypatch):
+    from flask import Flask
+    from bit import mercado_promotion_routes as routes
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    allowed_promotion = _campaign(store)
+    forbidden_promotion = _campaign(store, token_id=2, promotion_id="P-2")
+    calls = []
+
+    def forbidden_start(**kwargs):
+        calls.append(kwargs)
+        pytest.fail("Unauthorized direct enrollment must not create a preview or job")
+
+    monkeypatch.setattr(routes, "PromotionStore", lambda: store)
+    monkeypatch.setattr(routes, "start_enrollment", forbidden_start)
+
+    denied_app = Flask("promotion-permission")
+    denied_app.register_blueprint(routes.create_promotions_blueprint(
+        login_required=lambda fn: fn,
+        current_user=lambda: {"username": "operator"},
+        authorized_token_ids=lambda _user: [1],
+        has_permission=lambda _user, _permission: False,
+    ))
+    denied_client = denied_app.test_client()
+    denied = denied_client.post("/api/promotions/enroll", json={
+        "promotion_id": allowed_promotion, "rows": [],
+    })
+    assert denied.status_code == 403
+    assert "报名权限" in denied.get_json()["message"]
+    assert denied_client.post("/api/promotions/preview", json={
+        "promotion_id": allowed_promotion, "action": "withdraw", "rows": [],
+    }).status_code == 403
+    assert denied_client.post("/api/promotions/jobs", json={
+        "confirmed": True, "preview_id": "not-created",
+    }).status_code == 403
+
+    scoped_app = Flask("promotion-scope")
+    scoped_app.register_blueprint(routes.create_promotions_blueprint(
+        login_required=lambda fn: fn,
+        current_user=lambda: {"username": "operator"},
+        authorized_token_ids=lambda _user: [1],
+        has_permission=lambda _user, _permission: True,
+    ))
+    scoped = scoped_app.test_client().post("/api/promotions/enroll", json={
+        "promotion_id": forbidden_promotion, "rows": [],
+    })
+    assert scoped.status_code == 403
+    assert "不能操作该店铺" in scoped.get_json()["message"]
+    assert calls == []
+
+
+def test_all_excluded_direct_enrollment_still_writes_a_complete_log(tmp_path):
+    from bit import mercado_promotions as service
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    promotion_id = _campaign(store)
+    store.replace_items(promotion_id, [
+        {"id": "MLM-started", "status": "started", "price": 20},
+    ])
+    item = store.list_items(promotion_id)[0]
+
+    result = service.start_enrollment(
+        promotion_fk=promotion_id,
+        rows=[{"item_local_id": item["id"], "deal_price": 15}],
+        actor="operator",
+        store=store,
+        promotion=store.get_promotion(promotion_id, include_summary=False),
+    )
+
+    assert result["status"] == "skipped"
+    assert result["submitted_count"] == 0
+    assert result["excluded_count"] == 1
+    assert result["job_id"]
+    job = store.list_jobs(job_ids=[result["job_id"]])[0]
+    assert job["status"] == "skipped"
+    assert job["total_count"] == job["blocked_count"] == 1
+    assert job["success_count"] == job["failed_count"] == job["unknown_count"] == 0
+    assert job["results"][0]["item_id"] == "MLM-started"
+    assert job["results"][0]["status"] == "blocked"
+    assert "不可报名" in job["results"][0]["message"]
+    assert store.get_preview(job["preview_id"])["payload"]["compacted"] is True
+
+
+def test_mixed_direct_enrollment_log_counts_submitted_and_screened_rows(tmp_path, monkeypatch):
+    from bit import mercado_promotions as service
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    promotion_id = _campaign(store)
+    store.replace_items(promotion_id, [
+        {"id": "MLM-ready", "status": "candidate", "price": 20},
+        {"id": "MLM-started", "status": "started", "price": 20},
+    ])
+    items = {row["item_id"]: row for row in store.list_items(promotion_id)}
+
+    class Adapter:
+        def enroll_item(self, *_args, **_kwargs):
+            return {"status": "pending_approval"}
+
+    monkeypatch.setattr(service.bit_mysql, "get_mercado_store_token", lambda _token_id: {})
+    monkeypatch.setattr(service, "_adapter", lambda secret: (Adapter(), secret))
+    preview = service.create_preview(
+        promotion_fk=promotion_id,
+        action="enroll",
+        rows=[
+            {"item_local_id": items["MLM-ready"]["id"], "deal_price": 15},
+            {"item_local_id": items["MLM-started"]["id"], "deal_price": 15},
+        ],
+        actor="operator",
+        store=store,
+    )
+    result = service.execute_preview(
+        preview["preview_id"], actor="operator", store=store, background=False,
+    )
+
+    job = store.list_jobs(job_ids=[result["job_id"]])[0]
+    assert job["total_count"] == 2
+    assert job["success_count"] == 1
+    assert job["blocked_count"] == 1
+    assert job["failed_count"] == 0
+    assert job["unknown_count"] == 0
+    assert {row["status"] for row in job["results"]} == {"succeeded", "blocked"}
+    assert sum((job["success_count"], job["blocked_count"], job["failed_count"], job["unknown_count"])) == job["total_count"]
+
+
+def test_initialization_failure_accounts_for_ready_row_that_matches_duplicate_block(tmp_path, monkeypatch):
+    from bit import mercado_promotions as service
+
+    store = PromotionStore(tmp_path / "promotions.sqlite3")
+    promotion_id = _campaign(store)
+    store.replace_items(promotion_id, [
+        {"id": "MLM-duplicate", "status": "candidate", "price": 20},
+    ])
+    item = store.list_items(promotion_id)[0]
+    preview = service.create_preview(
+        promotion_fk=promotion_id,
+        action="enroll",
+        rows=[
+            {"item_local_id": item["id"], "deal_price": 15},
+            {"item_local_id": item["id"], "deal_price": 15},
+        ],
+        actor="operator",
+        store=store,
+    )
+    assert preview["ready_count"] == preview["blocked_count"] == 1
+    monkeypatch.setattr(
+        service.bit_mysql,
+        "get_mercado_store_token",
+        lambda _token_id: (_ for _ in ()).throw(RuntimeError("token unavailable")),
+    )
+
+    result = service.execute_preview(
+        preview["preview_id"], actor="operator", store=store, background=False,
+    )
+
+    job = store.list_jobs(job_ids=[result["job_id"]])[0]
+    assert job["status"] == "partial"
+    assert job["total_count"] == 2
+    assert job["failed_count"] == job["blocked_count"] == 1
+    assert job["success_count"] == job["unknown_count"] == 0
+    assert sorted(row["status"] for row in job["results"]) == ["blocked", "failed"]
+    assert sum((job["success_count"], job["blocked_count"], job["failed_count"], job["unknown_count"])) == job["total_count"]
+
+
 def test_background_enrollment_returns_before_remote_and_saves_progress(tmp_path, monkeypatch):
     import threading
     from bit import mercado_promotions as service
@@ -590,3 +1126,37 @@ def test_item_promotions_rejects_unknown_payload_instead_of_empty_activities(pay
     client = SimpleNamespace(request=lambda *a, **kw: payload)
     with pytest.raises(MercadoAPIError, match='响应格式无效'):
         MercadoPromotionsClient(client).get_item_promotions('child','MLM1')
+
+
+@pytest.mark.parametrize('kind',['PRE_NEGOTIATED','DOD','LIGHTNING','SELLER_CAMPAIGN'])
+def test_withdraw_types_are_separate_from_enrollment_allowlist(kind):
+    session=FakeSession([FakeResponse()])
+    api=MercadoPromotionsClient(FakeClient(session))
+    api.withdraw_item('seller','MLM1',promotion_id='sale',promotion_type=kind,offer_id='offer')
+    assert session.calls[0][0]=='DELETE'
+    assert session.calls[0][2]['params']==dict(user_id='seller',promotion_type=kind,promotion_id='sale',offer_id='offer')
+    with pytest.raises(ValueError):
+        api.enroll_item('seller','MLM1',promotion_id='sale',promotion_type=kind,deal_price=10)
+
+
+@pytest.mark.parametrize('pages',[
+    [{'results':[{'id':'MLM1'}],'paging':{'total':2}}],
+    [{'results':[{'id':'MLM1'}],'paging':{'searchAfter':'same'}},{'results':[{'id':'MLM2'}],'paging':{'searchAfter':'same'}}],
+    [{}], [{'results':[{}]}],
+])
+def test_partial_or_invalid_pagination_must_not_look_like_complete_snapshot(pages):
+    class Client:
+        def request(self,*args,**kwargs):return pages.pop(0)
+    with pytest.raises(MercadoAPIError):list(MercadoPromotionsClient(Client()).iter_items('seller','sale',promotion_type='SMART'))
+
+
+@pytest.mark.parametrize('kind',['SMART','PRICE_MATCHING'])
+def test_shared_offers_enroll_with_official_offer_and_without_manual_price(kind):
+    session=FakeSession([FakeResponse(payload={'offer_id':'OFFER-new','price':15})])
+    api=MercadoPromotionsClient(FakeClient(session))
+    api.enroll_item('seller','MLB1',promotion_id='sale',promotion_type=kind,offer_id='CANDIDATE-1',deal_price=1)
+    assert session.calls[0][2]['json']=={'promotion_type':kind,'promotion_id':'sale','offer_id':'CANDIDATE-1'}
+    assert session.calls[0][2]['params']=={'user_id':'seller'}
+    with pytest.raises(ValueError,match='offer_id'):
+        api.enroll_item('seller','MLB1',promotion_id='sale',promotion_type=kind)
+    assert len(session.calls)==1

@@ -318,3 +318,6 @@ body.awp-workspace #storage { min-width: 0; max-width: 100%; overflow-wrap: anyw
 }
 body.awp-workspace .results-table td:last-child:not(.empty) { min-width: 100px; }
 body.awp-workspace .results-table .row-actions button { white-space: nowrap; }
+
+/* Long source URLs in the help page must wrap inside a phone viewport. */
+body.awp-workspace .guide { overflow-wrap: anywhere; }

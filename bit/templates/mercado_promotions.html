@@ -26,8 +26,9 @@
     <script src="{{ url_for('static', filename='console-performance.js') }}?v=20261007-json-fix"></script>
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
     <script src="{{ url_for('static', filename='data-freshness.js') }}?v=20261011-audit"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
-    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261016-module-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261016-module-ui">
+    <script defer src="{{ url_for('static', filename='compact-filters.js') }}?v=20261016-module-ui"></script>
 </head>
 <body class="zs-standalone{% if embedded %} embedded{% endif %}">
 {% if not embedded %}<header class="topbar"><div class="brand"><div class="mark">M</div><div><h1>活动管理</h1><small>Mercado Libre 店群促销工作台</small></div></div><div class="top-actions"><span class="user">{{ current_user.display_name or current_user.username }}</span><a class="back" href="/">返回综合服务台</a></div></header>{% endif %}
@@ -38,33 +39,33 @@
 
     <section id="centerView">
         <div class="panel filters">
-            <div class="field store-field"><label>店铺范围</label><div class="store-box"><button class="store-trigger" id="storeTrigger" onclick="toggleStores(event)">正在加载店铺…</button><div class="store-menu" id="storeMenu"></div></div></div>
+            <div class="field store-field"><label>店铺范围</label><div class="store-box"><button class="store-trigger" id="storeTrigger" type="button" aria-expanded="false" aria-controls="storeMenu" onclick="toggleStores(event)">正在加载店铺…</button><div class="store-menu" id="storeMenu"></div></div></div>
             <div class="field"><label>业务员</label><select id="salespersonFilter"><option value="">全部业务员</option></select></div>
             <div class="field"><label>店铺组</label><select id="groupFilter"><option value="">全部店铺组</option></select></div>
             <div class="field"><label>站点</label><select id="siteFilter"><option value="">全部站点</option></select></div>
-            <div class="field"><label>活动类型</label><select id="typeFilter"><option value="">全部类型</option><option value="DEAL">平台大促</option><option value="MARKETPLACE_CAMPAIGN">平台共补</option><option value="PRICE_DISCOUNT">单品折扣</option><option value="SELLER_CAMPAIGN">卖家活动</option><option value="DOD">每日特惠</option><option value="LIGHTNING">闪购</option><option value="CLEARANCE">清仓</option></select></div>
+            <div class="field"><label>活动类型</label><select id="typeFilter"><option value="">全部类型</option><option value="DEAL">平台大促</option><option value="MARKETPLACE_CAMPAIGN">平台共补</option><option value="PRICE_DISCOUNT">单品折扣</option><option value="SELLER_CAMPAIGN">卖家活动</option><option value="DOD">每日特惠</option><option value="LIGHTNING">闪购</option><option value="CLEARANCE">清仓</option><option value="SMART">智能共补</option><option value="PRICE_MATCHING">竞价补贴</option><option value="PRE_NEGOTIATED">预协商折扣</option><option value="SELLER_COUPON_CAMPAIGN">卖家优惠券</option></select></div>
             <div class="field"><label>官方状态</label><select id="statusFilter"><option value="">全部状态</option><option value="pending">未开始</option><option value="started">进行中</option><option value="finished">已结束</option></select></div>
             <div class="field"><label for="participatedFilter">参与状态</label><select id="participatedFilter" onchange="loadPromotions()"><option value="">全部活动</option><option value="1">已参与</option><option value="0">未参与</option></select></div>
             <div class="field"><label>搜索</label><input id="searchFilter" placeholder="活动、编号或店铺"></div>
             <button class="secondary" onclick="loadPromotions()">查询</button>
         </div>
-        <div class="stats"><div class="panel stat"><span>活动总数</span><strong id="statTotal">0</strong><em>当前筛选范围</em></div><div class="panel stat"><span>可报名商品</span><strong id="statCandidates">0</strong><em>官方 candidate 状态</em></div><div class="panel stat"><span>参与中商品</span><strong id="statActive">0</strong><em>按商品与活动记录统计</em></div><div class="panel stat"><span>有截止日期</span><strong id="statEnding">0</strong><em>请按官方时间核对</em></div></div>
+        <div class="stats"><div class="panel stat"><span>活动总数</span><strong id="statTotal">0</strong><em>当前筛选范围</em></div><div class="panel stat"><span>可报名商品</span><strong id="statCandidates">0</strong><em>官方 candidate 状态，按商品去重</em></div><div class="panel stat"><span>参与中商品</span><strong id="statActive">0</strong><em>按当前商品状态去重统计</em></div><div class="panel stat"><span>有截止日期</span><strong id="statEnding">0</strong><em>请按官方时间核对</em></div></div>
         <div id="stopProgress" class="panel hidden" style="padding:14px 16px;margin-bottom:12px" role="status" aria-live="polite"></div>
-        <div class="panel"><div class="table-head"><h3>活动列表</h3><div><span id="campaignSelectionText">已选 0 个活动</span> <button class="danger" id="stopCampaignsBtn" onclick="stopSelectedCampaigns()" disabled>停止所选活动</button></div><span id="updatedAt" class="user">尚未同步</span></div><div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="selectAllCampaigns" aria-label="选择当前列表全部可停止活动" onchange="selectCampaigns(this.checked)"></th><th>活动</th><th>店铺 / 站点</th><th>类型</th><th>官方状态</th><th>活动时间</th><th>报名截止</th><th>候选 / 参与</th><th>报名结果</th><th>同步时间</th><th>操作</th></tr></thead><tbody id="campaignRows"><tr><td class="empty" colspan="11">正在读取活动…</td></tr></tbody></table></div></div>
+        <div class="panel"><div class="table-head"><h3>活动列表</h3><div><span id="campaignSelectionText">已选 0 个活动</span> <button class="danger" id="stopCampaignsBtn" onclick="stopSelectedCampaigns()" disabled>停止所选活动</button></div><span id="updatedAt" class="user">尚未同步</span></div><div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="selectAllCampaigns" aria-label="选择当前列表全部可停止活动" onchange="selectCampaigns(this.checked)"></th><th>活动</th><th>店铺 / 站点</th><th>类型</th><th>官方状态</th><th>活动时间</th><th>报名截止</th><th>最新候选 / 参与</th><th>数据更新时间</th><th>操作</th></tr></thead><tbody id="campaignRows"><tr><td class="empty" colspan="10">正在读取活动…</td></tr></tbody></table></div></div>
     </section>
 
     <section id="itemsView" class="hidden">
-        <div class="panel"><div class="table-head"><div><h3 id="itemsTitle">促销商品</h3><span id="itemsSubtitle" class="user">请从活动中心选择一个活动</span><small class="net-note">净收益价为预计到手金额，显示币种及对应售价。</small></div><div><button class="secondary" onclick="refreshCampaign()">刷新结果</button> <button class="secondary" onclick="showView('center')">选择其他活动</button></div></div><form class="filters" onsubmit="event.preventDefault();applyItemFilters()" aria-label="活动明细筛选"><div class="field"><label for="itemProductFilter">产品名称</label><input id="itemProductFilter" placeholder="输入产品名称关键词"></div><div class="field"><label for="itemIdFilter">商品编号</label><input id="itemIdFilter" placeholder="输入完整或部分编号"></div><div><button class="primary" id="itemFilterSubmit" type="submit">筛选</button> <button class="secondary" id="itemFilterReset" type="button" onclick="applyItemFilters(true)">重置</button></div></form><div class="items-toolbar"><label for="itemEnrollmentFilter">是否报名 <select id="itemEnrollmentFilter" onchange="changeEnrollmentFilter(this.value)"><option value="">全部</option><option value="1">已报名</option><option value="0">未报名</option></select></label><span class="selection" id="selectionText">已选择 0 件商品</span><button class="secondary" id="selectAllPagesBtn" onclick="selectAllCampaignItems()" disabled>全选所有页可报名商品</button><div id="batchDiscount"><label for="batchDiscountValue">降价比例（%）</label> <input class="price" id="batchDiscountValue" type="number" min="0" max="99.99" step="0.01" placeholder="如 20"> <button class="secondary" id="applyDiscountBtn" onclick="applyBatchDiscount()" disabled>应用到已选商品</button><small class="user"> 20 表示降价 20%（8 折）</small></div><div id="discountDates" class="hidden"><label>折扣开始 <input id="discountStart" type="date"></label> <label>折扣结束 <input id="discountFinish" type="date"></label></div><div><button class="danger" id="withdrawBtn" onclick="previewAction('withdraw')" disabled>批量退出</button> <button class="primary" id="enrollBtn" onclick="previewAction('enroll')" disabled>批量报名</button></div></div><div class="item-pagination" aria-label="活动商品分页"><div><span id="itemPageSummary" class="item-page-summary" aria-live="polite">共 0 件商品</span><div class="item-page-note">表头勾选仅作用于当前页；点击「全选所有页可报名商品」后可统一设置折扣、批量报名</div></div><div class="item-page-controls"><label for="itemPageSize">每页</label><select id="itemPageSize" onchange="changeItemPageSize(this.value)" disabled><option value="20">20 件</option><option value="50" selected>50 件</option><option value="100">100 件</option></select><button class="secondary" id="itemPagePrev" onclick="loadCampaignPage(state.itemPage-1)" disabled>上一页</button><label for="itemPageSelect">页码</label><select id="itemPageSelect" onchange="loadCampaignPage(this.value)" disabled><option value="1">第 1 页</option></select><button class="secondary" id="itemPageNext" onclick="loadCampaignPage(state.itemPage+1)" disabled>下一页</button><span id="itemPageJumpControls" class="hidden"><label for="itemPageJump">跳至</label> <input class="price" style="width:75px" id="itemPageJump" type="number" min="1" step="1" value="1" onkeydown="if(event.key==='Enter')loadCampaignPage(this.value)"> <button class="secondary" onclick="loadCampaignPage($('itemPageJump').value)">跳转</button></span></div></div><div class="table-wrap"><table class="item-table"><thead><tr><th><input type="checkbox" id="selectAll" onchange="selectAllItems(this.checked)"></th><th>商品</th><th>官方状态</th><th>当前报名状态</th><th>原价</th><th>官方活动价 / 区间</th><th>当前折扣比例</th><th>最低要求折扣</th><th>促销前净收益价</th><th>促销后净收益价</th><th>报名活动价</th><th>同步时间</th></tr></thead><tbody id="itemRows"><tr><td class="empty" colspan="12">请先选择活动</td></tr></tbody></table></div></div>
+        <div class="panel"><div class="table-head"><div><h3 id="itemsTitle">促销商品</h3><span id="itemsSubtitle" class="user">请从活动中心选择一个活动</span><small class="net-note">净收益价为预计到手金额，显示币种及对应售价。</small></div><div><button class="secondary" onclick="refreshCampaign()">刷新结果</button> <button class="secondary" onclick="showView('center')">选择其他活动</button></div></div><form class="filters" onsubmit="event.preventDefault();applyItemFilters()" aria-label="活动明细筛选"><div class="field"><label for="itemProductFilter">产品名称</label><input id="itemProductFilter" placeholder="输入产品名称关键词"></div><div class="field"><label for="itemIdFilter">商品编号</label><input id="itemIdFilter" placeholder="输入完整或部分编号"></div><div><button class="primary" id="itemFilterSubmit" type="submit">筛选</button> <button class="secondary" id="itemFilterReset" type="button" onclick="applyItemFilters(true)">重置</button></div></form><div class="items-toolbar"><label for="itemEnrollmentFilter">是否报名 <select id="itemEnrollmentFilter" onchange="changeEnrollmentFilter(this.value)"><option value="">全部</option><option value="1">已报名</option><option value="0">未报名</option></select></label><span class="selection" id="selectionText">已选择 0 件商品</span><button class="secondary" id="selectAllPagesBtn" onclick="selectAllCampaignItems()" disabled>全选所有页可报名商品</button><div id="batchDiscount"><label for="batchDiscountValue">降价比例（%）</label> <input class="price" id="batchDiscountValue" type="number" min="0" max="99.99" step="0.01" placeholder="如 20"> <button class="secondary" id="applyDiscountBtn" onclick="applyBatchDiscount()" disabled>应用到已选商品</button><small class="user"> 20 表示降价 20%（8 折）</small></div><div id="discountDates" class="hidden"><label>折扣开始 <input id="discountStart" type="date"></label> <label>折扣结束 <input id="discountFinish" type="date"></label></div><div><button class="danger" id="withdrawBtn" onclick="previewAction('withdraw')" disabled>批量退出</button> <button class="primary" id="enrollBtn" onclick="startEnrollment()" disabled>批量报名</button></div></div><div class="item-pagination" aria-label="活动商品分页"><div><span id="itemPageSummary" class="item-page-summary" aria-live="polite">共 0 件商品</span><div class="item-page-note">表头勾选仅作用于当前页；点击「全选所有页可报名商品」后可统一设置折扣、批量报名</div></div><div class="item-page-controls"><label for="itemPageSize">每页</label><select id="itemPageSize" onchange="changeItemPageSize(this.value)" disabled><option value="20">20 件</option><option value="50" selected>50 件</option><option value="100">100 件</option></select><button class="secondary" id="itemPagePrev" onclick="loadCampaignPage(state.itemPage-1)" disabled>上一页</button><label for="itemPageSelect">页码</label><select id="itemPageSelect" onchange="loadCampaignPage(this.value)" disabled><option value="1">第 1 页</option></select><button class="secondary" id="itemPageNext" onclick="loadCampaignPage(state.itemPage+1)" disabled>下一页</button><span id="itemPageJumpControls" class="hidden"><label for="itemPageJump">跳至</label> <input class="price" style="width:75px" id="itemPageJump" type="number" min="1" step="1" value="1" onkeydown="if(event.key==='Enter')loadCampaignPage(this.value)"> <button class="secondary" onclick="loadCampaignPage($('itemPageJump').value)">跳转</button></span></div></div><div class="table-wrap"><table class="item-table"><thead><tr><th><input type="checkbox" id="selectAll" onchange="selectAllItems(this.checked)"></th><th>商品</th><th>官方状态</th><th>当前报名状态</th><th>原价</th><th>官方活动价 / 区间</th><th>当前折扣比例</th><th>最低要求折扣</th><th>促销前净收益价</th><th>促销后净收益价</th><th>报名活动价</th><th>同步时间</th></tr></thead><tbody id="itemRows"><tr><td class="empty" colspan="12">请先选择活动</td></tr></tbody></table></div></div>
     </section>
 
-    <section id="jobsView" class="hidden"><div class="panel"><div class="table-head"><h3>执行记录</h3><button class="secondary" onclick="loadJobs()">刷新</button></div><div class="table-wrap"><table><thead><tr><th>批次</th><th>操作人</th><th>动作</th><th>状态</th><th>总数</th><th>成功</th><th>待核实</th><th>失败</th><th>提交时间</th><th>结果</th></tr></thead><tbody id="jobRows"><tr><td class="empty" colspan="10">正在读取执行记录…</td></tr></tbody></table></div></div></section>
+    <section id="jobsView" class="hidden"><div class="panel"><div class="table-head"><h3>执行记录</h3><button class="secondary" onclick="loadJobs()">刷新</button></div><div class="table-wrap"><table><thead><tr><th>批次</th><th>操作人</th><th>动作</th><th>状态</th><th>总数</th><th>成功</th><th>自动屏蔽</th><th>待核实</th><th>失败</th><th>提交时间</th><th>结果</th></tr></thead><tbody id="jobRows"><tr><td class="empty" colspan="11">正在读取执行记录…</td></tr></tbody></table></div></div></section>
 </main>
 <div id="productImagePreview" class="product-image-preview hidden" aria-hidden="true"><img alt="产品主图放大"></div>
 
-<dialog id="previewDialog"><div class="modal-head"><div><h3>提交前确认</h3><span class="user" id="previewSubtitle"></span></div><button class="close" onclick="previewDialog.close()">×</button></div><div class="modal-body"><div class="preview-summary" id="previewSummary"></div><div id="previewRows"></div></div><div class="modal-foot"><button class="secondary" onclick="previewDialog.close()">返回修改</button><button class="primary" id="confirmBtn" onclick="submitPreview()">确认提交</button></div></dialog>
+<dialog id="previewDialog"><div class="modal-head"><div><h3>退出活动确认</h3><span class="user" id="previewSubtitle"></span></div><button class="close" onclick="previewDialog.close()">×</button></div><div class="modal-body"><div class="preview-summary" id="previewSummary"></div><div id="previewRows"></div></div><div class="modal-foot"><button class="secondary" onclick="previewDialog.close()">返回修改</button><button class="primary" id="confirmBtn" onclick="submitPreview()">确认退出</button></div></dialog>
 
 <script>
-const state={selectedCampaigns:new Set(),stoppingCampaigns:false,stores:[],selectedStores:new Set(),campaigns:[],currentCampaign:null,items:[],selectedItems:new Set(),selectedRows:new Map(),itemPrices:new Map(),itemPage:1,itemPageSize:50,itemTotal:0,itemPages:1,itemPageRequest:0,itemPageLoading:false,allPagesLoading:false,preview:null,campaignRequest:0,targetItemRowId:null,currentJob:null};
+const state={selectedCampaigns:new Set(),stoppingCampaigns:false,stores:[],selectedStores:new Set(),campaigns:[],currentCampaign:null,items:[],selectedItems:new Set(),selectedRows:new Map(),itemPrices:new Map(),itemPage:1,itemPageSize:50,itemTotal:0,itemPages:1,itemPageRequest:0,itemPageLoading:false,allPagesLoading:false,enrollmentSubmitting:false,preview:null,campaignRequest:0,targetItemRowId:null,currentJob:null};
 const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const isPlatformAdmin={{ 'true' if current_user.get('is_platform_admin') else 'false' }};
 const selectedEnterpriseKey=isPlatformAdmin?new URLSearchParams(window.location.search).get('organization_key')||'':'';
@@ -73,14 +74,34 @@ window.fetch=function(input,init){if(!selectedEnterpriseKey)return nativePromoti
 let feedbackTimer;
 function feedback(message,type='info',timeout=7000){clearTimeout(feedbackTimer);const el=$('feedback');el.className=`feedback show ${type}`;el.innerHTML=esc(message);if(timeout)feedbackTimer=setTimeout(()=>el.classList.remove('show'),timeout)}
 const promotionReadRequests=new Map();
-function api(url,options={}){const read=!options.method||options.method==='GET';if(read&&promotionReadRequests.has(url))return promotionReadRequests.get(url);if(!read)promotionReadRequests.clear();const pending=(async()=>{const response=await fetch(url,{headers:{'Content-Type':'application/json'},...options});const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='success')throw new Error(body.message||`请求失败 (${response.status})`);return body.data})().finally(()=>{if(!read)promotionReadRequests.clear();else if(promotionReadRequests.get(url)===pending)promotionReadRequests.delete(url);});if(read)promotionReadRequests.set(url,pending);return pending;}
+function api(url,options={}){const read=!options.method||options.method==='GET',shared=read&&!options.signal;if(shared&&promotionReadRequests.has(url))return promotionReadRequests.get(url);if(!read)promotionReadRequests.clear();const pending=(async()=>{const response=await fetch(url,{headers:{'Content-Type':'application/json'},...options});const body=await response.json().catch(()=>({}));if(!response.ok||body.status!=='success')throw new Error(body.message||`请求失败 (${response.status})`);return body.data})().finally(()=>{if(!read)promotionReadRequests.clear();else if(promotionReadRequests.get(url)===pending)promotionReadRequests.delete(url);});if(shared)promotionReadRequests.set(url,pending);return pending;}
 function fmtDate(v){if(!v)return '未提供';const d=new Date(v);return Number.isNaN(d.valueOf())?v:d.toLocaleString('zh-CN',{hour12:false})}
 function fmtMoney(v,c=''){return v===null||v===undefined||v===''||!Number.isFinite(Number(v))?'—':`${c||''} ${Number(v).toFixed(2)}`.trim()}
-function typeLabel(v){return {DEAL:'平台大促',MARKETPLACE_CAMPAIGN:'平台共补',PRICE_DISCOUNT:'单品折扣',SELLER_CAMPAIGN:'卖家活动',DOD:'每日特惠',LIGHTNING:'闪购',CLEARANCE:'清仓'}[v]||v||'未知'}
-function statusPill(v){const x=String(v||'unknown').toLowerCase();const map={started:['进行中','ok'],active:['进行中','ok'],pending:['未开始','warn'],pending_approval:['待批准','warn'],finished:['已结束','muted'],candidate:['可报名','warn'],programmed:['待生效','warn'],scheduled:['待生效','warn'],approved:['已批准','ok'],withdrawn:['已退出','muted'],succeeded:['成功','ok'],failed:['失败','bad'],unknown:['待核实','warn'],partial:['部分完成','warn'],running:['执行中','warn'],blocked:['未提交','bad']};const [label,cls]=map[x]||[v||'未知','muted'];return `<span class="pill ${cls}">${esc(label)}</span>`}
+function typeLabel(v){return {DEAL:'平台大促',MARKETPLACE_CAMPAIGN:'平台共补',PRICE_DISCOUNT:'单品折扣',SELLER_CAMPAIGN:'卖家活动',DOD:'每日特惠',LIGHTNING:'闪购',CLEARANCE:'清仓',SMART:'智能共补',PRICE_MATCHING:'竞价补贴',PRE_NEGOTIATED:'预协商折扣',SELLER_COUPON_CAMPAIGN:'卖家优惠券'}[v]||v||'未知'}
+function statusPill(v){const x=String(v||'unknown').toLowerCase();const map={started:['进行中','ok'],active:['进行中','ok'],pending:['未开始','warn'],pending_approval:['待批准','warn'],finished:['已结束','muted'],candidate:['可报名','warn'],programmed:['待生效','warn'],scheduled:['待生效','warn'],approved:['已批准','ok'],withdrawn:['已退出','muted'],succeeded:['成功','ok'],skipped:['已屏蔽','muted'],failed:['失败','bad'],unknown:['待核实','warn'],partial:['部分完成','warn'],running:['执行中','warn'],blocked:['未提交','bad']};const [label,cls]=map[x]||[v||'未知','muted'];return `<span class="pill ${cls}">${esc(label)}</span>`}
 function showView(name){['center','items','jobs'].forEach(v=>{$(v+'View').classList.toggle('hidden',v!==name);document.querySelector(`.tab[data-view="${v}"]`).classList.toggle('active',v===name)});if(name==='jobs')loadJobs()}
 document.querySelectorAll('.tab').forEach(button=>button.onclick=()=>showView(button.dataset.view));
-function toggleStores(event){event.stopPropagation();$('storeMenu').classList.toggle('open')}document.addEventListener('click',()=> $('storeMenu').classList.remove('open'));$('storeMenu').onclick=e=>e.stopPropagation();
+function setStoresOpen(open, restoreFocus=false){
+    $('storeMenu').classList.toggle('open',open);
+    $('storeTrigger').setAttribute('aria-expanded',String(open));
+    if(restoreFocus)$('storeTrigger').focus();
+}
+function toggleStores(event){event.stopPropagation();setStoresOpen(!$('storeMenu').classList.contains('open'))}
+document.addEventListener('click',()=>setStoresOpen(false));
+$('storeMenu').onclick=e=>e.stopPropagation();
+$('storeTrigger').addEventListener('keydown',event=>{
+    if(event.key!=='ArrowDown')return;
+    event.preventDefault();setStoresOpen(true);
+    $('storeMenu').querySelector('input:not(:disabled)')?.focus();
+});
+document.addEventListener('keydown',event=>{
+    if(event.key==='Escape'&&$('storeMenu').classList.contains('open')){
+        event.preventDefault();setStoresOpen(false,true);
+    }
+});
+$('storeMenu').parentElement.addEventListener('focusout',()=>queueMicrotask(()=>{
+    if(!$('storeMenu').parentElement.contains(document.activeElement))setStoresOpen(false);
+}));
 function renderStores(){const menu=$('storeMenu');menu.innerHTML=state.stores.map(s=>`<label class="store-option"><input type="checkbox" value="${s.id}" ${state.selectedStores.has(s.id)?'checked':''} onchange="toggleStore(${s.id},this.checked)"><span><b>${esc(s.name)}</b><small>${esc((s.sites||[]).map(x=>[x.site_id,x.salesperson,x.group_name].filter(Boolean).join(' · ')).join(' / ')||'站点将在同步时读取')}</small></span></label>`).join('')||'<div class="empty">没有可用店铺授权</div>';updateStoreTrigger()}
 function toggleStore(id,on){on?state.selectedStores.add(id):state.selectedStores.delete(id);updateStoreTrigger()}
 function updateStoreTrigger(){const n=state.selectedStores.size;$('storeTrigger').textContent=n?`已选择 ${n} 个店铺`:'选择店铺（默认全部）'}
@@ -89,92 +110,109 @@ function renderDimensionFilters(){const sites=state.stores.flatMap(store=>store.
 async function loadStores(){try{state.stores=await api('/api/promotions/stores');state.stores.filter(s=>s.enabled).forEach(s=>state.selectedStores.add(s.id));renderStores();renderDimensionFilters()}catch(e){feedback(e.message,'bad')}}
 function queryString(){const q=new URLSearchParams();state.selectedStores.forEach(id=>q.append('token_id',id));if($('salespersonFilter').value)q.set('salesperson',$('salespersonFilter').value);if($('groupFilter').value)q.set('group_name',$('groupFilter').value);if($('siteFilter').value)q.set('site_id',$('siteFilter').value);if($('typeFilter').value)q.set('type',$('typeFilter').value);if($('statusFilter').value)q.set('status',$('statusFilter').value);if($('participatedFilter').value)q.set('participated',$('participatedFilter').value);if($('searchFilter').value.trim())q.set('search',$('searchFilter').value.trim());return q.toString()}
 let promotionListSequence=0;
-async function loadPromotions(){const sequence=++promotionListSequence;try{$('campaignRows').innerHTML='<tr><td class="empty" colspan="11"><span class="spinner"></span>正在读取活动</td></tr>';const data=await api('/api/promotions?'+queryString());if(sequence!==promotionListSequence)return;state.campaigns=data.rows||[];state.selectedCampaigns=new Set([...(state.selectedCampaigns||[])].filter(id=>state.campaigns.some(row=>row.id===id)));$('statTotal').textContent=data.summary.total;$('statCandidates').textContent=data.summary.candidate_items;$('statActive').textContent=data.summary.active_items;$('statEnding').textContent=data.summary.ending_soon;renderCampaigns();DataFreshness.render('updatedAt',state.campaigns.map(row=>row.last_synced_at),{hours:24,scope:'当前筛选活动'});$('updatedAt').textContent=state.campaigns.length?`最近同步 ${fmtDate(state.campaigns[0].last_synced_at)}`:'暂无已同步活动'}catch(e){if(sequence!==promotionListSequence)return;$('campaignRows').innerHTML=`<tr><td class="empty" colspan="11">${esc(e.message)}</td></tr>`;feedback(e.message,'bad')}}
-function renderCampaigns(){const body=$('campaignRows');body.innerHTML=state.campaigns.map(row=>`<tr><td><input type="checkbox" aria-label="选择活动 ${esc(row.name)}" ${state.selectedCampaigns?.has(row.id)?'checked':''} ${canStopCampaign(row)?'':'disabled title="该活动无参与商品或暂不支持停止"'} onchange="toggleCampaign(${row.id},this.checked)"></td><td class="title-cell"><strong>${esc(row.name)}</strong><small>${esc(row.promotion_id)}</small><span class="pill ${row.participated?'ok':''}">${row.participated?'已参与':'未参与'}</span></td><td><strong>${esc(row.store_name)}</strong><div class="user">${esc([row.salesperson,row.group_name].filter(Boolean).join(' · ')||'未配置归属')}</div><div class="user">${esc(row.site_id)} · Seller ${esc(row.seller_id)}</div></td><td><span class="pill">${esc(typeLabel(row.promotion_type))}</span><div class="user">${esc(row.promotion_type)}</div></td><td>${statusPill(row.status_raw)}</td><td class="number">${esc(fmtDate(row.start_date))}<br><span class="user">至 ${esc(fmtDate(row.finish_date))}</span></td><td>${esc(fmtDate(row.deadline_date))}</td><td><b>${row.candidate_count||0}</b> / ${row.active_item_count||0}<div class="user">共 ${row.item_count||0} 条</div></td><td class="result-cell">${renderCampaignEnrollment(row.enrollment_summary)}</td><td>${esc(fmtDate(row.last_synced_at))}</td><td><button class="link-btn" onclick="openCampaign(${row.id})">查看商品 →</button></td></tr>`).join('')||'<tr><td class="empty" colspan="11">当前筛选范围没有活动。可调整业务员、店铺组或站点条件后重试。</td></tr>';updateCampaignSelection()}
-function canStopCampaign(row){return !state.stoppingCampaigns&&['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT'].includes(row.promotion_type)&&Number(row.active_item_count)>0;}
+function campaignUpdatedAt(row){return Number(row?.item_count)>0?(row?.item_counts_synced_at||''):(row?.last_synced_at||'');}
+async function loadPromotions(){const sequence=++promotionListSequence;try{$('campaignRows').innerHTML='<tr><td class="empty" colspan="10"><span class="spinner"></span>正在读取活动</td></tr>';const data=await api('/api/promotions?'+queryString());if(sequence!==promotionListSequence)return;state.campaigns=data.rows||[];state.selectedCampaigns=new Set([...(state.selectedCampaigns||[])].filter(id=>state.campaigns.some(row=>row.id===id)));$('statTotal').textContent=data.summary.total;$('statCandidates').textContent=data.summary.candidate_items;$('statActive').textContent=data.summary.active_items;$('statEnding').textContent=data.summary.ending_soon;renderCampaigns();const updated=state.campaigns.map(campaignUpdatedAt);DataFreshness.render('updatedAt',updated,{hours:24,scope:'当前筛选活动'});$('updatedAt').textContent=updated.filter(Boolean).length?`最近更新 ${fmtDate(updated.filter(Boolean).sort().at(-1))}`:'暂无已同步活动'}catch(e){if(sequence!==promotionListSequence)return;$('campaignRows').innerHTML=`<tr><td class="empty" colspan="10">${esc(e.message)}</td></tr>`;feedback(e.message,'bad')}}
+function renderCampaigns(){const body=$('campaignRows');body.innerHTML=state.campaigns.map(row=>`<tr><td><input type="checkbox" aria-label="选择活动 ${esc(row.name)}" ${state.selectedCampaigns?.has(row.id)?'checked':''} ${canStopCampaign(row)?'':'disabled title="${esc(stopCampaignReason(row))}"'} onchange="toggleCampaign(${row.id},this.checked)"></td><td class="title-cell"><strong>${esc(row.name)}</strong><small>${esc(row.promotion_id)}</small><span class="pill ${Number(row.active_item_count)>0?'ok':''}">${Number(row.active_item_count)>0?'参与中':'当前未参与'}</span></td><td><strong>${esc(row.store_name)}</strong><div class="user">${esc([row.salesperson,row.group_name].filter(Boolean).join(' · ')||'未配置归属')}</div><div class="user">${esc(row.site_id)} · Seller ${esc(row.seller_id)}</div></td><td><span class="pill">${esc(typeLabel(row.promotion_type))}</span><div class="user">${esc(row.promotion_type)}</div></td><td>${statusPill(row.status_raw)}</td><td class="number">${esc(fmtDate(row.start_date))}<br><span class="user">至 ${esc(fmtDate(row.finish_date))}</span></td><td>${esc(fmtDate(row.deadline_date))}</td><td><span class="pill warn">候选 ${Number(row.candidate_count)||0}</span> <span class="pill ok">参与 ${Number(row.active_item_count)||0}</span><div class="user">当前共 ${Number(row.item_count)||0} 条</div></td><td>${esc(fmtDate(campaignUpdatedAt(row)))}</td><td><button class="link-btn" onclick="openCampaign(${row.id})">查看商品 →</button></td></tr>`).join('')||'<tr><td class="empty" colspan="10">当前筛选范围没有活动。可调整业务员、店铺组或站点条件后重试。</td></tr>';updateCampaignSelection()}
+function stopCampaignReason(row){
+    if(row.promotion_type==='CLEARANCE')return '清仓由平台自动管理，官方接口禁止取消';
+    if(!['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT','SMART','PRICE_MATCHING','PRE_NEGOTIATED','DOD','LIGHTNING','SELLER_CAMPAIGN'].includes(row.promotion_type))return '此类型官方接口暂不支持停止';
+    if([...(state.stopJobs?.values()||[])].some(job=>job.promotion_fk===row.id&&job.status==='running'))return '此活动正在停止，其他活动可继续多选';
+    return '';
+}
+function canStopCampaign(row){return !stopCampaignReason(row);}
 function updateCampaignSelection(){
-    const rows=state.campaigns.filter(canStopCampaign),n=state.selectedCampaigns?.size||0;
+    const rows=state.campaigns.filter(canStopCampaign);
+    state.selectedCampaigns=new Set([...(state.selectedCampaigns||[])].filter(id=>rows.some(row=>row.id===id)));
+    const n=state.selectedCampaigns.size;
     $('campaignSelectionText').textContent=`已选 ${n} 个活动`;
-    $('stopCampaignsBtn').disabled=!n||state.stoppingCampaigns;
-    $('stopCampaignsBtn').textContent=state.stoppingCampaigns?(state.stopProgressText||'正在启动停止任务…'):'停止所选活动';
+    $('stopCampaignsBtn').disabled=!n||!!state.stopSubmitting;
+    $('stopCampaignsBtn').textContent=state.stopSubmitting?'正在启动停止任务…':'停止所选活动';
     $('selectAllCampaigns').disabled=!rows.length;
-    $('selectAllCampaigns').checked=!!rows.length&&rows.every(row=>state.selectedCampaigns?.has(row.id));
+    $('selectAllCampaigns').checked=!!rows.length&&rows.every(row=>state.selectedCampaigns.has(row.id));
     $('selectAllCampaigns').indeterminate=n>0&&!$('selectAllCampaigns').checked;
 }
 function toggleCampaign(id,on){
-    if(state.stoppingCampaigns)return;
     state.selectedCampaigns=state.selectedCampaigns||new Set();
     if(on&&state.campaigns.some(row=>row.id===id&&canStopCampaign(row)))state.selectedCampaigns.add(id);
     else state.selectedCampaigns.delete(id);
     updateCampaignSelection();
 }
 function selectCampaigns(on){
-    if(state.stoppingCampaigns)return;
     state.selectedCampaigns=new Set(on?state.campaigns.filter(canStopCampaign).map(row=>row.id):[]);renderCampaigns();
 }
 async function stopSelectedCampaigns(){
-    if(state.stoppingCampaigns)return;
+    if(state.stopSubmitting)return;
     const rows=state.campaigns.filter(row=>state.selectedCampaigns?.has(row.id)&&canStopCampaign(row));
     if(!rows.length)return;
     if(rows.length>50){feedback('每次最多停止 50 个活动，请减少选择。','bad');return;}
-    if(!window.confirm(`确定停止这 ${rows.length} 个活动吗？将取消这些活动下所有已报名商品（含待审核、其他商品页），不再参与所选活动。\n${rows.map(row=>row.name).join('、')}`))return;
-    state.stoppingCampaigns=true;renderCampaigns();
+    if(!window.confirm(`确定停止参与这 ${rows.length} 个活动吗？将读取官方全部商品并取消报名（含待审核、其他商品页），最后核实剩余商品。平台活动本身的官方状态不会因此结束。\n${rows.map(row=>row.name).join('、')}`))return;
+    state.stopSubmitting=true;updateCampaignSelection();
     try{
         const data=await api('/api/promotions/stop',{method:'POST',body:JSON.stringify({promotion_ids:rows.map(row=>row.id),confirmed:true})});
         const results=data.results||[],jobs=results.filter(row=>row.job_id),failed=results.filter(row=>row.status==='failed');
-        state.selectedCampaigns.clear();
+        rows.forEach(row=>state.selectedCampaigns.delete(row.id));
+        state.stopJobs=state.stopJobs||new Map();
+        jobs.forEach(job=>state.stopJobs.set(job.job_id,{...job,promotion_fk:job.promotion_id,status:'running'}));
         const note=failed.map(row=>`${row.name}：${row.message}`).join('；');
-        if(jobs.length){feedback(`已启动 ${jobs.length} 个活动的停止任务。${note}`,'info',0);watchStoppedCampaigns(jobs.map(row=>row.job_id),note);}
-        else{state.stoppingCampaigns=false;feedback(note||'所选活动没有需要取消的已报名商品。',failed.length?'bad':'info',0);}
+        if(jobs.length){showStopProgress(`正在读取官方全部商品并启动 ${jobs.length} 个停止任务；其他活动可继续操作。`);feedback(`已启动 ${jobs.length} 个活动的停止任务。其他活动可继续多选停止。${note}`,'info',0);watchStoppedCampaigns(jobs.map(row=>row.job_id),note);}
+        else feedback(note||'所选活动没有需要取消的已报名商品。',failed.length?'bad':'info',0);
         await loadPromotions();
-    }catch(e){state.stoppingCampaigns=false;feedback(`停止任务提交失败：${e.message}。请先查看执行记录确认结果，再重试。`,'bad',0);}
-    updateCampaignSelection();
+    }catch(e){feedback(`停止任务提交失败：${e.message}。请先查看执行记录确认结果，再重试。`,'bad',0);await restoreStopProgress();}
+    finally{state.stopSubmitting=false;renderCampaigns();}
 }
 function showStopProgress(message){
     const el=$('stopProgress');if(!el)return;
     el.textContent=message;el.classList?.toggle('hidden',false);
 }
 function watchStoppedCampaigns(ids,note='',attempt=0){
+    state.stoppingCampaigns=true;
     window.setTimeout(async()=>{
         try{
             const query=new URLSearchParams({summary:'1'});ids.forEach(id=>query.append('job_id',id));
-            const data=await api('/api/promotions/jobs?'+query,{signal:AbortSignal.timeout(15000)}),jobs=ids.map(id=>(data.rows||[]).find(job=>job.job_id===id));
-            if(jobs.some(job=>!job))throw new Error('部分任务暂未返回，请确认店铺权限或查看执行记录');
-            const success=jobs.reduce((n,job)=>n+Number(job.success_count||0),0),failed=jobs.reduce((n,job)=>n+Number(job.failed_count||0),0),unknown=jobs.reduce((n,job)=>n+Number(job.unknown_count||0),0),total=jobs.reduce((n,job)=>n+Number(job.total_count||0),0);
-            const running=jobs.filter(job=>job.status==='running').length;
-            const progress=`活动 ${jobs.length-running}/${jobs.length} 已结束 · 共 ${total} 件 · 已取消 ${success} 件 · 失败 ${failed} 件 · 待核实 ${unknown} 件`;
-            showStopProgress(`${running?'正在停止：':'停止任务完成：'}${progress}。${note}`);
-            state.stopProgressText=running?`正在停止 · 已取消 ${success}/${total} 件`:'';
-            state.stoppingCampaigns=!!running;updateCampaignSelection();
-            const signature=[success,failed,unknown,running].join(':');
+            const timeoutOptions=typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'?{signal:AbortSignal.timeout(15000)}:{};
+            const data=await api('/api/promotions/jobs?'+query,timeoutOptions),batch=ids.map(id=>(data.rows||[]).find(job=>job.job_id===id));
+            if(batch.some(job=>!job))throw new Error('部分任务暂未返回，请确认店铺权限或查看执行记录');
+            state.stopJobs=state.stopJobs||new Map();
+            batch.forEach(job=>state.stopJobs.set(job.job_id,{...state.stopJobs.get(job.job_id),...job}));
+            const jobs=[...state.stopJobs.values()];
+            const success=jobs.reduce((n,job)=>n+Number(job.success_count||0),0),failed=jobs.reduce((n,job)=>n+Number(job.failed_count||0),0),unknown=jobs.reduce((n,job)=>n+Number(job.unknown_count||0),0),blocked=jobs.reduce((n,job)=>n+Number(job.blocked_count||0),0),total=jobs.reduce((n,job)=>n+Number(job.total_count||0),0);
+            const running=jobs.filter(job=>job.status==='running').length,complete=jobs.filter(job=>job.status==='succeeded').length;
+            const blockedProgress=blocked?` · 未提交 ${blocked} 件`:'';
+            const progress=`活动 ${complete}/${jobs.length} 已全部停止 · 共 ${total} 件 · 已取消 ${success} 件${blockedProgress} · 失败 ${failed} 件 · 待核实 ${unknown} 件`;
+            showStopProgress(`${running?'正在停止或核验官方剩余：':failed||unknown?'部分活动未全部停止：':'官方核验完成：'}${progress}。${note}`);
+            state.stoppingCampaigns=!!running;renderCampaigns();
+            const signature=[success,blocked,failed,unknown,running].join(':');
             if(signature!==state.stopProgressSignature){
                 state.stopProgressSignature=signature;state.stopProgressChangedAt=Date.now();
                 window.parent.postMessage({type:'promotions-changed'},window.location.origin);
-            }else if(Date.now()-(state.stopProgressChangedAt||Date.now())>120000){
-                showStopProgress(`${progress}。超过 2 分钟没有新增结果，仍在查询后台状态；请查看执行记录中的最后一件商品。`);
+            }else if(running&&Date.now()-(state.stopProgressChangedAt||Date.now())>120000){
+                showStopProgress(`${progress}。超过 2 分钟没有新增结果，仍在查询后台或核验官方全量商品；其他活动可继续操作。`);
             }
-            if(running){watchStoppedCampaigns(ids,note);return;}
+            if(batch.some(job=>job.status==='running')){watchStoppedCampaigns(ids,note);return;}
             await loadPromotions();
-            feedback(`停止任务完成：已取消 ${success} 件，失败 ${failed} 件，待核实 ${unknown} 件。${failed||unknown?'未成功取消的商品仍需在执行记录中核查。':''}${note}`,failed||unknown||note?'bad':'ok',0);
+            if(!running)feedback(`${blocked||failed||unknown?'部分活动未全部停止':'所选活动已全部停止参与'}：已取消 ${success} 件${blocked?`，未提交 ${blocked} 件`:''}，失败 ${failed} 件，待核实 ${unknown} 件。${blocked||failed||unknown?'请查看执行记录，可再次停止以处理剩余商品。':''}${note}`,blocked||failed||unknown||note?'bad':'ok',0);
         }catch(e){
-            // A read failure does not mean that the remote cancellation stopped.
-            showStopProgress(`暂时无法读取停止进度：${e.message}。后台任务可能仍在执行，正在自动重连，请勿重复提交。`);
+            showStopProgress(`暂时无法读取停止进度：${e.message}。后台任务可能仍在执行，正在自动重连；其他活动可继续操作。`);
             if(attempt<5){watchStoppedCampaigns(ids,note,attempt+1);return;}
-            state.stoppingCampaigns=false;state.stopProgressText='';renderCampaigns();
-            feedback('停止进度连续读取失败，请刷新页面或在执行记录核对任务状态；不会自动重复提交取消。','bad',0);
+            // Keep only the affected campaigns protected after an uncertain read.
+            feedback('停止进度连续读取失败，请刷新页面或在执行记录核对任务状态。其他活动可继续多选。','bad',0);
         }
     },attempt?10000:3000);
 }
 async function restoreStopProgress(){
     try{
-        const data=await api('/api/promotions/jobs?summary=1&action=withdraw&status=running',{signal:AbortSignal.timeout(15000)});
-        const ids=(data.rows||[]).map(row=>row.job_id);
-        if(!ids.length||state.stoppingCampaigns)return;
-        state.stoppingCampaigns=true;renderCampaigns();watchStoppedCampaigns(ids.slice(0,50));
+        const timeoutOptions=typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'?{signal:AbortSignal.timeout(15000)}:{};
+        const data=await api('/api/promotions/jobs?summary=1&action=withdraw&status=running',timeoutOptions);
+        state.stopJobs=state.stopJobs||new Map();
+        const jobs=(data.rows||[]).filter(job=>!state.stopJobs.has(job.job_id));
+        jobs.forEach(job=>state.stopJobs.set(job.job_id,job));
+        for(let i=0;i<jobs.length;i+=50)watchStoppedCampaigns(jobs.slice(i,i+50).map(row=>row.job_id));
+        renderCampaigns();
     }catch(e){showStopProgress(`停止任务状态暂不可用：${e.message}，可在执行记录中查看。`);}
 }
 async function syncSelected(){if(!state.selectedStores.size){feedback('请至少选择一个店铺','bad');return}const btn=$('syncBtn');btn.disabled=true;btn.innerHTML='<span class="spinner"></span>正在读取官方接口';try{const data=await api('/api/promotions/sync',{method:'POST',body:JSON.stringify({token_ids:[...state.selectedStores]})});window.parent.postMessage({type:'promotions-changed'},window.location.origin);feedback(`同步完成：${data.succeeded} 个店铺成功，读取 ${data.promotion_count} 个活动、${data.item_count} 条商品记录`,data.failed?'info':'ok');await loadPromotions()}catch(e){feedback(e.message,'bad')}finally{btn.disabled=false;btn.textContent='同步所选店铺'}}
 function clearCampaignItems(){
+    state.selectionAbort?.abort();
     state.currentCampaign=null;state.items=[];state.selectedItems.clear();state.preview=null;state.targetItemRowId=null;state.currentJob=null;
     state.selectedRows=new Map();state.itemPrices=new Map();state.itemPage=1;state.itemPageSize=state.itemPageSize||50;state.itemTotal=0;state.itemPages=1;state.itemPageLoading=false;state.allPagesLoading=false;state.itemPageRequest=(state.itemPageRequest||0)+1;
     $('previewDialog').close();$('confirmBtn').disabled=true;$('previewSubtitle').textContent='';$('previewSummary').innerHTML='';$('previewRows').innerHTML='';
@@ -200,17 +238,17 @@ function applyCampaignPage(data){
     $('itemsTitle').textContent=data.promotion.name;$('itemsSubtitle').textContent=`${data.promotion.store_name} · ${data.promotion.site_id} · ${typeLabel(data.promotion.promotion_type)} · 共 ${state.itemTotal} 条商品`;
 }
 function renderItemPagination(){
-    const page=state.itemPage||1,pages=state.itemPages||1,total=state.itemTotal||0,size=state.itemPageSize||50,ready=!!state.currentCampaign;
+    const page=state.itemPage||1,pages=state.itemPages||1,total=state.itemTotal||0,size=state.itemPageSize||50,ready=!!state.currentCampaign,busy=state.allPagesLoading||state.enrollmentSubmitting||state.pendingJob?.campaignId===state.currentCampaign?.id||state.currentJob?.status==='running';
     $('itemPageSummary').textContent=state.itemPageLoading?'正在读取活动商品…':total?`共 ${total} 件商品 · 第 ${(page-1)*size+1}–${Math.min(page*size,total)} 件 · 第 ${page} / ${pages} 页`:'共 0 件商品';
     // Keep the selector small even when a campaign contains many pages.
     const choices=pages<=200?Array.from({length:pages},(_,index)=>index+1):[...new Set([1,...Array.from({length:21},(_,index)=>page-10+index).filter(value=>value>0&&value<=pages),pages])];
     $('itemPageSelect').innerHTML=choices.map(value=>`<option value="${value}" ${value===page?'selected':''}>第 ${value} 页</option>`).join('');
-    $('itemEnrollmentFilter').disabled=!ready||state.allPagesLoading;
-    ['itemProductFilter','itemIdFilter','itemFilterSubmit','itemFilterReset'].forEach(id=>$(id).disabled=!ready||state.allPagesLoading);
-    $('itemPageSelect').value=String(page);$('itemPageSelect').disabled=!ready||pages<=1;
-    $('itemPageSize').value=String(size);$('itemPageSize').disabled=!ready;
+    $('itemEnrollmentFilter').disabled=!ready||busy;
+    ['itemProductFilter','itemIdFilter','itemFilterSubmit','itemFilterReset'].forEach(id=>$(id).disabled=!ready||busy);
+    $('itemPageSelect').value=String(page);$('itemPageSelect').disabled=!ready||busy||pages<=1;
+    $('itemPageSize').value=String(size);$('itemPageSize').disabled=!ready||busy;
     $('itemPageJumpControls').classList.toggle('hidden',pages<=200);$('itemPageJump').value=String(page);$('itemPageJump').max=String(pages);
-    $('itemPagePrev').disabled=!ready||state.itemPageLoading||page<=1;$('itemPageNext').disabled=!ready||state.itemPageLoading||page>=pages;
+    $('itemPagePrev').disabled=!ready||busy||state.itemPageLoading||page<=1;$('itemPageNext').disabled=!ready||busy||state.itemPageLoading||page>=pages;
 }
 function saveItemPrices(){
     state.itemPrices=state.itemPrices||new Map();
@@ -262,14 +300,14 @@ async function openCampaign(id,targetItemId='',page=1){
         applyCampaignPage(data);state.itemPageLoading=false;
         let message='',messageType='info';
         if(wanted){
-            const writable=['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT'].includes(data.promotion.promotion_type);
+            const writable=['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT','SMART','PRICE_MATCHING'].includes(data.promotion.promotion_type);
             const matches=state.items.filter(row=>String(row.item_id||'')===wanted);
             const target=matches.find(row=>String(row.status_raw||'').toLowerCase()==='candidate');
             if(!writable){message='该活动当前仅支持查看，无法从此入口报名。';messageType='bad';}
             else if(['finished','ended','cancelled','canceled','deleted'].includes(String(data.promotion.status_raw||'').toLowerCase())||(data.promotion.finish_date&&new Date(data.promotion.finish_date).valueOf()<=Date.now())){message='该活动已结束或关闭，无法报名。';messageType='bad';}
             else if(!matches.length){message=`未找到商品 ${wanted} 的活动记录，请返回店铺链接刷新活动状态。`;messageType='bad';}
             else if(!target){message=`商品 ${wanted} 当前已不可报名（${matches.map(row=>row.status_raw||'未知').join(' / ')}），请返回店铺链接刷新活动状态。`;messageType='bad';}
-            else{state.selectedItems.add(target.id);state.selectedRows.set(target.id,target);state.targetItemRowId=target.id;message=`已选中商品 ${wanted}。请核对活动价${data.promotion.promotion_type==='PRICE_DISCOUNT'?'及折扣日期':''}，然后点击「报名此商品」进行提交前确认。`;messageType='ok';}
+            else{state.selectedItems.add(target.id);state.selectedRows.set(target.id,target);state.targetItemRowId=target.id;message=`已选中商品 ${wanted}。请核对活动价${data.promotion.promotion_type==='PRICE_DISCOUNT'?'及折扣日期':''}，然后点击「报名此商品」；系统会自动校验并创建执行日志。`;messageType='ok';}
         }
         renderItems();
         if(state.targetItemRowId!==null)$(`item-row-${state.targetItemRowId}`)?.scrollIntoView({block:'center',behavior:'smooth'});
@@ -314,7 +352,7 @@ function renderCampaignEnrollment(summary){
 }
 function operationPill(status,action='enroll'){
     const verb=action==='withdraw'?'退出':'报名';
-    const [label,style]=({succeeded:[`${verb}成功`,'ok'],failed:[`${verb}失败`,'bad'],unknown:['待核实','warn'],running:['提交中','warn'],blocked:['未提交','bad']})[status]||['结果待确认','warn'];
+    const [label,style]=({succeeded:[`${verb}成功`,'ok'],failed:[`${verb}失败`,'bad'],unknown:['待核实','warn'],running:['提交中','warn'],blocked:[action==='enroll'?'自动屏蔽':'未提交','muted']})[status]||['结果待确认','warn'];
     return `<span class="pill ${style}">${esc(label)}</span>`;
 }
 function isItemEnrolled(row){
@@ -349,6 +387,9 @@ function renderNetProceeds(net,fallbackCurrency='',selectedPrice=null){
 }
 function defaultDealPrice(row){return [row.price,row.raw?.suggested_discounted_price,row.max_price].find(value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))&&Number(value)>0)??'';}
 function netForPrice(row,price){return (price!==null&&price!==undefined&&price!==''?(row.net_proceeds_options||[]).find(net=>(!net.price_currency_id||!row.currency_id||net.price_currency_id===row.currency_id)&&net.applies_to_price!==null&&net.applies_to_price!==undefined&&net.applies_to_price!==''&&Number.isFinite(Number(net.applies_to_price))&&Math.abs(Number(net.applies_to_price)-Number(price))<=0.005):null)||row.net_proceeds_after;}
+function manualEnrollmentReason(row){const type=state.currentCampaign?.promotion_type,status=String(row?.status_raw||'').toLowerCase();if(!['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT','SMART','PRICE_MATCHING'].includes(type))return '该活动类型当前不支持报名';if(!['candidate','withdrawn'].includes(status))return `当前官方状态 ${status||'unknown'} 不可报名`;if(status==='candidate'&&['SMART','PRICE_MATCHING'].includes(type)&&!row.offer_id)return '缺少官方候选优惠编号';return '';}
+function isBulkSelectableItem(row){return String(row?.status_raw||'').toLowerCase()==='candidate'&&!manualEnrollmentReason(row);}
+function itemSelectionReason(row){return !manualEnrollmentReason(row)||isItemEnrolled(row)?'':manualEnrollmentReason(row);}
 function invalidatePreview(){state.preview=null;const confirm=$('confirmBtn');if(confirm)confirm.disabled=true;}
 function updateNetForPrice(id){
     invalidatePreview();
@@ -376,65 +417,89 @@ function applyBatchDiscount(){
     invalidatePreview();
     document.querySelectorAll('#itemRows input[type="checkbox"]').forEach(el=>{el.checked=state.selectedItems.has(Number(el.value));});
     updateSelection();
-    feedback(`已设置 ${applied} 件商品${skipped?`；已取消勾选并跳过 ${skipped} 件，其中 ${belowMinimum} 件低于官方最低折扣要求，其余为不可报名、原价缺失或超出官方价格区间`:''}。${applied?'仅保留符合条件的商品，请核对后进行报名确认。':'没有符合条件的商品，不会提交报名。'}`,skipped?'info':'ok');
+    feedback(`已设置 ${applied} 件商品${skipped?`；已取消勾选并跳过 ${skipped} 件，其中 ${belowMinimum} 件低于官方最低折扣要求，其余为不可报名、原价缺失或超出官方价格区间`:''}。${applied?'仅保留符合条件的商品，点击报名后将自动校验并创建执行日志。':'没有符合条件的商品，不会提交报名。'}`,skipped?'info':'ok');
 }
 function renderItems(){
     hideProductImage();
-    const type=state.currentCampaign?.promotion_type,writable=['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT'].includes(type),priceNeeded=['DEAL','PRICE_DISCOUNT'].includes(type);
+    const type=state.currentCampaign?.promotion_type,writable=['DEAL','MARKETPLACE_CAMPAIGN','PRICE_DISCOUNT','SMART','PRICE_MATCHING'].includes(type),priceNeeded=['DEAL','PRICE_DISCOUNT'].includes(type);
     $('itemRows').innerHTML=state.items.map(row=>{
         const raw=row.raw||{},min=row.min_price,max=row.max_price,price=state.itemPrices?.has(row.id)?state.itemPrices.get(row.id):defaultDealPrice(row);
         const range=min!=null||max!=null?[fmtMoney(min,row.currency_id),fmtMoney(max,row.currency_id)].join(' – '):fmtMoney(row.price,row.currency_id);
-        return `<tr id="item-row-${row.id}" class="${state.targetItemRowId===row.id?'target-item':''}"><td><input type="checkbox" value="${row.id}" ${state.selectedItems.has(row.id)?'checked':''} onchange="toggleItem(${row.id},this.checked)"></td><td><div class="product">${row.thumbnail?`<img src="${esc(row.thumbnail)}" alt="${esc(row.title||row.item_id)}" tabindex="0" onmouseenter="showProductImage(this)" onmouseleave="hideProductImage()" onfocus="showProductImage(this)" onblur="hideProductImage()">`:'<span class="user">暂无主图</span>'}<div><strong>${esc(row.title||raw.title||'产品名称未同步')}</strong><small>${esc(row.item_id)}</small></div></div></td><td>${statusPill(row.status_raw)}</td><td class="result-cell">${renderEnrollmentResult(row)}</td><td>${esc(fmtMoney(row.original_price,row.currency_id))}</td><td>${esc(range)}</td><td>${esc(currentDiscountLabel(row))}</td><td>${esc(discountLabel(row))}</td><td class="net-cell">${renderNetProceeds(row.net_proceeds_before,row.currency_id)}</td><td class="net-cell" id="net-after-${row.id}">${renderNetProceeds(priceNeeded?netForPrice(row,price):row.net_proceeds_after,row.currency_id,priceNeeded?price:null)}</td><td>${priceNeeded?`<input class="price" id="price-${row.id}" type="number" min="0" step="0.01" value="${esc(price)}" oninput="updateNetForPrice(${row.id})" placeholder="活动价">`:'平台定价'}</td><td>${esc(fmtDate(row.last_synced_at))}</td></tr>`;
+        const blocked=itemSelectionReason(row);
+        return `<tr id="item-row-${row.id}" class="${state.targetItemRowId===row.id?'target-item':''}"><td><input type="checkbox" value="${row.id}" ${state.selectedItems.has(row.id)?'checked':''} ${blocked?`disabled title="${esc(blocked)}"`:''} onchange="toggleItem(${row.id},this.checked)"></td><td><div class="product">${row.thumbnail?`<img src="${esc(row.thumbnail)}" alt="${esc(row.title||row.item_id)}" tabindex="0" onmouseenter="showProductImage(this)" onmouseleave="hideProductImage()" onfocus="showProductImage(this)" onblur="hideProductImage()">`:'<span class="user">暂无主图</span>'}<div><strong>${esc(row.title||raw.title||'产品名称未同步')}</strong><small>${esc(row.item_id)}</small></div></div></td><td>${statusPill(row.status_raw)}</td><td class="result-cell">${renderEnrollmentResult(row)}</td><td>${esc(fmtMoney(row.original_price,row.currency_id))}</td><td>${esc(range)}</td><td>${esc(currentDiscountLabel(row))}</td><td>${esc(discountLabel(row))}</td><td class="net-cell">${renderNetProceeds(row.net_proceeds_before,row.currency_id)}</td><td class="net-cell" id="net-after-${row.id}">${renderNetProceeds(priceNeeded?netForPrice(row,price):row.net_proceeds_after,row.currency_id,priceNeeded?price:null)}</td><td>${priceNeeded?`<input class="price" id="price-${row.id}" type="number" min="0" step="0.01" value="${esc(price)}" oninput="updateNetForPrice(${row.id})" placeholder="活动价">`:'平台定价'}</td><td>${esc(fmtDate(row.last_synced_at))}</td></tr>`;
     }).join('')||`<tr><td class="empty" colspan="12">${state.itemProductFilter||state.itemIdFilter||state.itemEnrollmentFilter?'没有符合筛选条件的商品，请调整条件或重置筛选。':'该活动尚无商品记录'}</td></tr>`;
-    $('enrollBtn').classList.toggle('hidden',!writable);$('withdrawBtn').classList.toggle('hidden',!writable);$('batchDiscount').classList.toggle('hidden',!priceNeeded);$('discountDates').classList.toggle('hidden',type!=='PRICE_DISCOUNT');updateSelection();renderItemPagination();
+    $('enrollBtn').classList.toggle('hidden',!writable);$('withdrawBtn').classList.toggle('hidden',!!stopCampaignReason({promotion_type:type}));$('batchDiscount').classList.toggle('hidden',!priceNeeded);$('discountDates').classList.toggle('hidden',type!=='PRICE_DISCOUNT');updateSelection();renderItemPagination();
 }
 function toggleItem(id,on){
     state.selectedRows=state.selectedRows||new Map();
-    if(on){state.selectedItems.add(id);const row=state.items.find(row=>row.id===id);if(row)state.selectedRows.set(id,row);}
+    const row=state.items.find(row=>row.id===id);
+    if(on&&row&&!itemSelectionReason(row)){state.selectedItems.add(id);state.selectedRows.set(id,row);}
     else{state.selectedItems.delete(id);state.selectedRows.delete(id);}
     invalidatePreview();updateSelection();
 }
 function selectAllItems(on){
-    state.items.forEach(row=>toggleItem(row.id,on));
-    document.querySelectorAll('#itemRows input[type="checkbox"]').forEach(el=>{el.checked=on;});
+    state.items.forEach(row=>toggleItem(row.id,on&&!itemSelectionReason(row)));
+    document.querySelectorAll('#itemRows input[type="checkbox"]').forEach(el=>{el.checked=state.selectedItems.has(Number(el.value));});
     invalidatePreview();updateSelection();
 }
+async function readSelectionPage(url, signal){
+    const controller=new AbortController();
+    let timer,onAbort;
+    const stopped=new Promise((_,reject)=>{
+        onAbort=()=>{controller.abort();reject(new Error('已取消读取'));};
+        if(signal.aborted){onAbort();return;}
+        signal.addEventListener('abort',onAbort,{once:true});
+        timer=setTimeout(()=>{controller.abort();reject(new Error('分页读取超过 20 秒，请重试'));},20000);
+    });
+    try{return await Promise.race([api(url,{signal:controller.signal}),stopped]);}
+    finally{clearTimeout(timer);signal.removeEventListener('abort',onAbort);}
+}
 async function selectAllCampaignItems(){
-    if(!state.currentCampaign||state.itemPageLoading||state.allPagesLoading)return;
+    if(state.allPagesLoading){state.selectionAbort?.abort();return;}
+    if(!state.currentCampaign||state.itemPageLoading)return;
     saveItemPrices();invalidatePreview();$('previewDialog').close();
-    const campaignId=state.currentCampaign.id,request=state.campaignRequest;
-    const rows=new Map();
-    state.allPagesLoading=true;updateSelection();
+    const campaignId=state.currentCampaign.id,request=state.campaignRequest,controller=new AbortController();
+    state.selectionAbort=controller;
+    const rows=new Map(),pageRows=new Map();
+    state.allPagesLoading=true;state.selectionProgress='0 页';updateSelection();renderItemPagination();
     try{
-        let pages=1,total=null;
-        for(let page=1;page<=pages;page++){
-            const data=await api(campaignItemsUrl(campaignId,page,100));
-            if(request!==state.campaignRequest)return;
-            if(total!==null&&Number(data.total)!==total)throw new Error('商品数量发生变化，请重试');
+        let pages=1,total=null,completed=0,next=2;
+        const read=async page=>{
+            const data=await readSelectionPage(campaignItemsUrl(campaignId,page,500)+'&selection=1&candidate_only=1',controller.signal);
+            if(controller.signal.aborted||request!==state.campaignRequest)throw new Error('已取消读取');
+            if(total!==null&&(Number(data.total)!==total||Number(data.pages)!==pages))throw new Error('商品数量发生变化，请重试');
             total=Number(data.total);pages=Math.max(1,Number(data.pages)||1);
-            for(const row of data.rows||[])rows.set(row.id,row);
-            feedback(`正在读取所有页商品：${page} / ${pages} 页`,'info',0);
-        }
+            if(!Number.isSafeInteger(total)||total<0||!Number.isSafeInteger(pages))throw new Error('分页响应无效，请重试');
+            pageRows.set(page,data.rows||[]);completed++;
+            state.selectionProgress=`${completed}/${pages} 页`;updateSelection();
+            feedback(`正在读取所有页商品：${completed} / ${pages} 页（最多 6 页并行，可取消读取）`,'info',0);
+        };
+        await read(1);
+        const worker=async()=>{while(next<=pages&&!controller.signal.aborted){const page=next++;await read(page);}};
+        await Promise.all(Array.from({length:Math.min(6,pages-1)},worker));
+        for(let page=1;page<=pages;page++)for(const row of pageRows.get(page)||[])rows.set(row.id,row);
         if(rows.size!==total)throw new Error('商品列表发生变化或未读取完整，请重试');
         let count=0;
         for(const row of rows.values()){
-            if(!['candidate','withdrawn'].includes(String(row.status_raw||'').toLowerCase()))continue;
+            if(!isBulkSelectableItem(row))continue;
             state.selectedItems.add(row.id);state.selectedRows.set(row.id,row);count++;
         }
         feedback(`已选中所有页的 ${count} 件可报名商品，可统一设置折扣后点击报名按钮。`,'ok');
     }catch(e){
-        if(request===state.campaignRequest)feedback(`全选所有页失败：${e.message}。已保留原有选择，请重试。`,'bad',0);
+        controller.abort();
+        if(request===state.campaignRequest)feedback(`全选所有页未完成：${e.message}。已保留原有选择，可重试。`,'bad',0);
     }finally{
-        if(request===state.campaignRequest){state.allPagesLoading=false;renderItems();}
+        if(request===state.campaignRequest&&state.selectionAbort===controller){state.allPagesLoading=false;state.selectionAbort=null;renderItems();}
     }
 }
-function updateSelection(){const n=state.selectedItems.size,busy=state.itemPageLoading||state.allPagesLoading||state.pendingJob?.campaignId===state.currentCampaign?.id; $('selectAllPagesBtn').disabled=busy||!state.currentCampaign||!state.itemTotal; $('selectAllPagesBtn').textContent=state.allPagesLoading?'正在读取所有页…':'全选所有页可报名商品';const pageSelected=state.items.filter(row=>state.selectedItems.has(row.id)).length;$('selectionText').textContent=`已选择 ${n} 件商品`;$('enrollBtn').disabled=!n||busy;$('enrollBtn').textContent=n===1?'报名此商品':'批量报名';$('withdrawBtn').disabled=!n||busy;$('applyDiscountBtn').disabled=!n||busy;$('selectAll').disabled=!state.items.length||busy;$('selectAll').checked=!!state.items.length&&pageSelected===state.items.length;$('selectAll').indeterminate=pageSelected>0&&pageSelected<state.items.length}
+function updateSelection(){const n=state.selectedItems.size,running=state.pendingJob?.campaignId===state.currentCampaign?.id||state.currentJob?.status==='running',busy=state.itemPageLoading||state.allPagesLoading||state.enrollmentSubmitting||running; $('selectAllPagesBtn').disabled=!state.allPagesLoading&&(busy||!state.currentCampaign||!state.itemTotal); $('selectAllPagesBtn').textContent=state.allPagesLoading?`取消读取 · ${state.selectionProgress||'0 页'}`:'全选所有页可报名商品';const pageSelected=state.items.filter(row=>state.selectedItems.has(row.id)).length;$('selectionText').textContent=state.enrollmentSubmitting?'正在校验并创建报名日志…':running?'报名任务执行中':`已选择 ${n} 件商品`;$('enrollBtn').disabled=!n||busy;$('enrollBtn').textContent=state.enrollmentSubmitting?'正在提交…':n===1?'报名此商品':'批量报名';$('withdrawBtn').disabled=!n||busy;$('applyDiscountBtn').disabled=!n||busy;$('selectAll').disabled=!state.items.length||busy;$('selectAll').checked=!!state.items.length&&pageSelected===state.items.length;$('selectAll').indeterminate=pageSelected>0&&pageSelected<state.items.length}
 function previewRequestRows(){
     const priceNeeded=['DEAL','PRICE_DISCOUNT'].includes(state.currentCampaign?.promotion_type);
     return selectedItemRows().map(row=>({item_local_id:row.id,deal_price:priceNeeded?((state.items.some(item=>item.id===row.id)?$(`price-${row.id}`)?.value:state.itemPrices?.get(row.id)??String(defaultDealPrice(row)))||null):null,start_date:$('discountStart').value,finish_date:$('discountFinish').value}));
 }
 async function previewAction(action){
-    if(!state.currentCampaign||!state.selectedItems.size||state.itemPageLoading||state.allPagesLoading||state.pendingJob?.campaignId===state.currentCampaign?.id)return;
+    if(action==='enroll')return startEnrollment();
+    if(!state.currentCampaign||!state.selectedItems.size||state.itemPageLoading||state.allPagesLoading||state.pendingJob?.campaignId===state.currentCampaign?.id||state.currentJob?.status==='running')return;
     const campaign=state.currentCampaign,request=state.campaignRequest,pageRequest=state.itemPageRequest;
     const rows=previewRequestRows();
     try{
@@ -444,8 +509,39 @@ async function previewAction(action){
         state.preview=data;$('previewSubtitle').textContent=`${action==='enroll'?'报名':'退出'} · ${campaign.name} · 预览 5 分钟内有效`;
         $('previewSummary').innerHTML=`<span>可提交 <b>${data.ready_count}</b></span><span>已阻止 <b>${data.blocked_count}</b></span>`;
         $('previewRows').innerHTML=data.rows.map(r=>`<div class="preview-row"><b>${esc(r.item_id||'未知商品')}</b><span>${r.deal_price?esc(fmtMoney(r.deal_price,r.currency_id)):action==='enroll'?'接受平台活动价':'退出活动'}</span><span class="${r.status==='blocked'?'blocked':''}">${r.status==='ready'?'校验通过':esc(r.reason)}</span>${action==='enroll'?`<div class="preview-net"><div>促销前净收益价：${renderNetProceeds(r.net_proceeds_before,r.currency_id)}</div><div>促销后净收益价：${renderNetProceeds(r.net_proceeds_after,r.currency_id,r.deal_price??null)}</div></div>`:''}</div>`).join('');
-        $('confirmBtn').disabled=!data.ready_count;$('confirmBtn').textContent=`确认提交 ${data.ready_count} 件商品`;previewDialog.showModal();
+        $('confirmBtn').disabled=!data.ready_count;$('confirmBtn').textContent=`确认退出 ${data.ready_count} 件商品`;previewDialog.showModal();
     }catch(e){if(request===state.campaignRequest)feedback(e.message,'bad');}
+}
+function excludedEnrollmentText(data){
+    const count=Number(data?.excluded_count)||0;
+    if(!count)return '';
+    const reasons=(data.excluded_reasons||[]).slice(0,3).map(row=>`${row.reason} ${Number(row.count)||0} 件`).join('；');
+    return `；自动屏蔽 ${count} 件${reasons?`（${reasons}）`:''}`;
+}
+async function startEnrollment(){
+    if(!state.currentCampaign||!state.selectedItems.size||state.itemPageLoading||state.allPagesLoading||state.enrollmentSubmitting||state.pendingJob?.campaignId===state.currentCampaign?.id||state.currentJob?.status==='running')return;
+    const campaign=state.currentCampaign,campaignId=campaign.id,request=state.campaignRequest,rows=previewRequestRows();
+    state.enrollmentSubmitting=true;updateSelection();renderItemPagination();
+    feedback(`正在校验 ${rows.length} 件商品并创建报名日志…`,'info',0);
+    try{
+        const data=await api('/api/promotions/enroll',{method:'POST',body:JSON.stringify({promotion_id:campaignId,rows})});
+        const excluded=excludedEnrollmentText(data);
+        window.parent.postMessage({type:'promotions-changed'},window.location.origin);
+        if(request===state.campaignRequest&&state.currentCampaign?.id===campaignId){state.selectedItems.clear();state.selectedRows=new Map();invalidatePreview();}
+        if(data.status==='running'&&data.job_id){
+            state.pendingJob={id:data.job_id,campaignId};
+            feedback(`报名日志已创建，提交 ${Number(data.submitted_count)||0} 件${excluded}；正在后台执行。`,'info',0);
+            watchPromotionJob(data.job_id,campaignId);
+        }else{
+            feedback(`${data.job_id?'报名日志已记录；':''}本次没有可提交商品${excluded||'；所选商品均不符合报名要求'}，未向平台发送报名。`,'info',0);
+            await loadPromotions();
+        }
+    }catch(e){feedback(`报名未提交：${e.message}`,'bad',0);}
+    finally{
+        state.enrollmentSubmitting=false;
+        if(request===state.campaignRequest&&state.currentCampaign?.id===campaignId)renderItems();
+        else{updateSelection();renderItemPagination();}
+    }
 }
 async function submitPreview(){
     if(!state.preview)return;
@@ -459,7 +555,7 @@ async function submitPreview(){
         if(state.preview?.preview_id===previewId)state.preview=null;
         if(data.status==='running'){
             state.pendingJob={id:data.job_id,campaignId};updateSelection();
-            feedback('报名任务已提交，正在后台执行。请在「执行记录」查看进度，勿重复提交。','info',0);
+            feedback(`${action==='withdraw'?'退出':'报名'}任务已提交，正在后台执行。请在「执行记录」查看进度，勿重复提交。`,'info',0);
             watchPromotionJob(data.job_id,campaignId);
             return;
         }
@@ -479,33 +575,54 @@ async function submitPreview(){
         }
         loadPromotions();
         feedback(`提交完成：成功 ${success}，待核实 ${unknown}，失败 ${failed}`,failed&&!success&&!unknown?'bad':failed||unknown?'info':'ok',0);
-    }catch(e){feedback(e.message,'bad')}finally{btn.disabled=!state.preview?.ready_count;btn.textContent='确认提交'}
+    }catch(e){feedback(e.message,'bad')}finally{btn.disabled=!state.preview?.ready_count;btn.textContent='确认退出'}
 }
-function watchPromotionJob(jobId,campaignId,attempt=0,lastSuccessCount=0){
+function watchPromotionJob(jobId,campaignId,attempt=0,lastSuccessCount=0,missingCount=0){
     window.setTimeout(async()=>{
         try{
-            const data=await api('/api/promotions/jobs'),job=(data.rows||[]).find(row=>row.job_id===jobId);
+            const timeoutOptions=typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'?{signal:AbortSignal.timeout(15000)}:{};
+            const data=await api(`/api/promotions/jobs?summary=1&job_id=${encodeURIComponent(jobId)}`,timeoutOptions),job=(data.rows||[])[0];
             const successCount=Number(job?.success_count)||0;
             if(job?.status==='running'&&successCount!==lastSuccessCount){
                 window.parent.postMessage({type:'promotions-changed'},window.location.origin);
             }
-            if(!job||job.status==='running'){
-                if(attempt<300)watchPromotionJob(jobId,campaignId,attempt+1,successCount);
-                else feedback('活动任务仍在执行，请在「执行记录」查看最新结果。','info',0);
+            if(!job){
+                if(missingCount<5){watchPromotionJob(jobId,campaignId,Math.min(attempt+1,26),lastSuccessCount,missingCount+1);return;}
+                if(state.pendingJob?.id===jobId)state.pendingJob=null;
+                updateSelection();renderItemPagination();
+                feedback('报名任务已连续多次不可见，请在「执行记录」核对店铺权限和任务状态。','bad',0);
+                return;
+            }
+            if(job.status==='running'){
+                watchPromotionJob(jobId,campaignId,Math.min(attempt+1,26),successCount,0);
                 return;
             }
             if(state.pendingJob?.id===jobId)state.pendingJob=null;
+            if(state.currentCampaign?.id===campaignId){
+                state.currentJob={...(state.currentJob||{}),...job,action:job.action||state.currentJob?.action||'enroll'};
+            }
             window.parent.postMessage({type:'promotions-changed'},window.location.origin);
+            await loadPromotions();
             if(state.currentCampaign?.id===campaignId)await refreshCampaign();
-            loadPromotions();
-            feedback(`提交完成：成功 ${Number(job.success_count)||0}，待核实 ${Number(job.unknown_count)||0}，失败 ${Number(job.failed_count)||0}`,job.status==='succeeded'?'ok':'info',0);
-        }catch(e){feedback(`读取执行结果失败：${e.message}，请点击刷新结果或查看执行记录。`,'bad',0);}
-    },2000);
+            const blocked=Number(job.blocked_count)||0;
+            feedback(`提交完成：成功 ${Number(job.success_count)||0}${blocked?`，自动屏蔽 ${blocked}`:''}，待核实 ${Number(job.unknown_count)||0}，失败 ${Number(job.failed_count)||0}`,job.status==='succeeded'?'ok':'info',0);
+        }catch(e){
+            if(attempt===0)feedback(`暂时无法读取执行进度：${e.message}；系统会自动重试。`,'info',0);
+            watchPromotionJob(jobId,campaignId,Math.min(attempt+1,26),lastSuccessCount,missingCount);
+        }
+    },Math.min(15000,2000+attempt*500));
 }
-async function loadJobs(){try{const data=await api('/api/promotions/jobs');$('jobRows').innerHTML=(data.rows||[]).map(row=>`<tr><td class="number">${esc(row.job_id.slice(0,10))}${row.promotion_name?`<small class="result-note">${esc(row.promotion_name)}<br>${esc(row.store_name||'')} · ${esc(row.site_id||'')}</small>`:''}</td><td>${esc(row.actor)}</td><td>${row.action==='enroll'?'报名':'退出'}</td><td>${statusPill(row.status)}</td><td>${row.total_count}</td><td>${row.success_count}</td><td>${row.unknown_count}</td><td>${row.failed_count}</td><td>${esc(fmtDate(row.created_at))}</td><td class="result-cell">${(row.results||[]).map(r=>`<div class="operation-row"><b>${esc(r.item_id)}</b>${operationPill(r.status,row.action)}${r.message?`<small class="result-note">${esc(r.message)}</small>`:''}</div>`).join('')||'—'}</td></tr>`).join('')||'<tr><td class="empty" colspan="10">暂无执行记录</td></tr>'}catch(e){feedback(e.message,'bad')}}
+async function restoreEnrollmentProgress(){
+    try{
+        const timeoutOptions=typeof AbortSignal!=='undefined'&&typeof AbortSignal.timeout==='function'?{signal:AbortSignal.timeout(15000)}:{};
+        const data=await api('/api/promotions/jobs?summary=1&action=enroll&status=running',timeoutOptions);
+        (data.rows||[]).forEach(job=>watchPromotionJob(job.job_id,job.promotion_fk));
+    }catch(e){feedback(`报名任务状态暂不可用：${e.message}；可在执行记录中查看。`,'info');}
+}
+async function loadJobs(){try{const data=await api('/api/promotions/jobs?result_limit=100');$('jobRows').innerHTML=(data.rows||[]).map(row=>`<tr><td class="number">${esc(row.job_id.slice(0,10))}${row.promotion_name?`<small class="result-note">${esc(row.promotion_name)}<br>${esc(row.store_name||'')} · ${esc(row.site_id||'')}</small>`:''}</td><td>${esc(row.actor)}</td><td>${row.action==='enroll'?'报名':'退出'}</td><td>${statusPill(row.status)}</td><td>${row.total_count}</td><td>${row.success_count}</td><td>${Number(row.blocked_count)||0}</td><td>${row.unknown_count}</td><td>${row.failed_count}</td><td>${esc(fmtDate(row.created_at))}</td><td class="result-cell">${(row.results||[]).map(r=>`<div class="operation-row"><b>${esc(r.item_id||'批次')}</b>${operationPill(r.status,row.action)}${r.message?`<small class="result-note">${esc(r.message)}</small>`:''}</div>`).join('')||'—'}${row.results_truncated?`<small class="result-note">本页显示前 ${row.results.length} 条，共 ${Number(row.results_total)||0} 条；汇总数量为完整日志。</small>`:''}</td></tr>`).join('')||'<tr><td class="empty" colspan="11">暂无执行记录</td></tr>'}catch(e){feedback(e.message,'bad')}}
 async function initializePromotions(search=window.location.search){
     const query=new URLSearchParams(search),promotionId=query.get('promotion_id'),itemId=query.get('item_id');
-    const requests=[loadStores(),loadPromotions()];
+    const requests=[loadStores(),loadPromotions(),restoreEnrollmentProgress()];
     if(promotionId!==null||itemId!==null){
         if(!/^[1-9]\d*$/.test(promotionId||'')||!Number.isSafeInteger(Number(promotionId))){feedback('报名入口的活动编号无效，请返回店铺链接重新打开。','bad',0);}
         else if(itemId!==null&&!itemId.trim()){feedback('报名入口缺少商品编号，请返回店铺链接重新打开。','bad',0);}

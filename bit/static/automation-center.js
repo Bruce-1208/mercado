@@ -1,73 +1,35 @@
 (() => {
   'use strict';
-  const rules = {rights_reply:'权利人自动回复',rights_cleanup:'举报链接及同名产品处理',freight:'运费变动自动回填',settings:'开关设置'};
-  const statuses = {running:'执行中',success:'成功',failed:'失败',unknown:'待核实，请人工检查',skipped:'已跳过',interrupted:'执行中断，已安排重试'};
-  const message=document.querySelector('#message'), runs=document.querySelector('#runs'), more=document.querySelector('#more');
-  const filters=document.querySelector('#log-filters'), hint=document.querySelector('#filter-hint');
-  let next=null, busy=false, older=false, appliedFilters={}, revision=0, pendingReload=false;
+  const rules={rights_reply:'权利人自动回复',rights_cleanup:'举报链接及同名产品处理',freight:'运费变动自动回填',settings:'开关设置'};
+  const statuses={error:'失败',partial:'部分失败',retained:'已保留',queued:'等待重试',running:'执行中',success:'成功',failed:'失败',unknown:'待核实，请人工检查',skipped:'已跳过',interrupted:'执行中断，可重试'};
+  const message=document.querySelector('#message'),runs=document.querySelector('#runs'),more=document.querySelector('#more');
+  const filters=document.querySelector('#log-filters'),hint=document.querySelector('#filter-hint');
+  const selectAll=document.querySelector('#select-all-retry'),retrySelected=document.querySelector('#retry-selected'),retryHint=document.querySelector('#retry-hint');
+  const maxRetries=50,selected=new Set(),detailCache=new Map();
+  let next=null,busy=false,retryBusy=false,older=false,appliedFilters={},revision=0,pendingReload=false;
+
+  function showMessage(text,tone='error'){message.textContent=text||'';if(text)message.dataset.tone=tone;else delete message.dataset.tone;}
   function resumePending(){if(pendingReload){pendingReload=false;load();}}
-  function contextValues(detail,keys){
-    const found=new Set();
-    function walk(value){if(!value||typeof value!=='object')return;for(const [key,item] of Object.entries(value)){if(keys.includes(key)&&item!==null&&typeof item!=='object'&&String(item).trim())found.add(String(item));else walk(item);}}
-    walk(detail);return [...found];
-  }
+  function contextValues(detail,keys){const found=new Set();function walk(value){if(!value||typeof value!=='object')return;for(const [key,item] of Object.entries(value)){if(keys.includes(key)&&item!==null&&typeof item!=='object'&&String(item).trim())found.add(String(item));else walk(item);}}walk(detail);return [...found];}
   function element(tag,text,cls){const el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;return el;}
-  const labels={time:'时间',stage:'步骤',status:'状态',message:'说明',error:'错误',errors:'错误',result:'结果',
-    token_id:'店铺编号',source_token_id:'来源店铺',case_id:'案件编号',source_id:'举报编号',item_id:'链接编号',marketplace_item_id:'站点链接',global_item_id:'Global 商品',
-    due_at:'截止时间',text:'回复内容',title:'商品标题',order_number:'订单号',actual_weight_g:'实际重量（克）',dimensions_cm:'尺寸（厘米）',
-    submitted_weight_g:'提交重量（克）',submitted_dimensions_cm:'提交尺寸（厘米）',net_proceeds_usd:'净收益（美元）',
-    product_count:'匹配产品数',product_ids:'产品编号',before:'修改前',after:'修改后',weight_g:'重量（克）',
-    package_length_cm:'长（厘米）',package_width_cm:'宽（厘米）',package_height_cm:'高（厘米）',volumetric_weight_kg:'体积重（公斤）',
-    reports:'举报记录',products:'同名产品',links:'链接处理结果',changed:'修改数量',matched:'匹配数量',review_status:'审核状态',
-    actor_id:'操作人编号',switches:'开关',rights_reply:'权利人自动回复',rights_cleanup:'举报链接清理',freight:'运费自动回填',
-    automation_status:'执行结果',store_name:'店铺',salesperson:'业务员',link_name:'链接名称',execution_id:'执行批次',
-    operator:'执行人',action:'操作',reason:'举报原因',rights_holder:'权利人'};
-  function readable(value,depth=0){
-    if(value===null||typeof value!=='object')return String(value===true?'开启':value===false?'关闭':value??'—');
-    if(Array.isArray(value))return value.map((item,index)=>'  '.repeat(depth)+(index+1)+'. '+readable(item,depth+1)).join('\n');
-    return Object.entries(value).map(([key,item])=>'  '.repeat(depth)+(labels[key]||key)+'：'+(item&&typeof item==='object'?'\n'+readable(item,depth+1):readable(item,depth))).join('\n');
-  }
-  async function api(options={}, before=null){
-    const params=new URLSearchParams();const organization=new URLSearchParams(location.search).get('organization_key');if(organization)params.set('organization_key',organization);
-    for(const [key,value] of Object.entries(appliedFilters))if(value)params.set(key,value);if(before)params.set('before',before);
-    const response=await fetch('/api/automation-center?'+params.toString(),{...options,headers:{'Content-Type':'application/json'},cache:'no-store'});
-    const payload=await response.json();
-    if(!response.ok||payload.status!=='success')throw new Error(payload.message||'加载失败');
-    return payload.data;
-  }
-  function render(data,append=false){
-    for(const input of document.querySelectorAll('[data-rule]')){input.checked=!!data.settings[input.dataset.rule];input.disabled=false;}
-    if(!append)runs.replaceChildren();
-    for(const run of data.runs){
-      const detail=element('details',''),summary=element('summary','');
-      summary.append(element('span',statuses[run.status]||run.status,'badge '+run.status),element('span',rules[run.rule_key]||run.rule_key),element('span',run.subject,'subject'),element('time',run.started_at,'meta'));
-      const sales=contextValues(run.detail,['salesperson']), stores=contextValues(run.detail,['store_name','company_store','store']);
-      const ids=contextValues(run.detail,['token_id','source_token_id']);
-      summary.append(element('span','业务员：'+(sales.join('、')||'未记录')+' · 店铺：'+(stores.join('、')||ids.map(id=>'#'+id).join('、')||'未记录'),'context'));
-      detail.append(summary,element('pre',readable(run.detail)));runs.append(detail);
-    }
-    if(!runs.children.length)runs.append(element('div',(Object.values(appliedFilters).some(Boolean)?'没有符合筛选条件的日志。':'暂无执行日志。开启规则后，符合条件的事项会自动执行。'),'empty'));
-    next=data.next_before;more.hidden=!next;hint.textContent='已显示 '+runs.querySelectorAll('details').length+' 条'+(Object.values(appliedFilters).some(Boolean)?'筛选结果':'日志');
-  }
-  async function load(append=false){
-    if(busy){if(!append)pendingReload=true;return;}busy=true;message.textContent='';const version=revision;
-    try{const data=await api({},append?next:null);if(version===revision){render(data,append);older=append;}}catch(error){if(version===revision)message.textContent=error.message;}finally{busy=false;resumePending();}
-  }
-  for(const input of document.querySelectorAll('[data-rule]'))input.addEventListener('change',async()=>{
-    if(busy){input.checked=!input.checked;return;}
-    busy=true;const value=input.checked, version=revision;
-    for(const item of document.querySelectorAll('[data-rule]'))item.disabled=true;
-    try{const data=await api({method:'PATCH',body:JSON.stringify({[input.dataset.rule]:value})});if(version===revision)render(data);older=false;message.textContent=value?'已开启，后台将在下一轮检查时执行。':'已关闭，正在处理的单次请求结束后停止后续操作。';}
-    catch(error){input.checked=!value;message.textContent=error.message;}
-    finally{busy=false;for(const item of document.querySelectorAll('[data-rule]'))item.disabled=false;resumePending();}
-  });
-  filters.addEventListener('submit',event=>{
-    event.preventDefault();
-    const values=Object.fromEntries([...new FormData(filters)].map(([key,value])=>[key,value.trim()]));
-    if(values.date_from&&values.date_to&&values.date_from>values.date_to){message.textContent='开始时间不能晚于结束时间';return;}
-    appliedFilters=values;revision++;older=false;next=null;load();
-  });
-  filters.addEventListener('reset',()=>{appliedFilters={};revision++;older=false;next=null;load();});
-  document.querySelector('#refresh').addEventListener('click',()=>load());more.addEventListener('click',()=>load(true));
-  setInterval(()=>{if(!document.hidden&&!older&&!runs.querySelector('details[open]')&&(!window.frameElement||window.frameElement.closest('.tab-page')?.classList.contains('active')))load();},15000);load();
+  const labels={time:'时间',stage:'步骤',status:'状态',message:'说明',error:'错误',errors:'错误',result:'结果',token_id:'店铺编号',source_token_id:'来源店铺',case_id:'案件编号',source_id:'举报编号',item_id:'链接编号',marketplace_item_id:'站点链接',global_item_id:'Global 商品',due_at:'截止时间',text:'回复内容',title:'商品标题',order_number:'订单号',actual_weight_g:'实际重量（克）',dimensions_cm:'尺寸（厘米）',submitted_weight_g:'提交重量（克）',submitted_dimensions_cm:'提交尺寸（厘米）',net_proceeds_usd:'净收益（美元）',product_count:'匹配产品数',product_ids:'产品编号',before:'修改前',after:'修改后',weight_g:'重量（克）',package_length_cm:'长（厘米）',package_width_cm:'宽（厘米）',package_height_cm:'高（厘米）',volumetric_weight_kg:'体积重（公斤）',reports:'举报记录',products:'同名产品',links:'链接处理结果',changed:'修改数量',matched:'匹配数量',review_status:'审核状态',actor_id:'操作人编号',operator_id:'操作人编号',source_run_id:'来源日志',switches:'开关',rights_reply:'权利人自动回复',rights_cleanup:'举报链接清理',freight:'运费自动回填',automation_status:'执行结果',store_name:'店铺',salesperson:'业务员',link_name:'链接名称',execution_id:'执行批次',operator:'执行人',action:'操作',reason:'举报原因',rights_holder:'权利人',link_id:'链接记录编号',store:'店铺',max_deleted_sales:'删除销量上限',applied_fields:'已应用字段',remote_groups:'平台操作组'};
+  function scalar(value,key){if(value===null||value===undefined)return '—';if(typeof value==='boolean')return value?'开启':'关闭';if(key==='status'||key==='automation_status')return statuses[value]||String(value);const text=String(value),start=text.indexOf('{');if(start>=0){try{return text.slice(0,start).trimEnd()+'\n'+JSON.stringify(JSON.parse(text.slice(start)),null,2);}catch(_){/* Preserve non-JSON errors. */}}return text;}
+  function fields(value,parent,path=[]){if(value&&typeof value==='object'&&Object.keys(value).length){for(const [key,item] of Object.entries(value))fields(item,parent,[...path,Array.isArray(value)?'第 '+(Number(key)+1)+' 项':labels[key]||key]);return;}const row=element('div','','log-field');if(path.some(key=>key==='错误'))row.classList.add('log-error');row.append(element('dt',path.join(' / ')||'说明'),element('dd',value&&typeof value==='object'?(Array.isArray(value)?'无记录':'无字段'):scalar(value,path[path.length-1]==='状态'?'status':path[path.length-1]==='执行结果'?'automation_status':'')));parent.append(row);}
+  function logEntries(value){const list=element('ol','','log-entries'),entries=Array.isArray(value)?value:[value];if(!entries.length){list.append(element('li','暂无详细记录','empty'));return list;}entries.forEach((entry,index)=>{const item=element('li','','log-entry'),heading=element('div','','log-entry-heading');heading.append(element('span',String(index+1).padStart(2,'0'),'log-number'));const structured=entry&&typeof entry==='object'&&!Array.isArray(entry);heading.append(element('strong',structured?(entry.stage||(entry.error?'执行错误':entry.result?'执行结果':'执行记录')):'执行记录'));if(structured&&entry.time)heading.append(element('time',String(entry.time).replace('T',' '),'meta'));const body=element('dl','','log-fields');fields(structured?Object.fromEntries(Object.entries(entry).filter(([key])=>!['time','stage'].includes(key))):entry,body);item.append(heading,body);list.append(item);});return list;}
+  async function api(options={},before=null,extra={}){const params=new URLSearchParams(),organization=new URLSearchParams(location.search).get('organization_key');if(organization)params.set('organization_key',organization);for(const [key,value] of Object.entries(appliedFilters))if(value)params.set(key,value);if(before)params.set('before',before);for(const [key,value] of Object.entries(extra))if(value!==null&&value!==undefined&&value!=='')params.set(key,value);const response=await fetch('/api/automation-center?'+params.toString(),{...options,headers:{'Content-Type':'application/json'},cache:'no-store'});const payload=await response.json();if(!response.ok||payload.status!=='success')throw new Error(payload.message||'加载失败');return payload.data;}
+  function retryCheckboxes(){return [...runs.querySelectorAll('.run-select:not(:disabled)')];}
+  function updateSelection(){const choices=retryCheckboxes();for(const id of [...selected]){const choice=document.querySelector(`.run-select[data-run-id="${id}"]`);if(!choice||choice.disabled)selected.delete(id);}for(const choice of choices)choice.checked=selected.has(Number(choice.dataset.runId));const allSelected=choices.length>0&&choices.every(choice=>selected.has(Number(choice.dataset.runId)));selectAll.disabled=retryBusy||choices.length===0;selectAll.checked=allSelected;selectAll.indeterminate=!allSelected&&choices.some(choice=>selected.has(Number(choice.dataset.runId)));retrySelected.textContent=`重试所选（${selected.size}）`;retrySelected.disabled=retryBusy||selected.size===0;retryHint.textContent=retryBusy?'正在加入重试队列…':selected.size?`已选择 ${selected.size} 条；系统会按当前权威数据重新核验后执行`:'请选择失败或中断的最新记录';}
+  function clearSelection(){selected.clear();updateSelection();}
+  async function loadDetail(run,body,reasonText){if(body.dataset.loaded==='1')return;body.replaceChildren(element('div','正在读取日志明细…','detail-state'));const cacheKey=`${run.id}:${run.updated_at||''}:${run.status||''}`;try{let data;if(Array.isArray(run.detail))data={detail:run.detail,failure_reason:run.failure_reason||''};else{if(!detailCache.has(cacheKey))detailCache.set(cacheKey,api({},null,{run_id:run.id}));data=await detailCache.get(cacheKey);}body.replaceChildren(logEntries(data.detail||[]));body.dataset.loaded='1';if(data.failure_reason){reasonText.textContent=data.failure_reason;reasonText.closest('.failure-reason').hidden=false;}}catch(error){detailCache.delete(cacheKey);body.replaceChildren(element('div',error.message,'detail-state log-error'));}}
+  function render(data,append=false){for(const input of document.querySelectorAll('[data-rule]')){input.checked=!!data.settings?.[input.dataset.rule];input.disabled=false;}if(!append)runs.replaceChildren();for(const run of data.runs||[]){const detail=element('details',''),summary=element('summary',''),choice=document.createElement('input');choice.type='checkbox';choice.className='run-select';choice.dataset.runId=String(run.id||'');choice.setAttribute('aria-label','选择重试：'+run.subject);choice.disabled=!run.retryable;choice.title=run.retry_blocked_reason||'';choice.addEventListener('click',event=>event.stopPropagation());choice.addEventListener('change',()=>{const id=Number(run.id);if(choice.checked){if(!selected.has(id)&&selected.size>=maxRetries){choice.checked=false;showMessage(`每次最多重试 ${maxRetries} 条日志`);return;}selected.add(id);}else selected.delete(id);updateSelection();});summary.append(choice,element('span',statuses[run.status]||run.status,'badge '+run.status),element('span',rules[run.rule_key]||run.rule_key),element('span',run.subject,'subject'),element('time',run.started_at,'meta'));const retry=element('button','执行重试','retry-one');retry.type='button';retry.disabled=!run.retryable;retry.title=run.retry_blocked_reason||'';retry.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();retryRuns([Number(run.id)]);});summary.append(retry);const sales=run.salesperson?[String(run.salesperson)]:contextValues(run.detail,['salesperson']),stores=run.store_name?[String(run.store_name)]:contextValues(run.detail,['store_name','company_store','store']),ids=contextValues(run.detail,['token_id','source_token_id']);summary.append(element('span','业务员：'+(sales.join('、')||'未记录')+' · 店铺：'+(stores.join('、')||ids.map(id=>'#'+id).join('、')||'未记录'),'context'));const reason=element('div','','failure-reason'),reasonText=element('span',run.failure_reason||'');reason.append(element('strong',run.status==='unknown'?'待核实原因：':'失败原因：'),reasonText);reason.hidden=!run.failure_reason;const body=element('div','','detail-body');detail.append(summary,reason,body);detail.addEventListener('toggle',()=>{if(detail.open)loadDetail(run,body,reasonText);});runs.append(detail);}if(!runs.querySelector('details'))runs.append(element('div',(Object.values(appliedFilters).some(Boolean)?'没有符合筛选条件的日志。':'暂无执行日志。开启规则后，符合条件的事项会自动执行。'),'empty'));next=data.next_before;more.hidden=!next;hint.textContent='已显示 '+runs.querySelectorAll('details').length+' 条'+(Object.values(appliedFilters).some(Boolean)?'筛选结果':'日志');updateSelection();}
+  async function load(append=false){if(busy){if(!append)pendingReload=true;return;}busy=true;showMessage('');const version=revision;try{const data=await api({},append?next:null);if(version===revision){render(data,append);older=append;}}catch(error){if(version===revision)showMessage(error.message);}finally{busy=false;resumePending();}}
+  async function retryRuns(ids){const runIds=[...new Set(ids.filter(id=>Number.isInteger(id)&&id>0))].sort((a,b)=>a-b);if(retryBusy||!runIds.length)return;if(runIds.length>maxRetries){showMessage(`每次最多重试 ${maxRetries} 条日志`);return;}const selectedAtSubmit=new Set(runIds.filter(id=>selected.has(id)));retryBusy=true;showMessage('');updateSelection();for(const button of runs.querySelectorAll('.retry-one'))button.disabled=true;try{const data=await api({method:'POST',body:JSON.stringify({run_ids:runIds})});const queued=Number(data.queued_count??data.retry?.accepted?.length??0),skipped=Number(data.skipped_count??data.retry?.rejected?.length??0);for(const id of selectedAtSubmit)selected.delete(id);revision++;older=false;next=null;await load();showMessage(`已加入重试队列 ${queued} 条${skipped?`，${skipped} 条未加入`:''}`,'success');}catch(error){showMessage(error.message);}finally{retryBusy=false;for(const button of runs.querySelectorAll('.retry-one'))button.disabled=button.closest('details')?.querySelector('.run-select')?.disabled!==false;updateSelection();}}
+  for(const input of document.querySelectorAll('[data-rule]'))input.addEventListener('change',async()=>{if(busy){input.checked=!input.checked;return;}busy=true;const value=input.checked,version=revision;for(const item of document.querySelectorAll('[data-rule]'))item.disabled=true;try{const data=await api({method:'PATCH',body:JSON.stringify({[input.dataset.rule]:value})});if(version===revision)render(data);older=false;showMessage(input.dataset.rule==='publish_infringement'?(value?'已开启，对后续普通上架生效；人工复核上架仍跳过侵权拦截。':'已关闭，后续上架不再自动检测或拦截侵权风险。'):(value?'已开启，后台将在下一轮检查时执行。':'已关闭，正在处理的单次请求结束后停止后续操作。'),'success');}catch(error){input.checked=!value;showMessage(error.message);}finally{busy=false;for(const item of document.querySelectorAll('[data-rule]'))item.disabled=false;resumePending();}});
+  selectAll.addEventListener('change',()=>{let limited=false;for(const choice of retryCheckboxes()){const id=Number(choice.dataset.runId);if(selectAll.checked){if(!selected.has(id)&&selected.size>=maxRetries){limited=true;continue;}selected.add(id);}else selected.delete(id);}if(limited)showMessage(`每次最多重试 ${maxRetries} 条日志`);updateSelection();});
+  retrySelected.addEventListener('click',()=>retryRuns([...selected]));
+  filters.addEventListener('submit',event=>{event.preventDefault();const values=Object.fromEntries([...new FormData(filters)].map(([key,value])=>[key,value.trim()]));if(values.date_from&&values.date_to&&values.date_from>values.date_to){showMessage('开始时间不能晚于结束时间');return;}appliedFilters=values;revision++;older=false;next=null;clearSelection();load();});
+  filters.addEventListener('reset',()=>{appliedFilters={};revision++;older=false;next=null;clearSelection();load();});
+  document.querySelector('#refresh').addEventListener('click',()=>{clearSelection();load();});more.addEventListener('click',()=>load(true));
+  setInterval(()=>{if(!document.hidden&&!older&&!selected.size&&!retryBusy&&!runs.querySelector('details[open]')&&(!window.frameElement||window.frameElement.closest('.tab-page')?.classList.contains('active')))load();},15000);
+  load();
 })();

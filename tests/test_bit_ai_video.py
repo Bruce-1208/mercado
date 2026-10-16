@@ -414,6 +414,7 @@ def test_worker_does_not_fallback_after_uncertain_submit_response(monkeypatch, t
     assert "未自动切换备用模型" in job["message"]
 
 
+@pytest.mark.usefixtures("isolated_legacy_console_user", "subscribed_workbench_account")
 def test_workbench_contains_ai_video_module():
     from bit import bit_interface as app_module
 
@@ -451,6 +452,7 @@ def test_ai_weight_price_page_redirects_to_login_when_session_expires():
     assert response.headers["Location"].startswith("/login?next=/ai-weight-price")
 
 
+@pytest.mark.usefixtures("isolated_legacy_console_user", "subscribed_workbench_account")
 def test_ai_video_routes_use_central_api(monkeypatch):
     from bit import bit_interface as app_module
 

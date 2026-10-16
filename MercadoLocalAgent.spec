@@ -9,7 +9,18 @@ from PyInstaller.utils.hooks import collect_submodules
 # Agent 真正执行时会把服务器下载的 release 放在 sys.path 最前面，因此业务
 # 模块仍来自最新 release，而不是这里随 EXE 收集的构建时副本。
 hiddenimports = sorted(
-    set(collect_submodules("requests") + ["local_agent_worker"])
+    set(
+        collect_submodules("requests")
+        + [
+            "local_agent_worker",
+            # ``selenium.webdriver.Chrome`` resolves this implementation at
+            # runtime.  The downloadable business bundle is outside the
+            # frozen EXE, so PyInstaller cannot discover that import from the
+            # release code and Windows jobs otherwise fail after opening the
+            # BitBrowser window.
+            "selenium.webdriver.chrome.webdriver",
+        ]
+    )
 )
 
 # ``bit_interface`` exposes both the Windows Agent routes and server-only

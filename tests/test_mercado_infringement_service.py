@@ -516,3 +516,14 @@ def test_collection_risk_filters_keep_salesperson_scope(harness):
     service.read('products', {'salesperson': '业务乙'})
     reads = [params for name, params in state['calls'] if name == 'list']
     assert reads and all(params['salesperson'] == '业务乙' for params in reads)
+
+
+@pytest.mark.parametrize('selection', ['selected', 'filtered', 'unchecked'])
+def test_detection_cannot_modify_coworker_products(harness, selection):
+    from bit import product_access
+    service, store, state = harness
+    state['rows'][1] = row(1, organization_key='acme', owner_user_id=8, visibility='enterprise')
+    with product_access.scope({'id': 7, 'role_key': 'member', 'organization_key': 'acme'}):
+        with pytest.raises(PermissionError, match='只能操作自己的产品'):
+            service.start({'list_mode': 'products', 'selection_mode': selection, 'item_ids': [1]}, 7)
+    assert not store.list(7)

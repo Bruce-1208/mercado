@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="25" time="54.272" timestamp="2026-10-12T16:50:11.661351+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_1688_product_management_browser" name="test_collector_options_include_other_pages_and_query_keeps_selection" time="0.870" /><testcase classname="tests.test_1688_product_management_browser" name="test_bulk_category_uses_shared_product_categories_and_can_clear" time="0.411" /><testcase classname="tests.test_1688_product_management_browser" name="test_single_edit_submits_changed_values_in_g_cm_usd_and_cny" time="0.418" /><testcase classname="tests.test_1688_product_management_browser" name="test_untouched_fields_are_not_patched_and_explicit_clear_beats_source_snapshot" time="0.370" /><testcase classname="tests.test_1688_product_management_browser" name="test_failed_edit_stays_open_and_can_retry" time="0.351" /><testcase classname="tests.test_1688_product_management_browser" name="test_saved_edit_avoids_followup_list_and_slow_ai_refresh" time="0.432" /><testcase classname="tests.test_1688_product_management_browser" name="test_failed_bulk_category_preserves_existing_rows_and_selection" time="0.284" /><testcase classname="tests.test_1688_product_management_browser" name="test_desktop_list_and_edit_dialog_layout" time="0.393" /><testcase classname="tests.test_1688_product_management_browser" name="test_bulk_measurements_apply_to_selection_and_keep_source_details" time="0.343" /><testcase classname="tests.test_1688_product_management_browser" name="test_compact_primary_filters_and_advanced_weight_layout[1440]" time="0.877" /><testcase classname="tests.test_1688_product_management_browser" name="test_compact_primary_filters_and_advanced_weight_layout[1024]" time="0.610" /><testcase classname="tests.test_1688_product_management_browser" name="test_compact_primary_filters_and_advanced_weight_layout[390]" time="5.366" /><testcase classname="tests.test_ai_cost_visibility_browser" name="test_sku_error_cost_visibility[super_admin-1440]" time="1.240" /><testcase classname="tests.test_ai_cost_visibility_browser" name="test_sku_error_cost_visibility[super_admin-390]" time="0.706" /><testcase classname="tests.test_ai_cost_visibility_browser" name="test_sku_error_cost_visibility[enterprise_admin-1440]" time="0.691" /><testcase classname="tests.test_ai_cost_visibility_browser" name="test_sku_error_cost_visibility[enterprise_admin-390]" time="0.734" /><testcase classname="tests.test_ai_cost_visibility_browser" name="test_sku_error_cost_visibility[member-1440]" time="0.715" /><testcase classname="tests.test_ai_cost_visibility_browser" name="test_sku_error_cost_visibility[member-390]" time="6.459" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_preflight_shows_reports_and_invalidates_after_settings_change" time="6.130"><failure message="playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.">tests/test_mercado_attribute_preflight_browser.py:63: in test_preflight_shows_reports_and_invalidates_after_settings_change
+    page.wait_for_function("document.body.textContent.includes('属性预检：可上架')")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:11559: in wait_for_function
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:1111: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:860: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_report_escapes_untrusted_collected_values" time="0.597" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[1440]" time="5.585"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for get_by_label(&quot;型号&quot;, exact=True)">tests/test_mercado_attribute_preflight_browser.py:112: in test_user_can_complete_a_missing_attribute_and_recheck
+    page.get_by_label('型号', exact=True).fill('M-123')
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for get_by_label("型号", exact=True)</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[390]" time="5.753"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for get_by_label(&quot;型号&quot;, exact=True)">tests/test_mercado_attribute_preflight_browser.py:112: in test_user_can_complete_a_missing_attribute_and_recheck
+    page.get_by_label('型号', exact=True).fill('M-123')
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for get_by_label("型号", exact=True)</failure></testcase><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_preferences_explain_lost_runtime_and_can_retry[missing]" time="0.718" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_preferences_explain_lost_runtime_and_can_retry[invalidated]" time="0.192" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_real_extension_reload_reinjects_and_refreshes_old_page" time="13.485"><failure message="playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;extensions-toolbar #devMode&quot;)">tests/test_zeshun_runtime_recovery_browser.py:93: in test_real_extension_reload_reinjects_and_refreshes_old_page
+    if not developer_mode.evaluate("element =&gt; element.checked"):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/mercado_click_delay.py:152: in delayed
+    result = original(target, expression, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15724: in evaluate
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:188: in evaluate
+    return await self._with_element(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:112: in _with_element
+    handle = await self.element_handle(timeout=timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:316: in element_handle
+    handle = await self._frame.wait_for_selector(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:369: in wait_for_selector
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("extensions-toolbar #devMode")</failure></testcase></testsuite></testsuites>

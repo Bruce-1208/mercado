@@ -401,7 +401,7 @@ def test_live_api_collection_filters_authorized_sites_and_isolates_failures(
         assert accounts == [{"user_id": "seller-mx", "site_id": "MLM"}]
         assert date_created_since
         assert store_name == "正常店铺"
-        assert stop_event is None
+        assert not stop_event.is_set()
         assert deadline
         return (
             [
@@ -863,22 +863,17 @@ def test_overview_auto_sync_switch_is_persisted_through_db_api(monkeypatch):
     assert read_response.get_json()["data"]["enabled"] is False
 
 
-def test_due_infraction_sync_respects_disabled_full_refresh_switch(monkeypatch):
-    monkeypatch.setattr(
-        sync,
-        "get_overview_sync_settings",
-        lambda _scope: {"enabled": False},
-    )
-    monkeypatch.setattr(
-        sync,
-        "list_due_infraction_token_ids",
-        lambda **_kwargs: pytest.fail("disabled scheduler must not query due stores"),
-    )
-
+def test_due_infraction_sync_uses_enterprise_filtered_stores(monkeypatch):
+    monkeypatch.setattr(sync, "get_overview_sync_settings", lambda _: pytest.fail("must not use one enterprise's switch globally"))
+    monkeypatch.setattr(sync, "get_lock_owner", lambda _: None)
+    monkeypatch.setattr(sync, "list_due_infraction_token_ids", lambda **_: [22])
+    monkeypatch.setattr(sync, "due_batch", lambda ids: ids)
+    calls = []
+    monkeypatch.setattr(sync, "start_official_infraction_sync",
+                        lambda ids: (calls.append(ids) or True, {}))
     result = sync.start_due_official_infraction_sync()
-
-    assert result["disabled"] is True
-    assert result["started"] is False
+    assert result["started"] is True
+    assert calls == [[22]]
 
 
 def test_ip_rights_export_keeps_filters_and_exports_all_pages(monkeypatch):
@@ -1075,3 +1070,70 @@ def test_official_deadlines_always_normalize_to_beijing(monkeypatch):
             os.environ['TZ'] = previous
         if hasattr(time, 'tzset'):
             time.tzset()
+
+
+def test_hourly_todos_dispatch_due_overview_before_acquiring_shared_lock(monkeypatch):
+    monkeypatch.setattr(sync, 'start_due_official_infraction_sync', lambda: {'started': True, 'due_token_ids': [7]})
+    monkeypatch.setattr(sync, 'InterProcessLock', lambda *a, **k: pytest.fail('Hourly job must not take overview lock'))
+    result = sync._refresh_rights_holder_todos_once()
+    assert result['started'] is False
+    assert '12 小时' in result['message']
+
+
+def test_hourly_todos_wait_while_overview_thread_is_starting(monkeypatch):
+    monkeypatch.setattr(sync, 'start_due_official_infraction_sync', lambda: {'started': False, 'due_token_ids': []})
+    monkeypatch.setitem(sync._sync_state, 'running', True)
+    monkeypatch.setattr(sync, 'InterProcessLock', lambda *a, **k: pytest.fail('Overview thread has priority'))
+    assert sync._refresh_rights_holder_todos_once()['started'] is False
+
+
+def test_hourly_todos_still_run_when_no_overview_is_due(monkeypatch):
+    from unittest.mock import Mock
+    monkeypatch.setattr(sync, 'start_due_official_infraction_sync', lambda: {'started': False, 'due_token_ids': []})
+    monkeypatch.setitem(sync._sync_state, 'running', False)
+    monkeypatch.setattr(sync, 'get_lock_owner', lambda key: None)
+    lock = Mock()
+    lock.acquire.return_value = True
+    monkeypatch.setattr(sync, 'InterProcessLock', lambda *a, **k: lock)
+    monkeypatch.setattr(sync, '_token_records', lambda: [])
+    result = sync._refresh_rights_holder_todos_once()
+    assert result['started'] is True
+    assert result['failed_count'] == 0
+    lock.release.assert_called_once()
+
+
+def test_live_collection_bounds_blocked_worker_and_responds_to_stop(monkeypatch):
+    import threading
+    import time
+    from bit import bit_db_api
+
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "mysql")
+    monkeypatch.setattr(sync, "_token_records", lambda ids: [{"id": 7}])
+    for cancelled in (False, True):
+        entered = threading.Event()
+        release = threading.Event()
+        exited = threading.Event()
+        stop = threading.Event()
+        def blocked(*args, **kwargs):
+            entered.set()
+            if cancelled:
+                stop.set()
+            try:
+                release.wait(3)
+                return {"store": "test", "status": "success", "rows": []}
+            finally:
+                exited.set()
+        monkeypatch.setattr(sync, "run_capacity_store", blocked)
+        monkeypatch.setattr(sync, "LIVE_INFRACTION_STORE_TIMEOUT_SECONDS", 0.05)
+        started = time.monotonic()
+        try:
+            result = sync.collect_live_detection_infractions(
+                [{"token_id": 7}], stop_event=stop,
+            )
+            assert entered.is_set()
+            assert time.monotonic() - started < 2
+            assert result["results"][0]["status"] == ("stopped" if cancelled else "error")
+            assert result["data"] == []
+        finally:
+            release.set()
+            assert exited.wait(2)

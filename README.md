@@ -1,5 +1,9 @@
 # mercado
 
+## 订单资金释放
+
+订单管理支持查看子订单的资金释放状态及平台释放日期，高级筛选可选择已释放、未释放、部分释放和待核实；详情与导出沿用相同口径。后台分批读取美客多官方账单，失败保留上次核对结果，不将缺少数据判为未释放。部署与数据口径见[订单资金释放说明](docs/order_payment_release.md)。
+
 ## 商品经营诊断
 
 工作台「商品中心 → 商品经营诊断」按店铺、站点读取美客多刊登质量、购物体验和当前库存，展示平台依据、中文处理建议与数据完整性，可将问题加入今日必办。后台分批诊断并保存进度，重启后续跑；支持桌面及手机页面。权限、数据范围与部署说明见[商品经营诊断说明](docs/product_diagnosis.md)。
@@ -212,7 +216,7 @@ Copy-Item .\workbench-client.example.json .\workbench-runtime.json
 
 首次使用只需：
 
-1. 登录 `https://wuhanzeshun.com/`，点击网页右上角插件旁的“下载 Agent”，按电脑系统选择 Windows 或 macOS；
+1. 登录 `https://wuhanzeshun.cn/`，点击网页右上角插件旁的“下载 Agent”，按电脑系统选择 Windows 或 macOS；
 2. 在需要运行比特浏览器的电脑上解压下载包；
 3. Windows 双击 `start-agent.bat` 启动，或双击 `install-agent.bat` 安装登录启动任务；macOS 双击 `start-agent.command` 启动，或运行 `install-agent.command` 安装 LaunchAgent；
 4. 保持比特浏览器客户端运行，回到控制台刷新“执行电脑”并选择该电脑。
@@ -227,7 +231,7 @@ Agent 1.1.0 起同时承接“自动化 AI 申诉”和“任务模块”的 dai
 
 ```powershell
 $env:BIT_RUNTIME_ROLE="client"
-$env:BIT_DB_API_BASE_URL="https://wuhanzeshun.com"
+$env:BIT_DB_API_BASE_URL="https://wuhanzeshun.cn"
 python -m bit.bit_interface
 ```
 

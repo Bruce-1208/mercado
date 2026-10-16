@@ -1,0 +1,23 @@
+{
+  "hardware": {
+    "ram_gib": 16,
+    "physical_cores": 10,
+    "logical_cores": 10,
+    "model": "Mac16,10"
+  },
+  "launch_configuration": [
+    {
+      "source": "/Library/LaunchDaemons/com.zeshun.mercado-workbench.plist",
+      "working_directory": "/Users/a11/mercado",
+      "supervisor": false,
+      "configuration": {}
+    },
+    {
+      "source": "/Users/a11/Library/LaunchAgents/com.zeshun.mercado-workbench.plist",
+      "working_directory": "/Users/a11/mercado",
+      "supervisor": true,
+      "configuration": {}
+    }
+  ],
+  "note": "Saved launch configuration; running process environment and production DB variables not verified."
+}

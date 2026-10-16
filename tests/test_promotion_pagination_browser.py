@@ -17,6 +17,8 @@ class PromotionPaginationMock:
         self.page = page
         self.item_requests = []
         self.previews = []
+        self.enrollments = []
+        self.job_requests = []
         self.errors = []
         self.held_pages = set()
         self.pending = {}
@@ -104,8 +106,26 @@ class PromotionPaginationMock:
             self.json(route, {"preview_id": "paged-preview", "ready_count": len(payload["rows"]),
                                "blocked_count": 0, "rows": [{
                                    "item_id": f"MLM{row['item_local_id']:05d}", "status": "ready",
-                                   "deal_price": float(row["deal_price"]), "currency_id": "MXN",
+                                   "deal_price": float(row["deal_price"]) if row["deal_price"] is not None else None, "currency_id": "MXN",
                                } for row in payload["rows"]]})
+        elif path == "/api/promotions/enroll" and request.method == "POST":
+            payload = request.post_data_json
+            self.enrollments.append(payload)
+            self.json(route, {"status": "running", "job_id": "paged-enrollment-job",
+                              "submitted_count": len(payload["rows"]), "excluded_count": 0,
+                              "excluded_reasons": []})
+        elif path == "/api/promotions/jobs":
+            query = parse_qs(url.query)
+            if query.get("job_id"):
+                self.job_requests.append(query)
+                submitted = len(self.enrollments[-1]["rows"]) if self.enrollments else 0
+                self.json(route, {"rows": [{
+                    "job_id": "paged-enrollment-job", "action": "enroll",
+                    "status": "succeeded", "total_count": submitted,
+                    "success_count": submitted, "failed_count": 0, "unknown_count": 0,
+                }]})
+            else:
+                self.json(route, {"rows": []})
         else:
             route.abort()
 
@@ -177,7 +197,7 @@ def test_items_render_only_requested_page_and_allow_page_and_size_choices(pagina
     pagination_page.screenshot(path=str(ARTIFACTS / "pagination-390.png"))
 
 
-def test_switching_pages_preserves_selection_and_edited_prices_in_preview(pagination_page):
+def test_switching_pages_preserves_selection_and_edited_prices_in_direct_enrollment(pagination_page):
     mock = PromotionPaginationMock(pagination_page)
     mock.open()
     pagination_page.locator('#itemRows input[value="1"]').check()
@@ -188,11 +208,6 @@ def test_switching_pages_preserves_selection_and_edited_prices_in_preview(pagina
     assert pagination_page.locator("#selectAll").is_checked() is False
     pagination_page.locator('#itemRows input[value="51"]').check()
     pagination_page.locator("#price-51").fill("420")
-    pagination_page.locator("#enrollBtn").click()
-    pagination_page.locator("#previewDialog").wait_for(state="visible")
-    assert {row["item_local_id"]: row["deal_price"] for row in mock.previews[-1]["rows"]} == {1: "400", 51: "420"}
-    pagination_page.keyboard.press("Escape")
-
     pagination_page.locator("#itemPageSelect").select_option("1")
     mock.wait_page(1)
     assert pagination_page.locator('#itemRows input[value="1"]').is_checked()
@@ -204,10 +219,15 @@ def test_switching_pages_preserves_selection_and_edited_prices_in_preview(pagina
     assert pagination_page.locator("#selectionText").inner_text() == "已选择 51 件商品"
     pagination_page.locator("#selectAll").uncheck()
     assert pagination_page.locator("#selectionText").inner_text() == "已选择 1 件商品"
+    pagination_page.locator('#itemRows input[value="1"]').check()
     pagination_page.locator("#itemPageSelect").select_option("2")
     mock.wait_page(2)
     assert pagination_page.locator('#itemRows input[value="51"]').is_checked()
     assert pagination_page.locator("#price-51").input_value() == "420"
+    pagination_page.locator("#enrollBtn").click()
+    assert {row["item_local_id"]: row["deal_price"] for row in mock.enrollments[-1]["rows"]} == {1: "400", 51: "420"}
+    assert pagination_page.locator("#previewDialog").is_hidden()
+    assert not mock.previews
     assert not mock.errors
 
 
@@ -316,4 +336,62 @@ def test_product_images_expand_outside_table_and_hide_on_page_change(pagination_
     page.locator('#itemPageNext').click()
     mock.wait_page(2)
     assert not preview.is_visible()
+    assert not mock.errors
+
+
+@pytest.mark.parametrize('width',[1440,390])
+def test_full_selection_parallel_read_can_be_cancelled_and_retried(pagination_page,width):
+    page=pagination_page
+    page.set_viewport_size({'width':width,'height':1000})
+    mock=PromotionPaginationMock(page,count=3501)
+    mock.open()
+    mock.held_pages.add(2)
+    page.locator('#selectAllPagesBtn').click()
+    page.wait_for_function("state.selectionProgress==='7/8 页'")
+    assert any(q.get('page')==['8'] and q.get('selection')==['1'] for q in mock.item_requests)
+    assert page.locator('#selectAllPagesBtn').is_enabled()
+    assert page.locator('#enrollBtn').is_disabled()
+    page.locator('#selectAllPagesBtn').click()
+    page.wait_for_function('!state.allPagesLoading')
+    assert '已取消读取' in page.locator('#feedback').inner_text()
+    assert page.locator('#selectionText').inner_text()=='已选择 0 件商品'
+    mock.held_pages.clear()
+    page.locator('#selectAllPagesBtn').click()
+    page.wait_for_function('!state.allPagesLoading && state.selectedItems.size===3501')
+    assert page.locator('#enrollBtn').is_enabled()
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+    output=ROOT/'artifacts/promotion-selection-speed';output.mkdir(parents=True,exist_ok=True)
+    page.screenshot(path=str(output/f'selection-{width}.png'),full_page=True)
+    assert not mock.previews and not mock.enrollments and not mock.errors
+
+
+@pytest.mark.parametrize('width',[1440,390])
+def test_smart_campaign_select_all_exposes_enrollment_at_official_price(pagination_page,width):
+    page=pagination_page
+    page.set_viewport_size({'width':width,'height':1000})
+    mock=PromotionPaginationMock(page,count=10)
+    mock.campaign.update(name='Best Shared Offers Sep',store_name='向子立5',site_id='MLB',promotion_type='SMART')
+    for index,row in enumerate(mock.rows, start=1):
+        row['offer_id']=f'OFFER-{index}'
+    mock.open()
+    assert page.locator('#enrollBtn').is_visible()
+    assert page.locator('#withdrawBtn').is_visible()
+    assert not page.locator('#batchDiscount').is_visible()
+    page.locator('#selectAllPagesBtn').click()
+    page.wait_for_function('!state.allPagesLoading && state.selectedItems.size===10')
+    assert page.locator('#enrollBtn').is_enabled()
+    page.locator('#enrollBtn').focus()
+    page.keyboard.press('Enter')
+    assert len(mock.enrollments)==1
+    assert len(mock.enrollments[0]['rows'])==10
+    assert all(r['deal_price'] is None for r in mock.enrollments[0]['rows'])
+    assert page.locator('#previewDialog').is_hidden()
+    assert not mock.previews
+    page.locator('#selectionText').filter(has_text='已选择 0 件商品').wait_for()
+    assert len(mock.job_requests)==1
+    query=mock.job_requests[0]
+    assert query['summary']==['1'] and query['job_id']==['paged-enrollment-job']
+    assert mock.job_requests==[query]
+    target=ROOT/'artifacts/promotion-smart-enrollment';target.mkdir(parents=True,exist_ok=True)
+    page.screenshot(path=str(target/f'smart-{width}.png'),full_page=True)
     assert not mock.errors

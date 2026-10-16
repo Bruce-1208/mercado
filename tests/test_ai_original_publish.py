@@ -37,9 +37,13 @@ class Publisher:
 
 @pytest.fixture
 def setup(tmp_path):
-    rows = [{"id": i, "source_type": "ai_original", "review_status": "approved", "source_snapshot_json": {
+    rows = [{"id": i, "source_type": "ai_original", "review_status": "approved",
+        "weight_g": 250, "package_length_cm": 20, "package_width_cm": 10,
+        "package_height_cm": 5, "net_proceeds_usd": 8, "weight_basis": "ai_original_manual",
+        "source_snapshot_json": {
         "original_1688": {"id": str(i)}, "marketplace_listings": {"amazon": {
-            "title": "Product", "status": "completed", "main_image_url": "https://cdn.example.com/one.jpg"}}}}
+            "title": "Product", "status": "completed", "review_status": "approved",
+            "main_image_url": "https://cdn.example.com/one.jpg"}}}}
         for i in (1, 2)]
     publisher = Publisher()
     store = PublicationStore(tmp_path / "publish.sqlite3", "test-secret")
@@ -96,11 +100,25 @@ def test_preview_is_read_only_and_cannot_spoof_sku_ownership(setup):
     assert service.store.jobs(OWNER, ORG, "amazon") == []
 
 
-@pytest.mark.parametrize("change", ["draft", "risk", "image"])
+def test_preview_rejects_product_outside_current_users_operation_scope(setup):
+    service, publisher, _ = setup
+
+    def deny(_row):
+        raise PermissionError("当前账号无权发布所选 AI 原创产品")
+
+    service.authorize_row = deny
+    with pytest.raises(PermissionError, match="无权发布"):
+        preview(service)
+    assert not publisher.prepared and not publisher.published
+
+
+@pytest.mark.parametrize("change", ["draft", "platform_review", "risk", "image", "manual_fields"])
 def test_invalid_item_cannot_publish(setup, change):
     service, publisher, rows = setup
     if change == "draft": rows[0]["source_snapshot_json"]["marketplace_listings"]["amazon"]["status"] = "running"
+    if change == "platform_review": rows[0]["source_snapshot_json"]["marketplace_listings"]["amazon"]["review_status"] = "unreviewed"
     if change == "risk": rows[0]["review_status"] = "risk"
+    if change == "manual_fields": rows[0]["weight_g"] = None
     args = {"image_url": "http://localhost/a"} if change == "image" else {}
     result = preview(service, **args)
     assert not result["valid"] and result["items"][0]["errors"]

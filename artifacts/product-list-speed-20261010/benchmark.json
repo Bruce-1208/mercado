@@ -1,0 +1,20 @@
+[
+  {
+    "case": "directory",
+    "seconds": 0.004,
+    "rows": 4,
+    "total": null
+  },
+  {
+    "case": "first_page",
+    "seconds": 0.302,
+    "rows": 100,
+    "total": 1816638
+  },
+  {
+    "case": "person_filter",
+    "seconds": 0.016,
+    "rows": 41,
+    "total": 41
+  }
+]

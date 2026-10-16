@@ -1,0 +1,27 @@
+{
+  "version": "1.8.81",
+  "filters": [
+    "date_start",
+    "date_end",
+    "order_status",
+    "platform",
+    "salesperson",
+    "group_name"
+  ],
+  "combination": "AND",
+  "tests": {
+    "tracking_api_query": 27,
+    "tracking_runner": 8,
+    "popup_and_existing_appeal_popup": 19,
+    "access_control": 32
+  },
+  "services": {
+    "web_pid": 58336,
+    "orders_pid": 58332,
+    "new_options_unauthenticated_status": 401,
+    "login_status": 200
+  },
+  "package": "zeshun-collector-extension-1.8.81-tracking-filters.zip",
+  "sha256": "4ade7a0a9a3366d7b31969e716ce067ec640aeffe027e6571bd8bf47542cc6d1",
+  "live_logistics_sync_started": false
+}

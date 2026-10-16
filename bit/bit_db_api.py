@@ -2,6 +2,7 @@ import json
 import os
 import time
 import requests
+from urllib.parse import quote
 from datetime import datetime
 
 from bit.workbench_runtime import bootstrap_runtime
@@ -9,7 +10,7 @@ from bit.workbench_runtime import bootstrap_runtime
 
 RUNTIME_SETTINGS = bootstrap_runtime()
 
-DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "https://wuhanzeshun.com").rstrip("/")
+DB_API_BASE_URL = os.environ.get("BIT_DB_API_BASE_URL", "https://wuhanzeshun.cn").rstrip("/")
 DB_API_TOKEN = os.environ.get("BIT_DB_API_TOKEN", "")
 DB_API_SESSION = requests.Session()
 DB_API_SESSION.trust_env = False
@@ -76,9 +77,13 @@ def _request(method, path, **kwargs):
     if path.startswith("/api/db/"):
         from bit.product_access import forwarding_headers
         headers.update(forwarding_headers())
-    if path.startswith(("/api/db/infringement-knowledge", "/api/db/infringement-risk")):
+    if path.startswith(("/api/db/infringement-knowledge", "/api/db/infringement-risk", "/api/db/appeal-phrases", "/api/db/overview-auto-sync",
+                        "/api/db/official-infractions/sync/", "/api/db/prohibited-listings/sync/")):
         from bit.knowledge_organization import HEADER, organization
         headers[HEADER] = organization()
+    if path.startswith("/api/db/workbench/roles"):
+        from bit.bit_interface import workbench_role_organization
+        headers["X-Knowledge-Organization"] = workbench_role_organization()
     if path.startswith("/api/db/store-links"):
         from erp.store_link_audit import forwarding_headers
         headers.update(forwarding_headers())
@@ -289,8 +294,7 @@ def update_ai_video_settings(changes, user_id=None):
     if DB_MODE == "mysql":
         from bit.bit_ai_video import save_provider_settings
 
-        save_provider_settings(changes)
-        return provider_settings(user_id)
+        return save_provider_settings(changes, user_id=user_id)
     return _request(
         "PATCH", "/api/db/ai-videos/settings", params={"user_id": user_id or ""}, json=dict(changes or {}), timeout=60
     )
@@ -527,6 +531,9 @@ def collect_live_detection_infractions(
     status_path = f"{job_path}/{job_id}"
     timeout_seconds = _live_infraction_job_timeout_seconds()
     deadline = time.monotonic() + timeout_seconds
+    started_wait = time.monotonic()
+    last_report = None
+    last_status = None
     transient_failures = 0
     while time.monotonic() < deadline:
         if stop_event is not None and stop_event.is_set():
@@ -539,7 +546,7 @@ def collect_live_detection_infractions(
                 "stopped": True,
             }
         try:
-            state = _request("GET", status_path, timeout=30) or {}
+            state = _request("GET", status_path, timeout=30, max_attempts=1) or {}
             transient_failures = 0
         except DatabaseAPIAuthError:
             raise
@@ -557,7 +564,18 @@ def collect_live_detection_infractions(
                 "官方侵权读取服务端任务失败："
                 + str(state.get("error") or "未知错误")
             )
-        time.sleep(2)
+        now = time.monotonic()
+        if last_report is None or status != last_status or now - last_report >= 15:
+            label = {"queued": "排队中", "running": "读取中"}.get(status, status or "等待状态")
+            print(
+                f"{datetime.now():%Y-%m-%d %H:%M:%S} 官方侵权 API 服务端任务 {job_id}："
+                f"{label}，已等待 {int(now - started_wait)} 秒<br>", flush=True,
+            )
+            last_report, last_status = now, status
+        if stop_event is not None:
+            stop_event.wait(2)
+        else:
+            time.sleep(2)
     raise RuntimeError(
         f"官方侵权读取服务端任务超时（超过 {timeout_seconds // 60} 分钟）"
     )
@@ -1044,6 +1062,7 @@ def list_orders(
     purchase_platform="",
     freight_difference_min=None,
     freight_difference_max=None,
+    payment_release="",
 ):
     normalized_store_ids = [int(value) for value in store_ids or [] if str(value or "").lstrip("-").isdigit() and int(value) != 0]
     normalized_salespeople = [
@@ -1070,6 +1089,8 @@ def list_orders(
             local_params[key] = str(value)
     if purchase_platform:
         local_params["purchase_platform"] = purchase_platform
+    if payment_release:
+        local_params["payment_release"] = payment_release
     if not include_summary:
         local_params["include_summary"] = False
     if summary_only:
@@ -1626,7 +1647,7 @@ def get_order_access_contexts(order_ids):
     return _request("POST", "/api/db/orders/access-contexts", json={"order_ids": ids})
 
 
-def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False, status="", allowed_token_ids=None):
+def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False, status="", allowed_token_ids=None, salesperson="", group_name=""):
     payload = {"order_ids": [str(value) for value in order_ids or []]}
     if all_orders:
         payload["all_orders"] = True
@@ -1635,6 +1656,10 @@ def get_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None
         filters["status"] = status
     if allowed_token_ids is not None:
         filters["allowed_token_ids"] = list(allowed_token_ids)
+    if salesperson:
+        filters["salesperson"] = salesperson
+    if group_name:
+        filters["group_name"] = group_name
     payload.update(filters)
     if DB_MODE == "mysql":
         return _local_call("get_mercado_purchase_tracking_orders", payload["order_ids"], **({"all_orders": True} if all_orders else {}), **filters)
@@ -2509,6 +2534,7 @@ def list_mercado_collection_items(
     net_proceeds_min=None, net_proceeds_max=None, date_from="", date_to="",
     exclude_added=False, management_category_id=None, weight_status="",
     salesperson="", include_salesperson_options=False,
+    sku_count_min=None, sku_count_max=None,
 ):
     params = {
         "weight_status": str(weight_status or "").strip().lower(),
@@ -2528,6 +2554,9 @@ def list_mercado_collection_items(
         "exclude_added": bool(exclude_added),
         "management_category_id": management_category_id,
     }
+    for key, value in (('sku_count_min', sku_count_min), ('sku_count_max', sku_count_max)):
+        if value not in (None, ''):
+            params[key] = value
     if str(salesperson or "").strip():
         params["salesperson"] = str(salesperson).strip()
     if include_salesperson_options:
@@ -2580,11 +2609,12 @@ def list_mercado_product_items(
     publish_status="", weight_min=None, weight_max=None, price_min=None,
     price_max=None, net_proceeds_min=None, net_proceeds_max=None,
     date_from="", date_to="", management_category_id=None,
-    mercado_category="", zying_category="", product_developer_id="", token_ids=None,
+    mercado_category="", zying_category="", product_developer_id="", zying_status="", token_ids=None,
     collector_salesperson="", generator_salesperson="", weight_status="",
     collector_salesperson_exact=False, target_platform="mercadolibre",
     include_generator_options=False, include_total=True,
     salesperson="", include_salesperson_options=False,
+    sku_count_min=None, sku_count_max=None, group_skus=False,
 ):
     params = {
         "weight_status": str(weight_status or "").strip().lower(),
@@ -2607,8 +2637,14 @@ def list_mercado_product_items(
         "management_category_id": management_category_id,
         "mercado_category": str(mercado_category or "").strip(),
         "zying_category": str(zying_category or "").strip(),
+        "zying_status": str(zying_status or "").strip(),
         "product_developer_id": str(product_developer_id or "").strip(),
     }
+    if group_skus:
+        params["group_skus"] = True
+    for key, value in (('sku_count_min', sku_count_min), ('sku_count_max', sku_count_max)):
+        if value not in (None, ''):
+            params[key] = value
     if str(salesperson or "").strip():
         params["salesperson"] = str(salesperson).strip()
     if include_salesperson_options:
@@ -3265,7 +3301,7 @@ def update_mercado_product_publish_record(record_id, **changes):
 def list_mercado_product_publish_records(
     search="", status="", store_name="", site_id="", group_name="",
     start_date="", end_date="", limit=500, offset=0, token_ids=None,
-    filter_token_ids=None, salesperson="",
+    filter_token_ids=None, salesperson="", source_type="", product_item_id=None,
 ):
     params = {
         "search": str(search or ""),
@@ -3278,6 +3314,12 @@ def list_mercado_product_publish_records(
         "limit": int(limit),
         "offset": int(offset),
     }
+    if product_item_id is not None:
+        params["product_item_id"] = int(product_item_id)
+        if params["product_item_id"] <= 0:
+            raise ValueError("产品记录编号必须为正整数")
+    if source_type:
+        params["source_type"] = str(source_type).strip().lower()
     if str(salesperson or "").strip():
         params["salesperson"] = str(salesperson).strip()
     if token_ids is not None:
@@ -3575,6 +3617,12 @@ def create_workbench_organization(data):
     return _request("POST", "/api/db/workbench/organizations", json=data, timeout=15)
 
 
+def update_workbench_organization(organization_key, data):
+    if DB_MODE == "mysql":
+        return _local_interface_call("update_workbench_organization_local", organization_key, data)
+    return _request("PUT", f"/api/db/workbench/organizations/{quote(organization_key, safe='')}", json=data, timeout=15)
+
+
 def create_workbench_user(data):
     if DB_MODE == "mysql":
         return _local_interface_call("create_workbench_user_local", data)
@@ -3693,6 +3741,14 @@ def get_order_product_detail(order_ids, product_id, allowed_token_ids=None, *,
     }, timeout=(3, 45) if include_translation else (3, 35), max_attempts=1)
 
 
+def get_appeal_package_ids(shop_name, site, order_ids):
+    if DB_MODE == "mysql":
+        from bit.appeal_evidence import fetch_store_package_ids
+        return fetch_store_package_ids(shop_name, site, order_ids)
+    return _request("POST", "/api/db/appeal-package-ids", timeout=120,
+                    json={"shop_name": shop_name, "site": site, "order_ids": order_ids})
+
+
 def get_ai_appeal_product_contexts(shop_name, product_ids):
     if DB_MODE == "mysql":
         from bit.bit_ai_appeal_copy import fetch_store_product_contexts
@@ -3763,8 +3819,8 @@ def list_mercado_message_pack_candidates(token_id):
     return _mercado_action_center_call("message_pack_candidates", {"token_id": int(token_id)})
 
 
-def check_catalog_access(item_type, item_ids, *, manage_visibility=False):
-    payload = {'item_type': item_type, 'item_ids': list(item_ids), 'manage_visibility': manage_visibility}
+def check_catalog_access(item_type, item_ids, *, manage_visibility=False, operate=False):
+    payload = {'item_type': item_type, 'item_ids': list(item_ids), 'manage_visibility': manage_visibility, 'operate': operate}
     if DB_MODE == 'mysql':
         return _collection_store_call('check_catalog_access', **payload)
     return _request('POST', '/api/db/catalog/access', json=payload)
@@ -3775,3 +3831,19 @@ def set_catalog_visibility(item_type, item_ids, visibility):
     if DB_MODE == 'mysql':
         return _collection_store_call('set_catalog_visibility', **payload)
     return _request('POST', '/api/db/catalog/visibility', json=payload)
+
+
+def refresh_store_link_metrics(link_ids, allowed_token_ids=None):
+    if DB_MODE == "api":
+        return _request("GET", "/api/db/store-links/metrics", params={
+            "id": list(link_ids), **({"token_ids": sorted(allowed_token_ids)} if allowed_token_ids is not None else {}),
+            "scoped": "1" if allowed_token_ids is not None else "0"})
+    from bit.store_link_metrics import refresh
+    return refresh(link_ids, allowed_token_ids)
+
+
+def update_catalog_attributes(kind, item_ids, schemas, operation):
+    payload = {'kind': kind, 'item_ids': list(item_ids), 'schemas': schemas, 'operation': operation}
+    if DB_MODE == 'mysql':
+        return _collection_store_call('update_catalog_attributes', **payload)
+    return _request('POST', '/api/db/catalog/attributes', json=payload)

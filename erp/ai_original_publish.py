@@ -51,7 +51,8 @@ def fingerprint(row, platform):
     return hashlib.sha256(dumps({"listing": listing_for(row, platform), "review_status": row.get("review_status"),
         "original": snapshot.get("original_1688") or row.get("original_1688"),
         "package": {key: row.get(key) for key in (
-            "weight_g", "package_length_cm", "package_width_cm", "package_height_cm")}}).encode()).hexdigest()
+            "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+            "net_proceeds_usd")}}).encode()).hexdigest()
 
 
 def public_image_url(value, base_url=""):
@@ -234,12 +235,20 @@ class PublicationStore:
 
 
 class PublicationService:
-    def __init__(self, store, load_rows, publisher_factory=None, start_thread=None):
+    def __init__(self, store, load_rows, publisher_factory=None, start_thread=None, authorize_row=None):
         self.store, self.load_rows = store, load_rows
         self.publisher_factory = publisher_factory or self.publisher
         self.start_thread = start_thread or self._start
+        self.authorize_row = authorize_row
         self._lock = threading.RLock()
         self._active = set()
+
+    def authorized_rows(self, ids):
+        rows = list(self.load_rows(ids))
+        if self.authorize_row:
+            for row in rows:
+                self.authorize_row(row)
+        return rows
 
     @staticmethod
     def _start(function):
@@ -288,7 +297,7 @@ class PublicationService:
         ids = [item["product_id"] for item in items]
         if len(set(ids)) != len(ids):
             raise ValueError("同一商品不能在一批中重复提交")
-        rows = {int(row["id"]): row for row in self.load_rows(ids)}
+        rows = {int(row["id"]): row for row in self.authorized_rows(ids)}
         if len(rows) != len(ids) or any(row.get("source_type") != "ai_original" for row in rows.values()):
             raise ValueError("部分记录不是 AI 原创商品，请刷新列表")
         publisher, label = self.publisher_factory(platform, store_id, organization)
@@ -316,8 +325,14 @@ class PublicationService:
                 skus.add(settings["sku"])
                 if draft.get("status") != "completed":
                     raise ValueError("请先完成当前平台的 AI 草稿生成")
+                if draft.get("review_status") != "approved":
+                    raise ValueError("当前平台商品必须先由人工审核并设为通过，才能上架")
                 if row.get("review_status") in {"suspected", "infringing", "risk"}:
                     raise ValueError("商品仍标记为侵权风险或待复核，请完成审核后再上架")
+                from erp.ai_original_state import manual_listing_issues
+                manual_issues = manual_listing_issues(row)
+                if manual_issues:
+                    raise ValueError("上架前需补齐所有必填项：" + "；".join(manual_issues))
                 settings["image_url"] = public_image_url(settings.get("image_url") or draft.get("main_image_url"))
                 prepared = publisher.prepare(row, settings)
                 entry.update({key: value for key, value in prepared.items() if key not in {
@@ -336,7 +351,7 @@ class PublicationService:
         if record["job_id"]:
             return self.store.job(record["job_id"], owner, organization)
         body = json.loads(record["body"])
-        rows = {int(row["id"]): row for row in self.load_rows([item["product_id"] for item in body["items"]])}
+        rows = {int(row["id"]): row for row in self.authorized_rows([item["product_id"] for item in body["items"]])}
         if any(item["product_id"] not in rows or fingerprint(rows[item["product_id"]], body["platform"]) != item["fingerprint"]
                for item in body["items"]):
             raise ValueError("商品草稿或货源在预览后已修改，请重新预检并确认")
@@ -473,7 +488,7 @@ class PublicationService:
             selected = [item for item in job["items"] if item.get("retryable") and item["state"] in {"failed", "partial"}]
             if not selected:
                 raise ValueError("没有可重试项；结果不明的商品须先回查平台状态")
-            rows = {int(row["id"]): row for row in self.load_rows([item["product_id"] for item in selected])}
+            rows = {int(row["id"]): row for row in self.authorized_rows([item["product_id"] for item in selected])}
             if any(item["product_id"] not in rows or fingerprint(rows[item["product_id"]], job["platform"]) != item["fingerprint"]
                    for item in selected):
                 raise ValueError("商品草稿或货源已修改，请重新预检并确认，不能重试旧资料")

@@ -1,0 +1,46 @@
+{
+  "id": 63,
+  "name": "遥遥领先1号店",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3418530639",
+      "before": 0,
+      "local_id": 1320,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLM18015004",
+      "type": "SMART",
+      "site": "MLM",
+      "seller_id": "3418530639",
+      "before": 0,
+      "local_id": 1322,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3418530639",
+      "before": 0,
+      "local_id": 1324,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site": "MLB",
+      "seller_id": "3418529153",
+      "before": 0,
+      "local_id": 1326,
+      "jobs": [],
+      "remaining": 0
+    }
+  ]
+}

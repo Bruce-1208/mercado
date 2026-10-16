@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 from bit import bit_appeal_ai, bit_interface
@@ -44,10 +45,11 @@ def test_phrase_renderer_replaces_placeholders_without_duplicating_order_ids():
         "请复核",
         order_ids="1001、1002",
         appeal_type="投诉",
-    ) == "销售单号：1001、1002\n请复核"
+    ) == "包裹号：1001、1002\n请复核"
 
 
 def test_ai_delay_uses_phrase_selected_from_library(monkeypatch):
+    monkeypatch.setattr(bit_appeal_ai, "get_appeal_package_ids", lambda name, site, ids: ["200000001001", "200000001002"])
     monkeypatch.setattr(bit_appeal_ai, "save_ai_appeal_group_record", lambda *args, **kwargs: None)
     sent_messages = []
     monkeypatch.setattr(
@@ -79,9 +81,10 @@ def test_ai_delay_uses_phrase_selected_from_library(monkeypatch):
             "Bruce",
         )
 
-    assert sent_messages == ["1001、1002我是Bruce，请处理这些延误订单"]
+    assert sent_messages == ["200000001001、200000001002我是Bruce，请处理这些延误订单"]
 
 
+@pytest.mark.usefixtures("subscribed_workbench_account")
 def test_appeal_phrase_crud_api(monkeypatch):
     calls = []
     monkeypatch.setattr(

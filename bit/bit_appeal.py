@@ -28,7 +28,9 @@ from bit.bit_mercado_login import (
     try_record_login_anomaly,
 )
 from bit.bit_appeal_phrases import render_appeal_phrase, select_appeal_phrase
-from bit.bit_reputation_info import get_cancellation_orders
+from bit.bit_reputation_info import get_cancellation_orders, get_complaint_orders
+from bit.bit_db_api import get_appeal_package_ids
+from bit.appeal_evidence import ORDER_FORMS, validate_package_message
 import pandas as pd
 from datetime import datetime, timedelta
 from datetime import datetime
@@ -37,7 +39,7 @@ from openpyxl import load_workbook
 import traceback
 
 
-CHAT_INFO_API_URL = "https://wuhanzeshun.com/api/v1/chat"
+CHAT_INFO_API_URL = "https://wuhanzeshun.cn/api/v1/chat"
 HUMAN_SERVICE_HUB_URL = "https://global-selling.mercadolibre.com/help/hub/30928?source"
 HUMAN_SERVICE_CHAT_V2_URL = "https://global-selling.mercadolibre.com/help/chat/v2"
 SITE_REMOTE_VALUE_MAP = {
@@ -857,69 +859,44 @@ def shensu(name, site, form, message, mode="人工客服"):
         cancellation_random=""
         initial_huashu = ""
 
-        if(form=="延误" and message == ""):
-            orders_random = get_delay_orders_for_human_service(window_id, name, site, 10)
-            if (orders_random == "" and message == ""):
-                close_appeal_tabs(driver, appeal_base_handles, name, site)
-                return "没有可以申诉的订单"
+        package_ids = []
+        if form in ORDER_FORMS:
+            if form in {"延误", "延误率"}:
+                from bit.bit_appeal_ai import get_delay_orders_download_list
+                sales = get_delay_orders_download_list(window_id, name, site)
+                package_ids = get_appeal_package_ids(name, site, sales)
+            elif form == "取消率":
+                package_ids = get_cancellation_orders(driver, name, site, package_ids=True)
+            else:
+                package_ids = get_complaint_orders(driver, name, site, package_ids=True)
+            if not package_ids:
+                return "没有已核实包裹号的可申诉订单"
+            package_ids = package_ids[:10]
+            initial_huashu = render_appeal_phrase(message or selected_phrase or words_random,
+                nickname=nickname, order_ids="、".join(package_ids), appeal_type=form)
+            initial_huashu = validate_package_message(initial_huashu, package_ids)
+            open_human_service_hub_with_ip_retry(driver, name, site, window_id=window_id)
+            select_mercado_site_fast(driver, name, site)
         if should_load_infraction_orders(form, message):
-            infraction_random = get_infraction_orders_random(window_id,name, site, 10)
+            infraction_random = get_infraction_orders_random(window_id, name, site, 10)
         if form == "禁限售" and message == "":
             prohibited_random = get_prohibited_orders_for_human_service(name, site, 10)
             if not prohibited_random:
                 close_appeal_tabs(driver, appeal_base_handles, name, site)
                 return "禁限售列表没有可以申诉的产品"
-        if form == "取消率" and message == "":
-            cancellation_orders = get_cancellation_orders(driver, name, site)
-            if not cancellation_orders:
-                close_appeal_tabs(driver, appeal_base_handles, name, site)
-                return "没有可以申诉的取消订单"
-            selected_orders = (
-                random.sample(cancellation_orders, 10)
-                if len(cancellation_orders) > 10
-                else cancellation_orders
-            )
-            cancellation_random = "、".join(str(order_id) for order_id in selected_orders)
-            print(
-                f"{get_now_time()} {name} {site} 共获取 {len(cancellation_orders)} 个取消订单，"
-                f"本轮人工客服按侵权规则发送 {len(selected_orders)} 个：{cancellation_random}<br>"
-            )
-            # 获取订单后当前位于 Metrics 页面，重新回到人工客服入口。
-            open_human_service_hub_with_ip_retry(
-                driver,
-                name,
-                site,
-                window_id=window_id,
-            )
-            select_mercado_site_fast(driver, name, site)
         try:
             open_human_service_chat(driver, name, site, window_id=window_id)
 
             # 发消息
             print(f"{get_now_time()} {name} {site} '进入人工客服'<br>")
 
-            if message == "":
+            if form in ORDER_FORMS:
+                get_human_chat_input(driver, 30).send_keys(initial_huashu)
+                time.sleep(3)
+                click_human_send_button(driver, 30)
+                chat_ai(driver, name, site, form, initial_huashu, nickname)
+            elif message == "":
 
-                if form == "延误":
-                    initial_huashu = (
-                        render_appeal_phrase(
-                            selected_phrase,
-                            nickname=nickname,
-                            order_ids=orders_random,
-                            appeal_type=form,
-                        )
-                        if selected_phrase
-                        else orders_random + words_random
-                    )
-                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                    time.sleep(3)
-                    click_human_send_button(driver, 30)
-                    print(
-                        f"{get_now_time()} {name}  {site} 发送延误订单：{initial_huashu}<br>"
-                    )
-                    chat_ai(
-                        driver, name, site, form, initial_huashu, nickname
-                    )
                 if form == "侵权":
                     initial_huashu = (
                         render_appeal_phrase(
@@ -957,43 +934,6 @@ def shensu(name, site, form, message, mode="人工客服"):
                     print(
                         f"{get_now_time()} {name} {site} 发送禁限售产品编号："
                         f"{initial_huashu}<br>"
-                    )
-                    chat_ai(
-                        driver, name, site, form, initial_huashu, nickname
-                    )
-                if form == "取消率":
-                    initial_huashu = (
-                        render_appeal_phrase(
-                            selected_phrase,
-                            nickname=nickname,
-                            order_ids=cancellation_random,
-                            appeal_type=form,
-                        )
-                        if selected_phrase
-                        else cancellation_random + words_random
-                    )
-                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                    time.sleep(3)
-                    click_human_send_button(driver, 30)
-                    print(
-                        f"{get_now_time()} {name} {site} 发送取消订单：{initial_huashu}<br>"
-                    )
-                    chat_ai(
-                        driver, name, site, form, initial_huashu, nickname
-                    )
-                if form == "投诉":
-                    initial_huashu = (
-                        render_appeal_phrase(
-                            selected_phrase or words_random,
-                            nickname=nickname,
-                            appeal_type=form,
-                        )
-                    )
-                    get_human_chat_input(driver, 30).send_keys(initial_huashu)
-                    time.sleep(3)
-                    click_human_send_button(driver, 30)
-                    print(
-                        f"{get_now_time()} {name} {site} 发送投诉申诉：{initial_huashu}<br>"
                     )
                     chat_ai(
                         driver, name, site, form, initial_huashu, nickname
@@ -1083,6 +1023,7 @@ def get_delay_orders_random(name, site, nums):
                     order_list.append(order_num)
         print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
 
+        order_list = get_appeal_package_ids(name, site, order_list)
         if len(order_list) >= nums:
             order_random = str(random.sample(order_list, nums))
         else:
@@ -1100,7 +1041,7 @@ def get_delay_orders_for_human_service(window_id, name, site, nums=10):
     try:
         from bit.bit_appeal_ai import get_delay_orders_download_list
 
-        order_list = get_delay_orders_download_list(window_id, name, site)
+        order_list = get_appeal_package_ids(name, site, get_delay_orders_download_list(window_id, name, site))
         if not order_list:
             return ""
         selected_orders = order_list[:nums]
@@ -1237,7 +1178,8 @@ def use_all_browser_run_task_with_thread_pool(browser_list, max_threads=10):
     :param max_threads: 最大并发线程数
     """
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        executor.map(use_one_browser_run_task, browser_list)
+        from bit.knowledge_organization import bind
+        executor.map(bind(use_one_browser_run_task), browser_list)
 
 
 def auto_appeal_delay():

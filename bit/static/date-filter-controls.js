@@ -91,7 +91,9 @@
         day.hidden = true;
         common.append(label, select, day);
         const actions = [...container.children].find(node => node.matches('.market-filter-actions, .order-filter-actions, .filter-actions, .store-link-audit-filter-actions, button'));
-        container.insertBefore(common, actions || details);
+        const commonRow = container.querySelector('.zs-common-filter-row');
+        if (commonRow) commonRow.insertBefore(common, commonRow.querySelector('.market-filter-actions'));
+        else container.insertBefore(common, actions || details);
         let updating = false;
         function sync() {
             if (updating) return;
@@ -108,7 +110,8 @@
             day.hidden = select.value !== 'day';
             if (!day.hidden) day.value = fromDate;
             const count = [...grid.querySelectorAll('input, select')].filter(control => !control.closest('[hidden]') && control.value).length;
-            details.querySelector('summary').textContent = count ? `高级筛选 · 已设置 ${count} 项` : '高级筛选';
+            if (container.zsRefreshFilterSummary) container.zsRefreshFilterSummary();
+            else details.querySelector('summary').textContent = count ? `高级筛选 · 已设置 ${count} 项` : '高级筛选';
         }
         function setRange(start, end) {
             updating = true;

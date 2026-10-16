@@ -65,11 +65,15 @@ PRODUCT_REVIEW_STATUSES = {
     "unreviewed", "approved", "failed", "suspected", "infringing", "risk",
 }
 PRODUCT_PUBLISH_RECORD_STATUSES = {"pending", "publishing", "published", "failed", "pending_review"}
-PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "publishing", "failed"}
+# A lingering ``publishing`` record has an unknown remote outcome. Retrying it
+# can create a duplicate listing, so only attempts known not to be in flight are
+# eligible for another submission.
+PRODUCT_PUBLISH_RETRYABLE_STATUSES = {"pending", "failed"}
 PRODUCT_PUBLISH_FILTER_STATUSES = PRODUCT_PUBLISH_RECORD_STATUSES | {"unpublished"}
 PRODUCT_PUBLISH_RATE_LIMIT_RETRY_HOURS = 2
 ZYING_PROFITABILITY_SOURCE = "zying_collection"
 PURCHASE_PROFITABILITY_SOURCE = "purchase_cost_ratio"
+MANUAL_PRODUCT_PROFITABILITY_SOURCE = "manual_product_edit"
 COLLECTION_WORKFLOW_COLUMN_DEFINITIONS = (
     ("review_status", "VARCHAR(32) NOT NULL DEFAULT 'unreviewed' AFTER `added_to_products`"),
     ("last_publish_status", "VARCHAR(32) NULL AFTER `review_status`"),
@@ -237,8 +241,36 @@ def has_valid_actual_weight(row: Mapping[str, Any]) -> bool:
     return value is not None and value > 0
 
 
+def product_number(product_id: int) -> str:
+    """Stable nine-digit identifier backed by the product table's unique PK.
+
+    Existing and newly inserted products use the same mapping without a backfill
+    or a second sequence. The 9xxxxxxxx range is reserved for collection items.
+    Never truncate/wrap IDs, which would cause collisions.
+    """
+    product_id = int(product_id)
+    if not 1 <= product_id <= 799_999_999:
+        raise ValueError("产品 ID 超出 9 位产品编号范围")
+    return str(100_000_000 + product_id)
+
+
+def collection_product_number(collection_id: int) -> str:
+    """Use the persisted collection identity before and after claiming a product."""
+    collection_id = int(collection_id)
+    if not 1 <= collection_id <= 99_999_999:
+        raise ValueError("采集 ID 超出 9 位产品编号范围")
+    return str(900_000_000 + collection_id)
+
+
 def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result = dict(row)
+    if "collection_item_id" in result and "source_type" in result:
+        if result["source_type"] == "collected" and result.get("collection_item_id"):
+            result["product_number"] = collection_product_number(result["collection_item_id"])
+        else:
+            result["product_number"] = product_number(result["id"])
+    elif "task_id" in result and result.get("id"):
+        result["product_number"] = collection_product_number(result["id"])
     for key, value in tuple(result.items()):
         if isinstance(value, datetime):
             result[key] = value.strftime("%Y-%m-%d %H:%M:%S")
@@ -246,6 +278,8 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
             result[key] = float(value)
         elif isinstance(value, bytes):
             result[key] = value.decode("utf-8", errors="replace")
+    from erp.sku_matrix import sku_count
+    result['sku_count'] = sku_count(_loads(result.get('source_snapshot_json') or result.get('source_json'), {}) or {})
     result["ai_weight_price"] = _loads(result.get("ai_weight_price_json"), {})
     collection_copy = _loads(result.get("ai_copy_json"), {})
     if not collection_copy:
@@ -256,11 +290,17 @@ def _json_safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     result["actual_weight_complete"] = has_valid_actual_weight(result)
     result["weight_dimensions_complete"] = has_complete_weight_dimensions(result)
     if "task_id" in result:
+        from erp.mercadolibre_collection_attributes import collection_category_id
+        result["category_id"] = collection_category_id(result)
+        result["collector_salesperson"] = str(result.get("owner_name") or result.get("salesperson") or "").strip()
+        actor = product_access.actor()
+        result["can_claim"] = bool(actor and product_access.can_operate(result, actor))
         from erp.mercadolibre_collection_quality import collection_quality_issues
         result["collection_quality_issues"] = collection_quality_issues(result)
     user = product_access.actor()
     if user:
-        result["can_manage_visibility"] = product_access.is_admin(user) or product_access.owns(result, user)
+        result["can_operate"] = product_access.can_operate(result, user)
+        result["can_manage_visibility"] = result["can_operate"]
     return result
 
 
@@ -275,6 +315,33 @@ def _collection_personnel_predicate(name_expression, organization_expression):
     )
 
 
+def _sync_original_package_attributes(prepared, row):
+    """Column measurements are authoritative, including for legacy draft attributes."""
+    fields = {"LENGTH": "package_length_cm", "WIDTH": "package_width_cm",
+              "HEIGHT": "package_height_cm", "WEIGHT": "weight_g"}
+    attributes = [dict(item) for item in prepared.get("attributes") or [] if isinstance(item, Mapping)]
+    for suffix, field in fields.items():
+        if field not in row:
+            continue
+        ids = {"PACKAGE_" + suffix, "SELLER_PACKAGE_" + suffix}
+        targets = [item for item in attributes if str(item.get("id", "")).upper() in ids]
+        value = row.get(field)
+        if value in (None, ""):
+            attributes = [item for item in attributes if str(item.get("id", "")).upper() not in ids]
+            continue
+        if not targets:
+            targets = [{"id": "PACKAGE_" + suffix}]
+            attributes.extend(targets)
+        for item in targets:
+            for key in ("value_id", "values", "value_struct", "value_name_es", "value_name_pt"):
+                item.pop(key, None)
+            item["value_name"] = f"{format(Decimal(str(value)), 'f')} {'g' if suffix == 'WEIGHT' else 'cm'}"
+    prepared["attributes"] = attributes
+    for field in (*fields.values(), "net_proceeds_usd"):
+        if field in row:
+            prepared[field] = row[field]
+
+
 def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
     """Expose workflow metadata stored in the source snapshot as list fields."""
     result = dict(row)
@@ -283,10 +350,24 @@ def _mirror_zying_snapshot_fields(row: Mapping[str, Any]) -> dict[str, Any]:
         snapshot = _loads(result.get("source_snapshot_json"), {})
         if not isinstance(snapshot, dict):
             snapshot = {}
+        from copy import deepcopy
+        snapshot = deepcopy(snapshot)
+        from erp.sku_matrix import sync_single_sku_cover
+        for product in [snapshot.get('original_1688') or {}, snapshot.get('ai_original') or {},
+                        snapshot.get('source') or {}, *((snapshot.get('marketplace_listings') or {}).values())]:
+            sync_single_sku_cover(product)
+        cover = (snapshot.get('ai_original') or {}).get('main_image_url')
+        if cover and len((snapshot.get("ai_original") or {}).get("variations") or []) == 1:
+            result['main_image_url'] = cover
+        for draft in [snapshot.get("ai_original"), snapshot.get("source"), (snapshot.get("marketplace_listings") or {}).get("mercadolibre")]:
+            if isinstance(draft, dict):
+                _sync_original_package_attributes(draft, result)
+        result['source_snapshot_json'] = _dumps(snapshot)
         original = snapshot.get("original_1688") if isinstance(snapshot, dict) else {}
         prepared = snapshot.get("ai_original") if isinstance(snapshot, dict) else {}
-        from erp.ai_original_state import category_failure_state
+        from erp.ai_original_state import category_failure_state, source_input_state
         prepared = category_failure_state(result, prepared if isinstance(prepared, dict) else {})
+        prepared = source_input_state(prepared, original if isinstance(original, dict) else {})
         result["original_1688"] = original if isinstance(original, dict) else {}
         result["ai_original"] = prepared if isinstance(prepared, dict) else {}
         drafts = snapshot.get("marketplace_listings")
@@ -940,8 +1021,16 @@ def ensure_collection_tables(cursor: Any) -> None:
         if unique_columns == ["source_item_id"]:
             cursor.execute(f"ALTER TABLE `{PRODUCT_TABLE}` DROP INDEX `uniq_erp_meli_product_item`, "
                            "ADD UNIQUE KEY `uniq_erp_meli_product_item` (`organization_key`, `source_item_id`)")
+        from erp.product_sku_groups import ensure_table as ensure_sku_groups
+        ensure_sku_groups(cursor)
+        from erp.product_sku_materialize import ensure_table as ensure_sku_members
+        ensure_sku_members(cursor)
         _ensure_collection_task_unique_index(cursor)
         _ensure_index(cursor, PRODUCT_TABLE, "idx_product_source_enterprise", "(`source_item_id`, `organization_key`)" )
+        _ensure_index(
+            cursor, PRODUCT_TABLE, "idx_erp_meli_product_collection",
+            "(`collection_item_id`)",
+        )
         _ensure_index(
             cursor, PRODUCT_TABLE, "idx_erp_meli_product_owner",
             "(`last_publish_token_id`)",
@@ -1342,8 +1431,8 @@ def _execute_access_insert(cursor, sql, values, *, many=False, inherited=None):
         cursor.execute(f"SELECT `id`, `organization_key`, `owner_user_id`, `owner_name`, `visibility` "
                        f"FROM `{table}` WHERE `organization_key` = %s AND `source_item_id` IN "
                        f"({', '.join(['%s'] * len(sources))}) FOR UPDATE", (access_values[0], *sources))
-        if any(not product_access.can_view(row, user) for row in cursor.fetchall()):
-            raise PermissionError("当前账号无权重新采集该私有产品")
+        if any(not product_access.can_operate(row, user) for row in cursor.fetchall()):
+            raise PermissionError("只能重新采集自己的产品")
     sql = re.sub(r"(\)\s*VALUES\s*\()", r", `organization_key`, `owner_user_id`, `owner_name`, `visibility`\1", sql, count=1, flags=re.I)
     sql = re.sub(r"(VALUES\s*\([^)]*)(\))", r"\1, %s, %s, %s, %s\2", sql, count=1, flags=re.I)
     if many:
@@ -1367,7 +1456,9 @@ def upsert_collection_items(
     if not records:
         return 0
     category_ids = set()
+    from erp.mercadolibre_collection_attributes import collection_category_id
     for row in records:
+        row["category_id"] = collection_category_id(row) or None
         row["management_category_id"] = normalize_collection_management_category_id(
             row.get("management_category_id")
         )
@@ -1726,6 +1817,7 @@ def _list_rows(
     limit: int = 500,
     offset: int = 0,
     include_total: bool = True,
+    group_skus: bool = False,
     task_id: int | None = None,
     source_type: str = "",
     ai_status: str = "",
@@ -1742,11 +1834,14 @@ def _list_rows(
     management_category_id: Any = None,
     mercado_category: str = "",
     zying_category: str = "",
+    zying_status: str = "",
     product_developer_id: str = "",
     weight_min: Any = None,
     weight_max: Any = None,
     price_min: Any = None,
     price_max: Any = None,
+    sku_count_min: Any = None,
+    sku_count_max: Any = None,
     net_proceeds_min: Any = None,
     net_proceeds_max: Any = None,
     date_from: str = "",
@@ -1890,6 +1985,13 @@ def _list_rows(
                 f"OR {zying_id_expr} = %s)"
             )
             params.extend((zying_category, f"%{zying_category}%", zying_category))
+        zying_status = str(zying_status or "").strip()[:255]
+        if zying_status:
+            where.append(
+                "JSON_UNQUOTE(JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), "
+                "`source_snapshot_json`, '{}'), '$.plugin_snapshot.zying_status')) = %s"
+            )
+            params.append(zying_status)
         product_developer_id = str(product_developer_id or "").strip()[:255]
         if product_developer_id:
             where.append(
@@ -1938,6 +2040,17 @@ def _list_rows(
         if not number.is_finite() or (nonnegative and number < 0):
             raise ValueError(f"{name}必须是{'非负' if nonnegative else '有效'}数字")
         return number
+
+    from erp.sku_matrix import sku_count_sql
+    sku_bounds = [optional_decimal(v, 'SKU 个数', nonnegative=True) for v in (sku_count_min, sku_count_max)]
+    if any(v is not None and v != v.to_integral_value() for v in sku_bounds):
+        raise ValueError('SKU 个数必须是非负整数')
+    if all(v is not None for v in sku_bounds) and sku_bounds[0] > sku_bounds[1]:
+        raise ValueError('最少 SKU 个数不能大于最多 SKU 个数')
+    for operator, value in zip(('>=', '<='), sku_bounds):
+        if value is not None:
+            where.append(f"{sku_count_sql('`source_json`' if table == COLLECTION_TABLE else '`source_snapshot_json`')} {operator} %s")
+            params.append(int(value))
 
     ranges = (
         ("weight_g", "重量", weight_min, weight_max, True),
@@ -2029,6 +2142,9 @@ def _list_rows(
             else:
                 where.append(f"{expression} LIKE %s")
                 params.append("%" + str(owner).strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")
+    if table == PRODUCT_TABLE:
+        where.append("NOT EXISTS (SELECT 1 FROM erp_mercadolibre_product_sku_members sku_member "
+                     f"WHERE sku_member.product_id = `{PRODUCT_TABLE}`.id AND sku_member.parent_id <> `{PRODUCT_TABLE}`.id)")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     started = time.monotonic()
     timings = {}
@@ -2077,7 +2193,7 @@ def _list_rows(
             if include_generator_options and table == PRODUCT_TABLE:
                 options_where = " AND ".join(generator_options_where) or "1 = 1"
                 cursor.execute(
-                    "SELECT DISTINCT TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT("
+                    "SELECT /*+ MAX_EXECUTION_TIME(2000) */ DISTINCT TRIM(COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT("
                     "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}'), "
                     f"'{listing_path}.generated_by')), 'null'), '')) AS generator_salesperson "
                     f"FROM `{table}` WHERE {options_where} "
@@ -2244,13 +2360,14 @@ def _list_rows(
             if not include_total:
                 raw_rows = raw_rows[:limit]
                 total = None
-            mark("decode")
-            rows = [
-                _mirror_zying_snapshot_fields(_json_safe_row(row))
-                for row in raw_rows
-            ]
         mark("commit")
         connection.commit()
+        connection.close()
+        connection = None
+        # JSON decoding/copying can be expensive for supplier SKU snapshots.
+        # No database work remains; release the slot before processing them.
+        mark("decode")
+        rows = [_mirror_zying_snapshot_fields(_json_safe_row(row)) for row in raw_rows]
         mark("complete")
         return {"total": total, "rows": rows, **(
             {"has_more": has_more, "total_exact": False} if not include_total else {}
@@ -2427,9 +2544,13 @@ def save_collection_item_ai_copy(
             if product_mode:
                 snapshot = _loads(current.get("source_snapshot_json"), {})
                 snapshot.update(source=source, description=description, ai_copy=copy)
+                review_assignment = ""
+                if str(current.get("source_type") or "").lower() == "ai_original":
+                    _mark_ai_marketplace_drafts_unreviewed(snapshot)
+                    review_assignment = ", `review_status`='unreviewed'"
                 cursor.execute(
                     f"UPDATE `{PRODUCT_TABLE}` SET `title`=%s, `description_text`=%s, "
-                    "`source_snapshot_json`=%s WHERE `id`=%s",
+                    f"`source_snapshot_json`=%s{review_assignment} WHERE `id`=%s",
                     (copy["title_es"], copy["description_es"], _dumps(snapshot), item_id),
                 )
                 connection.commit()
@@ -2446,7 +2567,7 @@ def save_collection_item_ai_copy(
 
             # Keep a product already created from this collection item in sync.
             cursor.execute(
-                f"SELECT `id`, `source_snapshot_json` FROM `{PRODUCT_TABLE}` "
+                f"SELECT `id`, `source_type`, `source_snapshot_json` FROM `{PRODUCT_TABLE}` "
                 "WHERE `collection_item_id` = %s FOR UPDATE",
                 (item_id,),
             )
@@ -2462,9 +2583,13 @@ def save_collection_item_ai_copy(
                     "description": description,
                     "ai_copy": copy,
                 })
+                review_assignment = ""
+                if str(product.get("source_type") or "").lower() == "ai_original":
+                    _mark_ai_marketplace_drafts_unreviewed(snapshot)
+                    review_assignment = ", `review_status`='unreviewed'"
                 cursor.execute(
                     f"UPDATE `{PRODUCT_TABLE}` SET `title` = %s, `description_text` = %s, "
-                    "`source_snapshot_json` = %s WHERE `id` = %s",
+                    f"`source_snapshot_json` = %s{review_assignment} WHERE `id` = %s",
                     (copy["title_es"], copy["description_es"], _dumps(snapshot), product["id"]),
                 )
         connection.commit()
@@ -3099,7 +3224,9 @@ def update_product_publish_record(
 
 def list_product_publish_records(
     *,
+    product_item_id: int | None = None,
     search: str = "",
+    source_type: str = "",
     status: str = "",
     store_name: str = "",
     site_id: str = "",
@@ -3117,6 +3244,12 @@ def list_product_publish_records(
     offset = max(0, int(offset))
     base_where: list[str] = []
     base_params: list[Any] = []
+    if product_item_id is not None:
+        product_item_id = int(product_item_id)
+        if product_item_id <= 0:
+            raise ValueError("产品记录编号必须为正整数")
+        base_where.append("records.`product_item_id` = %s")
+        base_params.append(product_item_id)
     if token_ids is not None:
         scoped_token_ids = sorted({
             int(value) for value in token_ids or () if int(value or 0) > 0
@@ -3203,6 +3336,15 @@ def list_product_publish_records(
         base_where.append("records.`created_at` < %s")
         base_params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
 
+    source_type = str(source_type or "").strip().lower()
+    if source_type:
+        if source_type not in PRODUCT_SOURCE_TYPES:
+            raise ValueError(f"不支持的产品来源: {source_type}")
+        base_where.append(f"EXISTS (SELECT 1 FROM `{PRODUCT_TABLE}` AS source_product "
+                          "WHERE source_product.`id` = records.`product_item_id` "
+                          "AND source_product.`source_type` = %s)")
+        base_params.append(source_type)
+
     where = list(base_where)
     params = list(base_params)
     status = str(status or "").strip().lower()
@@ -3235,15 +3377,17 @@ def list_product_publish_records(
                 if count_status in counts:
                     counts[count_status] = int(count_row.get("total") or 0)
             counts["all"] = sum(counts.values())
+            total = counts.get(status, 0) if status else counts["all"]
             cursor.execute(
-                f"SELECT COUNT(*) AS total FROM {from_sql} {where_sql}",
-                tuple(params),
-            )
-            total = int((cursor.fetchone() or {}).get("total") or 0)
-            cursor.execute(
-                f"SELECT records.*, COALESCE(settings.`group_name`, '') AS `group_name` "
-                f"FROM {from_sql} {where_sql} "
-                "ORDER BY records.`id` DESC LIMIT %s OFFSET %s",
+                f"SELECT records.*, (SELECT source_product.`source_type` FROM `{PRODUCT_TABLE}` AS source_product "
+                "WHERE source_product.`id` = records.`product_item_id`) AS source_type, COALESCE(settings.`group_name`, '') AS `group_name` "
+                f"FROM (SELECT records.`id` FROM {from_sql} {where_sql} "
+                "ORDER BY COALESCE(records.`started_at`, records.`created_at`) DESC, records.`id` DESC "
+                "LIMIT %s OFFSET %s) AS page_ids "
+                f"INNER JOIN `{PUBLISH_RECORD_TABLE}` AS records ON records.`id` = page_ids.`id` "
+                "LEFT JOIN `mercado_store_site_settings` AS settings "
+                "ON settings.`token_id` = records.`token_id` AND settings.`site_id` = records.`site_id` "
+                "ORDER BY COALESCE(records.`started_at`, records.`created_at`) DESC, records.`id` DESC",
                 tuple(params + [limit, offset]),
             )
             rows = [_json_safe_row(row) for row in cursor.fetchall()]
@@ -3389,6 +3533,21 @@ def update_product_review_status(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
+                f"SELECT `id`, `source_type`, `organization_key`, `owner_user_id`, "
+                f"`owner_name`, `visibility` FROM `{PRODUCT_TABLE}` "
+                f"WHERE `id` IN ({placeholders}) FOR UPDATE",
+                tuple(ids),
+            )
+            selected_rows = list(cursor.fetchall() or [])
+            user = product_access.actor()
+            if user and any(not product_access.can_operate(row, user) for row in selected_rows):
+                raise PermissionError("当前账号无权修改所选产品的审核状态")
+            if status == "approved" and any(
+                str(row.get("source_type") or "").strip().lower() == "ai_original"
+                for row in selected_rows
+            ):
+                raise ValueError("AI 原创产品请在 AI 原创页面逐件审核；通过前必须校验全部必填项")
+            cursor.execute(
                 f"UPDATE `{PRODUCT_TABLE}` SET `review_status` = %s "
                 f"WHERE `id` IN ({placeholders})",
                 tuple([status] + ids),
@@ -3413,6 +3572,8 @@ def _normalize_product_content_changes(changes: Mapping[str, Any]) -> dict[str, 
         "description_text": ("产品描述", 60000, True),
         "main_image_url": ("主图链接", 1500, False),
         "category_id": ("分类编号", 64, True),
+        "source_url": ("来源链接", 1500, True),
+        "currency_id": ("币种", 3, False),
     }
     for field, (label, max_length, allow_empty) in text_rules.items():
         if field not in changes:
@@ -3422,8 +3583,12 @@ def _normalize_product_content_changes(changes: Mapping[str, Any]) -> dict[str, 
             raise ValueError(f"{label}不能为空")
         if len(value) > max_length:
             raise ValueError(f"{label}不能超过 {max_length} 个字符")
-        if field == "main_image_url" and not value.lower().startswith(("http://", "https://")):
-            raise ValueError("主图链接必须以 http:// 或 https:// 开头")
+        if field in {"main_image_url", "source_url"} and value and not value.lower().startswith(("http://", "https://")):
+            raise ValueError(f"{label}必须以 http:// 或 https:// 开头")
+        if field == "currency_id":
+            value = value.upper()
+            if not re.fullmatch(r"[A-Z]{3}", value):
+                raise ValueError("币种必须是三个英文字母")
         normalized[field] = value
 
     numeric_rules = {
@@ -3460,7 +3625,7 @@ def _product_content_update_plan(
     # Dimensions remain useful display/reference data, but shipping now uses
     # actual weight only. Editing length/width/height must not erase or queue a
     # perfectly valid commission/freight snapshot.
-    profitability_stale = bool({"price", "weight_g", "category_id"}.intersection(normalized))
+    profitability_stale = bool({"price", "currency_id", "weight_g", "category_id"}.intersection(normalized))
     if "weight_g" in normalized:
         assignments.append("`weight_basis` = 'manual_edit'")
     if set(normalized).intersection({
@@ -3532,26 +3697,80 @@ def update_product_item(
     if row_id <= 0:
         raise ValueError("产品记录编号无效")
     raw_changes = dict(changes or {})
-    variations_changed = "variations" in raw_changes
-    dimensions_changed = "variation_dimensions" in raw_changes
-    variation_rows: list[dict[str, Any]] = []
-    if variations_changed:
-        if not isinstance(raw_changes.get("variations"), list):
-            raise ValueError("产品变体必须是数组")
-        if len(raw_changes["variations"]) > 200:
-            raise ValueError("每件产品最多保存 200 个变体")
-        variation_rows = _editor_variations(raw_changes["variations"])
-    variation_dimensions: list[dict[str, Any]] = []
-    if dimensions_changed:
-        variation_dimensions = _editor_variation_dimensions(raw_changes["variation_dimensions"])
-    normalized = _normalize_product_content_changes(
-        {key: value for key, value in raw_changes.items() if key not in {"variations", "variation_dimensions"}}
-    ) if any(key not in {"variations", "variation_dimensions"} for key in raw_changes) else {}
-    if not normalized and not variations_changed and not dimensions_changed:
+    source_changes: dict[str, Any] = {}
+    for field in ("variations", "variation_dimensions", "attributes", "sale_terms", "pictures"):
+        if field not in raw_changes:
+            continue
+        rows = raw_changes.pop(field)
+        maximum = 2000 if field == "variations" else 200
+        if not isinstance(rows, list) or len(rows) > maximum:
+            raise ValueError(f"{field} 必须是数组，最多保存 {maximum} 项")
+        if field == "pictures":
+            pictures = []
+            for raw in rows:
+                item = dict(raw) if isinstance(raw, Mapping) else {"source": str(raw)}
+                url = str(item.get("secure_url") or item.get("url") or item.get("source") or "").strip()
+                if not url.lower().startswith(("https://", "http://")) or len(url) > 1500:
+                    raise ValueError("产品图片必须是有效的 http/https 链接")
+                pictures.append(item)
+            source_changes[field] = pictures
+        elif field in {"attributes", "sale_terms"}:
+            if any(not isinstance(row, Mapping) or not (row.get("id") or row.get("name")) for row in rows):
+                raise ValueError("属性必须填写编号或名称")
+            source_changes[field] = _editor_attributes(rows)
+        elif field == "variations":
+            source_changes[field] = _editor_variations(rows)
+        else:
+            source_changes[field] = _editor_variation_dimensions(rows)
+    if "available_quantity" in raw_changes:
+        quantity = raw_changes.pop("available_quantity")
+        if quantity is not None:
+            try:
+                number = Decimal(str(quantity))
+                if not number.is_finite() or number < 0 or number != number.to_integral_value() or number > 2147483647:
+                    raise ValueError()
+                quantity = int(number)
+            except Exception as exc:
+                raise ValueError("库存必须是非负整数") from exc
+        source_changes["available_quantity"] = quantity
+    if "condition" in raw_changes:
+        condition = str(raw_changes.pop("condition") or "").strip()
+        if condition not in {"new", "used", "not_specified"}:
+            raise ValueError("产品成色无效")
+        source_changes["condition"] = condition
+    copy_changes = {}
+    for field in ("title_pt", "description_pt"):
+        if field in raw_changes:
+            value = str(raw_changes.pop(field) or "").strip()
+            if len(value) > (255 if field == "title_pt" else 60000):
+                raise ValueError("葡语标题或描述超过长度限制")
+            copy_changes[field] = value
+    net_changed = "net_proceeds_usd" in raw_changes
+    net = None
+    if net_changed:
+        try:
+            net = Decimal(str(raw_changes.pop("net_proceeds_usd")))
+            if not net.is_finite() or abs(net) >= Decimal("10000000000000000"):
+                raise ValueError()
+            net = net.quantize(Decimal("0.0001"))
+            if abs(net) >= Decimal("10000000000000000"):
+                raise ValueError()
+        except Exception as exc:
+            raise ValueError("净收益必须是有效金额，最多 16 位整数") from exc
+    normalized = _normalize_product_content_changes(raw_changes) if raw_changes else {}
+    snapshot_changed = bool(source_changes or normalized or copy_changes) or net_changed
+    if not normalized and not snapshot_changed:
         raise ValueError("没有可保存的产品内容")
     assignments, values, profitability_stale = _product_content_update_plan(
         normalized, preserve_zying_net_proceeds=True
     ) if normalized else ([], [], False)
+    if net_changed:
+        # Apply the explicit target after invalidating derived costs.
+        assignments = [part for part in assignments if not part.startswith((
+            "`net_proceeds_usd` =", "`profitability_source` =", "`profitability_updated_at` ="))]
+        assignments.extend(["`net_proceeds_usd` = %s", "`profitability_source` = %s",
+                            "`profitability_updated_at` = NOW()", "`profitability_error` = ''"])
+        values.extend([net, MANUAL_PRODUCT_PROFITABILITY_SOURCE])
 
     connection = (connection_factory or _connect)()
     try:
@@ -3565,35 +3784,121 @@ def update_product_item(
                 changed = int(cursor.rowcount or 0)
             else:
                 changed = 0
-            if changed == 0 or variations_changed or dimensions_changed:
+            if changed == 0 or snapshot_changed:
                 cursor.execute(
-                    f"SELECT `id`, `collection_item_id`, `source_snapshot_json` "
-                    f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s FOR UPDATE",
+                    f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s FOR UPDATE",
                     (row_id,),
                 )
                 current = cursor.fetchone()
                 if not current:
                     raise KeyError("产品记录不存在")
+                user = product_access.actor()
+                if user and not product_access.can_operate(current, user):
+                    raise PermissionError("只能修改自己有操作权限的产品")
             else:
                 current = None
 
-            if variations_changed or dimensions_changed:
+            if snapshot_changed:
                 snapshot = _loads(current.get("source_snapshot_json"), {})
                 if not isinstance(snapshot, dict):
                     snapshot = {}
                 source = dict(snapshot.get("source") or {})
-                if variations_changed:
-                    source["variations"] = variation_rows
-                if dimensions_changed:
-                    source["variation_dimensions"] = variation_dimensions
+                source.update(source_changes)
+                for key in ("title", "price", "currency_id", "category_id"):
+                    if key in normalized:
+                        source[key] = normalized[key]
+                if net_changed:
+                    snapshot["manual_net_proceeds"] = {"net_proceeds_usd": str(net)}
+                    if current.get("source_type") == "zying":
+                        snapshot["zying_net_proceeds_usd"] = net
+                    elif current.get("source_type") == "ai_original":
+                        overrides = dict(snapshot.get("source_1688_overrides") or {})
+                        overrides["net_proceeds_usd"] = net
+                        snapshot["source_1688_overrides"] = overrides
+                snapshot["manual_product_fields"] = sorted(set(snapshot.get("manual_product_fields") or []) | set(source_changes))
+                if "description_text" in normalized:
+                    snapshot["description"] = {"plain_text": normalized["description_text"]}
+                if current.get("source_type") == "ai_original":
+                    prepared = dict(snapshot.get("ai_original") or {})
+                    edited_copy = dict(copy_changes)
+                    for column, field in (("title", "title_es"), ("description_text", "description_es")):
+                        if column in normalized:
+                            edited_copy[field] = normalized[column]
+                    prepared.update(edited_copy)
+                    _sync_ai_original_cached_copy(prepared, list(edited_copy))
+                    if "category_id" in normalized:
+                        prepared["category_id"] = normalized["category_id"]
+                    if "main_image_url" in normalized:
+                        prepared["main_image_url"] = normalized["main_image_url"]
+                    if "attributes" in source_changes:
+                        old_ids = {item.get("id") for item in prepared.get("attributes") or [] if isinstance(item, Mapping)}
+                        new_ids = {item.get("id") for item in source_changes["attributes"]}
+                        prepared["manual_attribute_removed_ids"] = sorted((set(prepared.get("manual_attribute_removed_ids") or []) | (old_ids - new_ids)) - new_ids - {None, ""})
+                        prepared["manual_attributes"] = source_changes["attributes"]
+                    for field in ("attributes", "variations", "variation_dimensions"):
+                        if field in source_changes:
+                            prepared[field] = source_changes[field]
+                            if field != "attributes":
+                                prepared[f"source_{field}"] = source_changes[field]
+                    checkpoint = dict(prepared.get("preparation") or {})
+                    if "category_id" in normalized:
+                        checkpoint.update(category_ready=False, variations_ready=False, required_ready=False)
+                    if set(source_changes) & {"variations", "variation_dimensions"}:
+                        checkpoint.update(variations_ready=False, required_ready=False)
+                    if "attributes" in source_changes:
+                        checkpoint["required_ready"] = False
+                    prepared["preparation"] = checkpoint
+                    prepared["review_status"] = "unreviewed"
+                    prepared["edit_revision"] = _ai_original_edit_revision(prepared) + 1
+                    snapshot["ai_original"] = prepared
+                    snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(prepared)
+                    overrides = dict(snapshot.get("source_1688_overrides") or {})
+                    overrides.update({key: value for key, value in normalized.items() if key in {
+                        "weight_g", "package_length_cm", "package_width_cm", "package_height_cm"}})
+                    snapshot["source_1688_overrides"] = overrides
+                    shared_facts_changed = bool(
+                        net_changed
+                        or set(normalized).intersection({
+                            "main_image_url", "weight_g", "package_length_cm",
+                            "package_width_cm", "package_height_cm",
+                        })
+                        or set(source_changes).intersection({
+                            "pictures", "variations", "variation_dimensions",
+                        })
+                    )
+                    if shared_facts_changed:
+                        _mark_ai_marketplace_drafts_unreviewed(snapshot)
+                elif copy_changes:
+                    copy = dict(snapshot.get("ai_copy") or {})
+                    copy.update(copy_changes)
+                    snapshot["ai_copy"] = copy
                 snapshot["source"] = source
+                if "variations" in source_changes:
+                    from erp.sku_matrix import sync_single_sku_cover
+                    cover = sync_single_sku_cover(source)
+                    sync_single_sku_cover(snapshot.get("ai_original") or {})
+                    sync_single_sku_cover((snapshot.get("marketplace_listings") or {}).get("mercadolibre") or {})
+                    if cover:
+                        cursor.execute(f"UPDATE `{PRODUCT_TABLE}` SET `main_image_url` = %s WHERE `id` = %s", (cover, row_id))
+                if current.get("source_type") == "ai_original":
+                    prepared = snapshot.get("ai_original")
+                    prepared = dict(prepared) if isinstance(prepared, Mapping) else {}
+                    from erp.ai_original_platforms import validate_platform_listing
+                    prepared["validation"] = validate_platform_listing(
+                        prepared, "mercadolibre",
+                    )
+                    snapshot["ai_original"] = prepared
+                    snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(prepared)
+                review_assignment = ", `review_status` = 'unreviewed'" if current.get("source_type") == "ai_original" else ""
+                if current.get("source_type") == "ai_original" and "weight_g" in normalized:
+                    review_assignment += ", `weight_basis` = 'ai_original_manual'"
                 cursor.execute(
-                    f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s WHERE `id` = %s",
+                    f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s{review_assignment} WHERE `id` = %s",
                     (_dumps(snapshot), row_id),
                 )
                 changed = max(changed, int(cursor.rowcount or 0))
                 collection_item_id = int(current.get("collection_item_id") or 0)
-                if collection_item_id > 0 and (variations_changed or dimensions_changed):
+                if collection_item_id > 0 and source_changes:
                     cursor.execute(
                         f"SELECT `source_json` FROM `{COLLECTION_TABLE}` WHERE `id` = %s FOR UPDATE",
                         (collection_item_id,),
@@ -3603,10 +3908,7 @@ def update_product_item(
                         collection_source = _loads(collection_row.get("source_json"), {})
                         if not isinstance(collection_source, dict):
                             collection_source = {}
-                        if variations_changed:
-                            collection_source["variations"] = variation_rows
-                        if dimensions_changed:
-                            collection_source["variation_dimensions"] = variation_dimensions
+                        collection_source.update(source_changes)
                         cursor.execute(
                             f"UPDATE `{COLLECTION_TABLE}` SET `source_json` = %s WHERE `id` = %s",
                             (_dumps(collection_source), collection_item_id),
@@ -3617,7 +3919,7 @@ def update_product_item(
             mirrored_fields = [
                 field for field in normalized
                 if field in {
-                    "title", "main_image_url", "price", "weight_g", "category_id",
+                    "title", "main_image_url", "price", "currency_id", "weight_g", "category_id",
                     "package_length_cm", "package_width_cm", "package_height_cm",
                 }
             ]
@@ -3652,6 +3954,11 @@ def update_product_item(
                             "c.`category_name` = NULL",
                             "c.`commission_rate` = NULL",
                         ))
+                collection_assignments = [
+                    _preserve_purchase_assignment_sql(value, alias="c")
+                    if value.startswith(("c.`net_proceeds_usd` =", "c.`profitability_source` =", "c.`profitability_updated_at` ="))
+                    else value for value in collection_assignments
+                ]
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` AS c "
                     f"INNER JOIN `{PRODUCT_TABLE}` AS p "
@@ -3659,11 +3966,14 @@ def update_product_item(
                     f"SET {', '.join(collection_assignments)} WHERE p.`id` = %s",
                     (row_id,),
                 )
+            if set(normalized).intersection({"title", "category_id"}) or "attributes" in source_changes:
+                from erp.product_sku_groups import refresh_products
+                refresh_products(cursor, [row_id])
         connection.commit()
         return {
             "product_item_id": row_id,
             "changed": changed,
-            "profitability_refresh_pending": profitability_stale,
+            "profitability_refresh_pending": profitability_stale and not net_changed,
         }
     except BaseException:
         connection.rollback()
@@ -3681,21 +3991,173 @@ def update_product_items(
     """Apply explicitly selected content fields to multiple products atomically."""
 
     ids = _normalize_row_ids(product_item_ids, empty_message="请至少勾选一个产品")
-    normalized = _normalize_product_content_changes(changes)
+    if not isinstance(changes, Mapping):
+        raise ValueError("批量修改内容必须是对象")
+    metadata_fields = {"review_status", "owner_user_id", "management_category_id", "visibility"}
+    content = {key: value for key, value in changes.items() if key not in metadata_fields}
+    normalized = _normalize_product_content_changes(content) if content else {}
+    metadata = {key: changes[key] for key in metadata_fields if key in changes}
+    if not normalized and not metadata:
+        raise ValueError("没有可保存的产品内容")
+    if "review_status" in metadata and metadata["review_status"] not in {"approved", "unreviewed", "suspected", "infringing", "risk"}:
+        raise ValueError("审核状态无效")
+    if "visibility" in metadata and metadata["visibility"] not in {"private", "enterprise"}:
+        raise ValueError("产品可见性必须为私有或企业共享")
+    for field in ("owner_user_id", "management_category_id"):
+        if field in metadata:
+            value = metadata[field]
+            if field == "management_category_id" and value in (None, ""):
+                metadata[field] = None
+            elif isinstance(value, bool) or not str(value).isdigit() or int(value) <= 0:
+                raise ValueError("业务员或运营分类编号无效")
+            else:
+                metadata[field] = int(value)
     assignments, values, profitability_stale = _product_content_update_plan(
         normalized, preserve_zying_net_proceeds=True
     )
     placeholders = ", ".join(["%s"] * len(ids))
+    selected_columns = [
+        "id", "source_type", "source_snapshot_json", "organization_key",
+        "owner_user_id", "owner_name", "visibility", *normalized,
+    ]
+    selected_columns_sql = ", ".join(f"`{field}`" for field in selected_columns)
     connection = (connection_factory or _connect)()
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT {selected_columns_sql} FROM `{PRODUCT_TABLE}` "
+                f"WHERE `id` IN ({placeholders}) FOR UPDATE",
+                tuple(ids),
+            )
+            selected_rows = cursor.fetchall()
+            if {int(row["id"]) for row in selected_rows} != set(ids):
+                raise KeyError("部分产品不存在或已移除")
+            user = product_access.actor()
+            if user and any(not product_access.can_operate(row, user) for row in selected_rows):
+                raise PermissionError("当前账号无权访问所选产品")
+            if "owner_user_id" in metadata:
+                if not user or not product_access.is_admin(user):
+                    raise PermissionError("仅企业管理员可批量分配业务员")
+                cursor.execute("SELECT `id`, `display_name`, `username`, `organization_key`, `is_active` "
+                               "FROM `workbench_users` WHERE `id` = %s", (metadata["owner_user_id"],))
+                owner = cursor.fetchone()
+                if not owner or not owner.get("is_active") or product_access.organization(owner) != product_access.organization(user):
+                    raise ValueError("请选择本企业启用中的业务员")
+                metadata["owner_name"] = str(owner.get("display_name") or owner["username"]).strip()
+            if metadata.get("management_category_id") is not None and "management_category_id" in metadata:
+                cursor.execute(f"SELECT `id` FROM `{MANAGEMENT_CATEGORY_TABLE}` WHERE `id` = %s",
+                               (metadata["management_category_id"],))
+                if not cursor.fetchone():
+                    raise ValueError("运营分类不存在")
+            if metadata.get("review_status") == "approved" and any(row.get("source_type") == "ai_original" for row in selected_rows):
+                raise ValueError("AI 原创产品请在 AI 原创页面逐件审核；通过前必须校验全部必填项")
+            assignments.extend(f"`{field}` = %s" for field in metadata)
+            values.extend(metadata.values())
             cursor.execute(
                 f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
                 f"WHERE `id` IN ({placeholders})",
                 tuple(values + ids),
             )
             changed = int(cursor.rowcount or 0)
+            for row in selected_rows:
+                if row.get("source_type") != "ai_original":
+                    continue
+                actual_changes = {}
+                for field, value in normalized.items():
+                    if field in {
+                        "price", "weight_g", "package_length_cm",
+                        "package_width_cm", "package_height_cm",
+                    }:
+                        different = _decimal_from_text(row.get(field)) != _decimal_from_text(value)
+                    elif field == "category_id":
+                        different = (
+                            str(row.get(field) or "").strip().upper()
+                            != str(value or "").strip().upper()
+                        )
+                    else:
+                        different = str(row.get(field) or "").strip() != str(value or "").strip()
+                    if different:
+                        actual_changes[field] = value
+                if not actual_changes:
+                    continue
+                snapshot = _loads(row.get("source_snapshot_json"), {})
+                snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
+                prepared = snapshot.get("ai_original")
+                prepared = dict(prepared) if isinstance(prepared, Mapping) else {}
+                source = snapshot.get("source")
+                source = dict(source) if isinstance(source, Mapping) else {}
+
+                edited_copy = {}
+                if "title" in actual_changes:
+                    edited_copy["title_es"] = actual_changes["title"]
+                    prepared["title"] = actual_changes["title"]
+                    source["title"] = actual_changes["title"]
+                if "description_text" in actual_changes:
+                    edited_copy["description_es"] = actual_changes["description_text"]
+                    prepared["description"] = actual_changes["description_text"]
+                    snapshot["description"] = {"plain_text": actual_changes["description_text"]}
+                if edited_copy:
+                    prepared.update(edited_copy)
+                    _sync_ai_original_cached_copy(prepared, edited_copy)
+                if "main_image_url" in actual_changes:
+                    prepared["main_image_url"] = actual_changes["main_image_url"]
+                if "price" in actual_changes:
+                    source["price"] = actual_changes["price"]
+                if "category_id" in actual_changes:
+                    category_id = str(actual_changes["category_id"] or "").strip().upper()
+                    source["category_id"] = category_id
+                    prepared.update(
+                        category_id=category_id,
+                        category_name="",
+                        status="failed",
+                        failed_step="category",
+                        workflow_status="needs_category",
+                        error="类目已修改，请重新执行 AI 制作以生成该类目的必填属性",
+                    )
+                    checkpoint = dict(prepared.get("preparation") or {})
+                    checkpoint.update(
+                        category_ready=False, variations_ready=False, required_ready=False,
+                    )
+                    prepared["preparation"] = checkpoint
+
+                overrides = snapshot.get("source_1688_overrides")
+                overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
+                overrides.update({
+                    field: value for field, value in actual_changes.items()
+                    if field in {
+                        "weight_g", "package_length_cm", "package_width_cm",
+                        "package_height_cm",
+                    }
+                })
+                snapshot["source_1688_overrides"] = overrides
+                from erp.ai_original_platforms import validate_platform_listing
+                prepared["validation"] = validate_platform_listing(
+                    prepared, "mercadolibre",
+                )
+                prepared["edit_revision"] = _ai_original_edit_revision(prepared) + 1
+                prepared["review_status"] = "unreviewed"
+                snapshot["ai_original"] = prepared
+                snapshot["source"] = source
+                drafts = snapshot.get("marketplace_listings")
+                drafts = dict(drafts) if isinstance(drafts, Mapping) else {}
+                drafts["mercadolibre"] = dict(prepared)
+                snapshot["marketplace_listings"] = drafts
+                if set(actual_changes).intersection({
+                    "main_image_url", "weight_g", "package_length_cm",
+                    "package_width_cm", "package_height_cm",
+                }):
+                    _mark_ai_marketplace_drafts_unreviewed(snapshot)
+                weight_basis_assignment = (
+                    ", `weight_basis` = 'ai_original_manual'"
+                    if "weight_g" in actual_changes else ""
+                )
+                cursor.execute(
+                    f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s, "
+                    f"`review_status` = 'unreviewed'{weight_basis_assignment} WHERE `id` = %s "
+                    "AND `source_type` = 'ai_original'",
+                    (_dumps(snapshot), int(row["id"])),
+                )
 
             mirrored_fields = [
                 field for field in normalized
@@ -3743,11 +4205,24 @@ def update_product_items(
                     f"WHERE p.`id` IN ({placeholders})",
                     tuple(ids),
                 )
+            if "review_status" in metadata:
+                cursor.execute(f"UPDATE `{PRODUCT_TABLE}` SET `review_status` = %s WHERE `id` IN ({placeholders})",
+                               (metadata["review_status"], *ids))
+            mirrored_metadata = {key: value for key, value in metadata.items() if key != "review_status"}
+            if mirrored_metadata:
+                cursor.execute(
+                    f"UPDATE `{COLLECTION_TABLE}` AS c INNER JOIN `{PRODUCT_TABLE}` AS p "
+                    "ON c.`source_item_id` = p.`source_item_id` AND c.`organization_key` = p.`organization_key` "
+                    f"SET {', '.join(f'c.`{key}` = p.`{key}`' for key in mirrored_metadata)} "
+                    f"WHERE p.`id` IN ({placeholders})", tuple(ids))
+            if set(normalized).intersection({"title", "category_id"}):
+                from erp.product_sku_groups import refresh_products
+                refresh_products(cursor, ids)
         connection.commit()
         return {
             "requested": len(ids),
             "changed": changed,
-            "updated_fields": list(normalized),
+            "updated_fields": list(normalized) + list(metadata),
             "profitability_refresh_pending": profitability_stale,
         }
     except BaseException:
@@ -3811,6 +4286,36 @@ def update_collection_items(
     ids = _normalize_row_ids(
         collection_item_ids, empty_message="请至少勾选一个采集商品"
     )
+    if 'variations' in (changes or {}) or 'variation_dimensions' in (changes or {}):
+        if len(ids) != 1 or set(changes) - {'variations', 'variation_dimensions'}:
+            raise ValueError('SKU 明细只能单件保存，请勿批量覆盖其他产品的 SKU')
+        normalized = {}
+        if 'variations' in changes:
+            normalized['variations'] = _editor_variations(changes['variations'])
+        if 'variation_dimensions' in changes:
+            normalized['variation_dimensions'] = _editor_variation_dimensions(changes['variation_dimensions'])
+        connection = (connection_factory or _connect)()
+        try:
+            with connection.cursor() as cursor:
+                ensure_collection_tables(cursor)
+                cursor.execute(f'SELECT * FROM `{COLLECTION_TABLE}` WHERE `id` = %s FOR UPDATE', (ids[0],))
+                row = cursor.fetchone()
+                if not row:
+                    raise ValueError('采集商品不存在')
+                if product_access.actor() and not product_access.can_operate(row, product_access.actor()):
+                    raise PermissionError('只能修改自己的采集商品')
+                if row.get('added_to_products'):
+                    raise ValueError('商品已加入产品列表，请在产品列表修改 SKU')
+                source = _loads(row.get('source_json'), {})
+                source.update(normalized)
+                cursor.execute(f'UPDATE `{COLLECTION_TABLE}` SET `source_json` = %s WHERE `id` = %s', (_dumps(source), ids[0]))
+            connection.commit()
+            return {'changed': 1, 'updated_fields': list(normalized)}
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
     allowed = {
         "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
     }
@@ -3887,15 +4392,19 @@ def update_collection_items(
         connection.close()
 
 
-def normalize_1688_product_changes(changes: Mapping[str, Any]) -> dict[str, Decimal | None]:
+def normalize_1688_product_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
     """Validate source edits strictly before opening a write connection."""
     if not isinstance(changes, Mapping) or not changes:
         raise ValueError("请填写需要修改的 1688 产品字段")
-    unsupported = set(changes) - SOURCE_1688_NUMERIC_FIELDS
+    unsupported = set(changes) - SOURCE_1688_NUMERIC_FIELDS - {"variations"}
     if unsupported:
         raise ValueError("不支持的 1688 产品字段：" + ", ".join(sorted(map(str, unsupported))))
     normalized = {}
     for field, value in changes.items():
+        if field == "variations":
+            from erp.sku_matrix import supplier_skus
+            normalized[field] = supplier_skus(value, validate=True)
+            continue
         if value is None or isinstance(value, str) and not value.strip():
             normalized[field] = None
             continue
@@ -3943,6 +4452,45 @@ def _1688_override_table_assignments(
     return assignments, values
 
 
+def _mark_ai_marketplace_drafts_unreviewed(snapshot):
+    """Require a fresh human review after shared source or package facts change."""
+    drafts = snapshot.get("marketplace_listings")
+    if not isinstance(drafts, Mapping):
+        return
+    updated = {}
+    for platform, value in drafts.items():
+        draft = dict(value) if isinstance(value, Mapping) else value
+        # Mercado uses the row-level review_status as its canonical review.
+        # Other targets keep an independent review inside their draft.
+        if isinstance(draft, dict) and platform != "mercadolibre":
+            draft["review_status"] = "unreviewed"
+        updated[platform] = draft
+    snapshot["marketplace_listings"] = updated
+
+
+def _ai_original_review_payload(snapshot):
+    """Return listing facts while excluding cost-ledger-only bookkeeping."""
+    if not isinstance(snapshot, Mapping):
+        return {}
+    prepared = snapshot.get("ai_original")
+    prepared = dict(prepared) if isinstance(prepared, Mapping) else {}
+    prepared.pop("generation_budget", None)
+    mercado = (snapshot.get("marketplace_listings") or {}).get("mercadolibre")
+    mercado = dict(mercado) if isinstance(mercado, Mapping) else dict(prepared)
+    mercado.pop("generation_budget", None)
+    return {
+        "ai_original": prepared,
+        "mercadolibre": mercado,
+        "original_1688": snapshot.get("original_1688"),
+        "source": snapshot.get("source"),
+        "description": snapshot.get("description"),
+        "ai_copy": snapshot.get("ai_copy"),
+        "source_1688_overrides": snapshot.get("source_1688_overrides"),
+        "manual_net_proceeds": snapshot.get("manual_net_proceeds"),
+        "purchase_net_proceeds": snapshot.get("purchase_net_proceeds"),
+    }
+
+
 def update_1688_product(
     product_item_id: int, changes: Mapping[str, Any],
     *, connection_factory: Callable[[], Any] | None = None,
@@ -3974,15 +4522,48 @@ def _save_1688_product(cursor, row_id, normalized):
     current = cursor.fetchone()
     if not current:
         raise KeyError("1688 产品不存在")
+    user = product_access.actor()
+    if user and not product_access.can_operate(current, user):
+        raise PermissionError("只能修改自己有操作权限的产品")
     snapshot = _loads(current.get("source_snapshot_json"), {})
     snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
     overrides = snapshot.get("source_1688_overrides")
     overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
+    derived_sku_net = False
+    if "variations" in normalized:
+        from erp.sku_matrix import sync_supplier_skus
+        normalized = dict(normalized)
+        rows = normalized.pop("variations")
+        original = snapshot.get("original_1688") or {}
+        from erp.sku_matrix import sku_identity
+        original_rows = original.get("variations") or []
+        identities_match = {sku_identity(v) for v in rows} == {sku_identity(v) for v in original_rows}
+        if not original_rows and len(rows) == 1:
+            # Legacy single-SKU sources store supplier facts on the product.
+            # Give that row a recorded offer identity on its first SKU edit.
+            from erp.ai_original_products import extract_1688_item_id
+            aliases = {str(value) for value in (
+                original.get("item_id"), original.get("source_1688_item_id"),
+                original.get("source_item_id"), current.get("source_item_id"),
+                extract_1688_item_id(re.sub(r"^1688_?", "", str(original.get("source_item_id") or current.get("source_item_id") or ""))),
+                extract_1688_item_id(original.get("source_url") or current.get("source_url")),
+            ) if value}
+            identities_match = sku_identity(rows[0]) in (aliases or {str(row_id)})
+        if not identities_match:
+            raise ValueError("SKU 编号已变化，请刷新产品后重新编辑")
+        sync_supplier_skus(snapshot, rows)
+        overrides["variations"] = rows
+        if 'net_proceeds_usd' not in overrides and 'net_proceeds_usd' not in normalized:
+            amounts = [v['net_proceeds_usd'] for v in rows if v.get('net_proceeds_usd')]
+            normalized['net_proceeds_usd'] = Decimal(max(amounts)) if amounts else None
+            derived_sku_net = True
     overrides.update({
         field: float(value) if value is not None else None
         for field, value in normalized.items()
+        if not (derived_sku_net and field == "net_proceeds_usd")
     })
     snapshot["source_1688_overrides"] = overrides
+    _mark_ai_marketplace_drafts_unreviewed(snapshot)
     # A changed purchase price also changes the source's calculated
     # net proceeds. Persist that same value for AI listing/publishing.
     if "price" in normalized and "net_proceeds_usd" not in overrides:
@@ -3990,6 +4571,8 @@ def _save_1688_product(cursor, row_id, normalized):
     assignments, values = _1688_override_table_assignments(current, normalized)
     assignments.append("`source_snapshot_json` = %s")
     values.append(_dumps(snapshot))
+    assignments.append("`review_status` = %s")
+    values.append("unreviewed")
     cursor.execute(
         f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
         "WHERE `id` = %s AND `source_type` = 'ai_original'", tuple(values + [row_id]),
@@ -4049,6 +4632,33 @@ def _default_ai_original_net_proceeds(
     return Decimal(suggested) if suggested is not None else None
 
 
+def get_collected_1688_ids(offer_ids, *, connection_factory=None):
+    """Read visible collected sources in one bounded, enterprise-scoped query."""
+    if len(offer_ids) > 200:
+        raise ValueError("最多查询 200 个商品")
+    ids = list(dict.fromkeys(str(value) for value in offer_ids))
+    if len(ids) > 200 or any(not re.fullmatch(r"\d{5,30}", value) for value in ids):
+        raise ValueError("1688 商品编号无效或超过 200 个")
+    if not ids:
+        return []
+    access, params = product_access.predicate(PRODUCT_TABLE)
+    if not access:
+        raise ValueError("请先登录")
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            placeholders = ', '.join(['%s'] * len(ids))
+            cursor.execute(
+                f"SELECT `source_item_id` FROM `{PRODUCT_TABLE}` "
+                f"WHERE `source_type` = 'ai_original' AND `source_item_id` IN ({placeholders}) AND {access}",
+                tuple(['1688' + value for value in ids] + params),
+            )
+            return [str(row['source_item_id'])[4:] for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+
 def upsert_ai_original_product(
     raw_product: Mapping[str, Any],
     *,
@@ -4095,8 +4705,8 @@ def upsert_ai_original_product(
             ensure_collection_tables(cursor)
             _execute_source_scoped(cursor, f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s FOR UPDATE", (product["source_item_id"],))
             existing = cursor.fetchone()
-            if existing and product_access.actor() and not product_access.can_view(existing, product_access.actor()):
-                raise PermissionError("当前账号无权重新采集该私有产品")
+            if existing and product_access.actor() and not product_access.can_operate(existing, product_access.actor()):
+                raise PermissionError("只能重新采集自己的产品")
             existing = existing if existing and existing.get("source_type") == "ai_original" else {}
             existing_snapshot = _loads(existing.get("source_snapshot_json"), {})
             overrides = (
@@ -4108,10 +4718,12 @@ def upsert_ai_original_product(
                 source_snapshot["source_1688_overrides"] = overrides
             if isinstance(existing_snapshot, Mapping) and isinstance(existing_snapshot.get("purchase_net_proceeds"), Mapping):
                 source_snapshot["purchase_net_proceeds"] = dict(existing_snapshot["purchase_net_proceeds"])
+            if isinstance(existing_snapshot, Mapping) and isinstance(existing_snapshot.get("manual_net_proceeds"), Mapping):
+                source_snapshot["manual_net_proceeds"] = dict(existing_snapshot["manual_net_proceeds"])
             if isinstance(existing_snapshot, Mapping) and isinstance(existing_snapshot.get("marketplace_listings"), Mapping):
                 source_snapshot["marketplace_listings"] = dict(existing_snapshot["marketplace_listings"])
             existing_prepared = existing_snapshot.get("ai_original") if isinstance(existing_snapshot, Mapping) else None
-            if isinstance(existing_prepared, Mapping) and isinstance(existing_prepared.get("generation_budget"), Mapping):
+            if isinstance(existing_prepared, Mapping):
                 # Recollection changes source facts, never the already spent
                 # allowance. Keep checkpoints; fingerprints invalidate only
                 # steps affected by the new source on the next generation.
@@ -4122,6 +4734,16 @@ def upsert_ai_original_product(
                 source_snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(source_snapshot["ai_original"])
             # Completed listings keep their saved source snapshot on recollection.
             # Calculate from that same snapshot, and preserve an entered net value.
+            if isinstance(overrides.get('variations'), list):
+                from erp.sku_matrix import sku_identity, sync_supplier_skus
+                reviewed = {sku_identity(v): v for v in overrides['variations']}
+                merged = [{**v, **reviewed.get(sku_identity(v), {})} for v in product.get('variations') or []]
+                if not merged and len(reviewed) == 1:
+                    identity, reviewed_single = next(iter(reviewed.items()))
+                    offer_id = str(product.get('source_1688_item_id') or '')
+                    if offer_id and identity in {offer_id, f'1688{offer_id}', f'1688_{offer_id}'}:
+                        merged = [dict(reviewed_single)]
+                sync_supplier_skus(source_snapshot, merged)
             net_snapshot = (
                 existing_snapshot if isinstance(existing_prepared, Mapping)
                 and existing_prepared.get("status") == "completed" else source_snapshot
@@ -4131,6 +4753,8 @@ def upsert_ai_original_product(
                 existing_snapshot if isinstance(existing_snapshot, Mapping) else {},
             )
             source_net_changed = bool(existing) and default_net != previous_net
+            if existing:
+                _mark_ai_marketplace_drafts_unreviewed(source_snapshot)
             _execute_access_insert(cursor, f"""
                 INSERT INTO `{PRODUCT_TABLE}` (
                     `collection_item_id`, `source_type`, `review_status`,
@@ -4170,14 +4794,30 @@ def upsert_ai_original_product(
                     weight_g, dimensions[0], dimensions[1], dimensions[2],
                     "1688_source" if weight_g else "", _dumps(source_snapshot), now, default_net,
                 ))
+            if existing:
+                _execute_source_scoped(
+                    cursor,
+                    f"UPDATE `{PRODUCT_TABLE}` SET `review_status` = %s "
+                    "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
+                    ("unreviewed", product["source_item_id"]),
+                )
             if isinstance(existing_prepared, Mapping) and existing_prepared.get("status") == "completed":
                 from erp.ai_original_images import merge_recollected_sku_images
                 supplemented = merge_recollected_sku_images(existing_snapshot, product)
-                if supplemented != existing_snapshot:
-                    supplemented['ai_original']['edit_revision'] = _ai_original_edit_revision(existing_prepared) + 1
-                    _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s "
-                        "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
-                        (_dumps(supplemented), product['source_item_id']))
+                supplemented = dict(supplemented) if isinstance(supplemented, Mapping) else dict(existing_snapshot)
+                prepared = supplemented.get("ai_original")
+                if isinstance(prepared, Mapping):
+                    prepared = dict(prepared)
+                    prepared["edit_revision"] = _ai_original_edit_revision(existing_prepared) + 1
+                    supplemented["ai_original"] = prepared
+                    supplemented.setdefault("marketplace_listings", {})["mercadolibre"] = dict(prepared)
+                # The upsert intentionally keeps a completed snapshot. Persist
+                # the review reset explicitly so a recollection cannot leave an
+                # old Amazon/Yandex approval attached to changed source facts.
+                _mark_ai_marketplace_drafts_unreviewed(supplemented)
+                _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s "
+                    "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'",
+                    (_dumps(supplemented), product['source_item_id']))
             if category_id is not None:
                 _execute_source_scoped(cursor, f"UPDATE `{PRODUCT_TABLE}` SET `management_category_id` = %s "
                     "WHERE `source_item_id` = %s AND `source_type` = 'ai_original'", (category_id, product["source_item_id"]))
@@ -4214,6 +4854,9 @@ def update_ai_original_product(
         "category_id", "category_name", "net_proceeds_usd", "review_status", "currency_id",
     }
     normalized = {key: value for key, value in dict(changes or {}).items() if key in allowed}
+    content_fields = allowed - {"review_status", "source_snapshot_json"}
+    if "review_status" not in normalized and set(normalized).intersection(content_fields):
+        normalized["review_status"] = "unreviewed"
     platform_listing = (changes or {}).get("marketplace_listing")
     expected_revision = (changes or {}).get("expected_ai_original_revision")
     expected_budget_revision = (changes or {}).get("expected_generation_budget_revision")
@@ -4230,6 +4873,11 @@ def update_ai_original_product(
         platform, _ = normalize_listing_options(platform_listing.get("target_platform"), platform_listing.get("template_id", "standard"))
         if platform == "mercadolibre":
             raise ValueError("美客多草稿请通过原刊登编辑接口保存")
+        platform_listing = dict(platform_listing)
+        if platform_listing.get("review_status") == "approved":
+            # Generation/internal snapshot writes can prepare a draft, but only
+            # the explicit per-card review endpoint may grant approval.
+            platform_listing["review_status"] = "unreviewed"
         # A platform-only update must never change the Mercado row columns.
         normalized = {"source_snapshot_json": {}}
         expected_revision = None
@@ -4266,18 +4914,70 @@ def update_ai_original_product(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            cursor.execute(
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
+            )
+            current = cursor.fetchone()
+            if not current:
+                raise KeyError("AI 原创产品不存在")
+            user = product_access.actor()
+            if user and not product_access.can_operate(current, user):
+                raise PermissionError("只能修改自己有操作权限的 AI 原创产品")
+            if normalized.get("review_status") == "approved":
+                content_changed = "source_snapshot_json" in normalized
+                for field in set(normalized).intersection(content_fields):
+                    if field in decimal_fields:
+                        different = (
+                            _decimal_from_text(normalized.get(field))
+                            != _decimal_from_text(current.get(field))
+                        )
+                    elif field in {"category_id", "currency_id"}:
+                        different = (
+                            str(normalized.get(field) or "").strip().upper()
+                            != str(current.get(field) or "").strip().upper()
+                        )
+                    else:
+                        different = (
+                            str(normalized.get(field) or "").strip()
+                            != str(current.get(field) or "").strip()
+                        )
+                    content_changed = content_changed or different
+                if ("weight_g" in normalized
+                        and current.get("weight_basis") != "ai_original_manual"):
+                    content_changed = True
+                if content_changed:
+                    raise ValueError("修改商品资料后需重新审核，审核通过必须单独保存")
+            approval_snapshot = _loads(current.get("source_snapshot_json"), {})
+            approval_snapshot = (
+                approval_snapshot if isinstance(approval_snapshot, Mapping) else {}
+            )
+            shared_package_fields = {
+                "weight_g", "package_length_cm", "package_width_cm", "package_height_cm",
+                "net_proceeds_usd",
+            }
+            reset_platform_reviews = platform_listing is None and any(
+                field in normalized and (
+                    _decimal_from_text(normalized[field]) != _decimal_from_text(current.get(field))
+                    or (field == "weight_g" and current.get("weight_basis") != "ai_original_manual")
+                )
+                for field in shared_package_fields
+            )
+            manual_category_change = (
+                platform_listing is None
+                and "category_id" in normalized
+                and "source_snapshot_json" not in normalized
+                and str(normalized.get("category_id") or "").strip().upper()
+                    != str(current.get("category_id") or "").strip().upper()
+            )
+            if (reset_platform_reviews or manual_category_change) and "source_snapshot_json" not in normalized:
+                normalized["source_snapshot_json"] = _loads(current.get("source_snapshot_json"), {})
+                assignments.append("`source_snapshot_json` = %s")
+                values.append(_dumps(normalized["source_snapshot_json"]))
             if "source_snapshot_json" in normalized or expected_revision is not None:
                 # An AI worker can save a snapshot loaded before a source edit.
                 # Lock and merge the current overrides so that save cannot erase it.
-                cursor.execute(
-                    f"SELECT `source_snapshot_json`, `net_proceeds_usd`, `price`, `currency_id` "
-                    f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
-                    "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
-                )
-                current = cursor.fetchone()
-                if not current:
-                    raise KeyError("AI 原创产品不存在")
-                existing_snapshot = _loads(current.get("source_snapshot_json"), {})
+                existing_snapshot = approval_snapshot
                 existing_prepared = existing_snapshot.get("ai_original") if isinstance(existing_snapshot, Mapping) else {}
                 old_budget = (existing_prepared or {}).get("generation_budget")
                 budget_revision = int(old_budget.get("revision") or 0) if isinstance(old_budget, Mapping) else 0
@@ -4314,6 +5014,13 @@ def update_ai_original_product(
                         # Workers hold old snapshots. Preserve other platforms'
                         # newest drafts, including manual edits made meanwhile.
                         drafts = dict(incoming_snapshot.get("marketplace_listings") or {})
+                        for target_platform, raw_draft in list(drafts.items()):
+                            if target_platform == "mercadolibre" or not isinstance(raw_draft, Mapping):
+                                continue
+                            draft = dict(raw_draft)
+                            if draft.get("review_status") == "approved":
+                                draft["review_status"] = "unreviewed"
+                            drafts[target_platform] = draft
                         drafts.update(existing_snapshot.get("marketplace_listings") or {})
                         if isinstance(incoming_snapshot.get("ai_original"), Mapping):
                             drafts["mercadolibre"] = dict(incoming_snapshot["ai_original"])
@@ -4324,7 +5031,44 @@ def update_ai_original_product(
                     purchase_target = existing_snapshot.get("purchase_net_proceeds")
                     if isinstance(purchase_target, Mapping):
                         incoming_snapshot["purchase_net_proceeds"] = dict(purchase_target)
+                    manual_target = existing_snapshot.get("manual_net_proceeds")
+                    if isinstance(manual_target, Mapping):
+                        incoming_snapshot["manual_net_proceeds"] = dict(manual_target)
+                    if manual_category_change:
+                        prepared = incoming_snapshot.get("ai_original")
+                        prepared = dict(prepared) if isinstance(prepared, Mapping) else {}
+                        category_id = str(normalized.get("category_id") or "").strip().upper()
+                        prepared.update(
+                            category_id=category_id,
+                            status="failed",
+                            failed_step="category",
+                            workflow_status="needs_category",
+                            error="类目已修改，请重新执行 AI 制作以生成该类目的必填属性",
+                        )
+                        checkpoint = dict(prepared.get("preparation") or {})
+                        checkpoint.update(
+                            category_ready=False, variations_ready=False, required_ready=False,
+                        )
+                        prepared["preparation"] = checkpoint
+                        incoming_snapshot["ai_original"] = prepared
+                        drafts = incoming_snapshot.get("marketplace_listings")
+                        drafts = dict(drafts) if isinstance(drafts, Mapping) else {}
+                        drafts["mercadolibre"] = dict(prepared)
+                        incoming_snapshot["marketplace_listings"] = drafts
+                    if reset_platform_reviews:
+                        _mark_ai_marketplace_drafts_unreviewed(incoming_snapshot)
                     if "source_snapshot_json" in normalized:
+                        if (platform_listing is None and "review_status" not in normalized
+                                and _ai_original_review_payload(incoming_snapshot)
+                                != _ai_original_review_payload(existing_snapshot)):
+                            normalized["review_status"] = "unreviewed"
+                            assignments.append("`review_status` = %s")
+                            values.append("unreviewed")
+                        # Approval must validate the exact merged snapshot that
+                        # this transaction will store, not the pre-edit row.
+                        approval_snapshot = (
+                            incoming_snapshot if isinstance(incoming_snapshot, Mapping) else {}
+                        )
                         values[list(normalized).index("source_snapshot_json")] = _dumps(incoming_snapshot)
                         if (platform_listing is None and "net_proceeds_usd" not in normalized
                                 and current.get("net_proceeds_usd") is None):
@@ -4341,29 +5085,16 @@ def update_ai_original_product(
                                 values.append(default_net)
                                 normalized["net_proceeds_usd"] = default_net
             if normalized.get("review_status") == "approved":
-                cursor.execute(
-                    f"SELECT `weight_g`, `net_proceeds_usd`, `source_snapshot_json` "
-                    f"FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
-                    "AND `source_type` = 'ai_original' FOR UPDATE",
-                    (row_id,),
-                )
-                current = cursor.fetchone()
-                if not current:
-                    raise KeyError("AI 原创产品不存在")
-                snapshot = _loads(current.get("source_snapshot_json"), {})
-                prepared = snapshot.get("ai_original") if isinstance(snapshot, dict) else {}
-                if not isinstance(prepared, dict) or prepared.get("status") != "completed":
-                    raise ValueError("AI 原创任务完成后才能审核通过")
-                approved_weight = _decimal_from_text(
-                    normalized.get("weight_g", current.get("weight_g"))
-                )
-                approved_net = _decimal_from_text(
-                    normalized.get("net_proceeds_usd", current.get("net_proceeds_usd"))
-                )
-                if approved_weight is None or approved_weight <= 0:
-                    raise ValueError("审核通过前必须填写有效实重")
-                if approved_net is None or approved_net <= 0:
-                    raise ValueError("审核通过前必须填写有效净收益 USD")
+                snapshot = approval_snapshot
+                prepared = snapshot.get("ai_original")
+                prepared = prepared if isinstance(prepared, Mapping) else {}
+                from erp.ai_original_state import manual_approval_issues
+                candidate = {**current, **normalized}
+                if "weight_g" in normalized:
+                    candidate["weight_basis"] = "ai_original_manual"
+                issues = manual_approval_issues(candidate, prepared, snapshot.get("original_1688"))
+                if issues:
+                    raise ValueError("审核通过前需补齐所有必填项：" + "；".join(issues))
             cursor.execute(
                 f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
                 "WHERE `id` = %s AND `source_type` = 'ai_original'",
@@ -4426,7 +5157,7 @@ def _update_ai_original_net_proceeds(ids, changes, *, connection_factory=None):
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT `id`, `net_proceeds_usd`, `organization_key`, `owner_user_id`, "
+                f"SELECT `id`, `net_proceeds_usd`, `source_snapshot_json`, `organization_key`, `owner_user_id`, "
                 f"`owner_name`, `visibility` FROM `{PRODUCT_TABLE}` "
                 f"WHERE `source_type` = 'ai_original' AND `id` IN ({', '.join(['%s'] * len(ids))}) FOR UPDATE",
                 tuple(ids),
@@ -4435,7 +5166,7 @@ def _update_ai_original_net_proceeds(ids, changes, *, connection_factory=None):
             if {int(row["id"]) for row in rows} != set(ids):
                 raise KeyError("部分 AI 原创产品不存在或已移除")
             user = product_access.actor()
-            if user and any(not product_access.can_view(row, user) for row in rows):
+            if user and any(not product_access.can_operate(row, user) for row in rows):
                 raise PermissionError("当前账号无权访问所选产品")
             updates, skipped = [], 0
             for row in rows:
@@ -4451,12 +5182,17 @@ def _update_ai_original_net_proceeds(ids, changes, *, connection_factory=None):
                 amount = amount.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
                 if amount <= 0:
                     raise ValueError("修改后的净收益金额不能小于 0.0001 USD")
-                updates.append((amount, int(row["id"])))
+                updates.append((amount, int(row["id"]), row.get("source_snapshot_json")))
             # Validate the entire selection before writing any amount.
-            for amount, row_id in updates:
+            for amount, row_id, raw_snapshot in updates:
+                snapshot = _loads(raw_snapshot, {})
+                snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
+                _mark_ai_marketplace_drafts_unreviewed(snapshot)
                 cursor.execute(
-                    f"UPDATE `{PRODUCT_TABLE}` SET `net_proceeds_usd` = %s "
-                    "WHERE `id` = %s AND `source_type` = 'ai_original'", (amount, row_id),
+                    f"UPDATE `{PRODUCT_TABLE}` SET `net_proceeds_usd` = %s, "
+                    "`source_snapshot_json` = %s, `review_status` = 'unreviewed' "
+                    "WHERE `id` = %s AND `source_type` = 'ai_original'",
+                    (amount, _dumps(snapshot), row_id),
                 )
                 cursor.execute(
                     f"SELECT `net_proceeds_usd` FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,),
@@ -4466,7 +5202,7 @@ def _update_ai_original_net_proceeds(ids, changes, *, connection_factory=None):
                     raise ValueError("净收益保存后回读不一致，请刷新后重试")
         connection.commit()
         return {"requested": len(ids), "changed": len(updates), "skipped": skipped,
-                "updated_fields": ["net_proceeds_usd"]}
+                "updated_fields": ["net_proceeds_usd", "review_status"]}
     except BaseException:
         connection.rollback()
         raise
@@ -4499,7 +5235,10 @@ def update_ai_original_product_items(
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
             cursor.execute(
-                f"SELECT `id`, `package_length_cm`, `package_width_cm`, `package_height_cm` FROM `{PRODUCT_TABLE}` "
+                f"SELECT `id`, `package_length_cm`, `package_width_cm`, `package_height_cm`, "
+                "`source_snapshot_json`, "
+                "`organization_key`, `owner_user_id`, `owner_name`, `visibility` "
+                f"FROM `{PRODUCT_TABLE}` "
                 f"WHERE `source_type` = 'ai_original' AND `id` IN ({placeholders}) "
                 "FOR UPDATE",
                 tuple(ids),
@@ -4508,6 +5247,9 @@ def update_ai_original_product_items(
             found_ids = {int(row["id"]) for row in selected_rows}
             if found_ids != set(ids):
                 raise KeyError("部分 AI 原创产品不存在或已移除")
+            user = product_access.actor()
+            if user and any(not product_access.can_operate(row, user) for row in selected_rows):
+                raise PermissionError("当前账号无权访问所选产品")
 
             missing_ids = [int(row["id"]) for row in selected_rows if all(
                 not row.get(field) or float(row[field]) <= 0 for field in allowed
@@ -4516,11 +5258,22 @@ def update_ai_original_product_items(
             if missing_ids:
                 missing_placeholders = ", ".join(["%s"] * len(missing_ids))
                 cursor.execute(
-                    f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} "
+                    f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)}, "
+                    "`review_status` = 'unreviewed' "
                     f"WHERE `source_type` = 'ai_original' AND `id` IN ({missing_placeholders})",
                     tuple(values + missing_ids),
                 )
                 changed = int(cursor.rowcount or 0)
+                selected_by_id = {int(row["id"]): row for row in selected_rows}
+                for row_id in missing_ids:
+                    snapshot = _loads(selected_by_id[row_id].get("source_snapshot_json"), {})
+                    snapshot = dict(snapshot) if isinstance(snapshot, Mapping) else {}
+                    _mark_ai_marketplace_drafts_unreviewed(snapshot)
+                    cursor.execute(
+                        f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s "
+                        "WHERE `id` = %s AND `source_type` = 'ai_original'",
+                        (_dumps(snapshot), row_id),
+                    )
 
             dimension_fields = [field for field in normalized if field in allowed]
             collection_assignments = [
@@ -4542,7 +5295,7 @@ def update_ai_original_product_items(
         return {
             "requested": len(ids),
             "changed": changed,
-            "updated_fields": list(normalized),
+            "updated_fields": [*normalized, "review_status"],
             "profitability_refresh_pending": profitability_stale,
         }
     except BaseException:
@@ -4598,8 +5351,10 @@ def _editor_variations(value: Any) -> list[dict[str, Any]]:
     """Round-trip a bounded SKU matrix while keeping prices and stock numeric."""
     if not isinstance(value, list):
         return []
+    if len(value) > 2000:
+        raise ValueError("变体数量超过 2000，请拆分商品后再保存")
     result = []
-    for raw in value[:200]:
+    for raw in value:
         if not isinstance(raw, Mapping):
             continue
         # JSON round-tripping is deliberate: it removes request-only objects
@@ -4657,11 +5412,19 @@ def _update_ai_platform_listing(product_item_id, data, platform, *, connection_f
             current = cursor.fetchone()
             if not current:
                 raise KeyError("AI 原创产品不存在")
+            user = product_access.actor()
+            if user and not product_access.can_operate(current, user):
+                raise PermissionError("只能修改自己有操作权限的 AI 原创产品")
             snapshot = _loads(current.get("source_snapshot_json"), {})
             drafts = dict(snapshot.get("marketplace_listings") or {})
             draft = dict(drafts.get(platform) or {})
             if not draft:
                 raise ValueError("请先生成该平台的商品草稿")
+            content_fields = {
+                "title", "description", "item_highlights", "bullet_points", "attributes",
+            }
+            if data.get("review_status") == "approved" and set(data).intersection(content_fields):
+                raise ValueError("编辑平台草稿后需重新审核，审核通过必须单独保存")
             for field in ("title", "description", "item_highlights"):
                 if field in data:
                     if not isinstance(data[field], str):
@@ -4677,7 +5440,29 @@ def _update_ai_platform_listing(product_item_id, data, platform, *, connection_f
                     raise ValueError("商品属性必须是数组")
                 draft["attributes"] = _editor_attributes(data["attributes"])
             draft["validation"] = validate_platform_listing(draft, platform)
-            if draft["validation"]["errors"]:
+            review_status = data.get("review_status")
+            if "review_status" in data:
+                if review_status not in PRODUCT_REVIEW_STATUSES:
+                    raise ValueError("AI 原创产品审核状态无效")
+                if review_status in {"approved", "unreviewed"} and (
+                    draft.get("status") != "completed" or not draft.get("main_image_url")
+                    or draft["validation"]["errors"]
+                ):
+                    raise ValueError("进入待审核或通过前，需完成 AI 制作并补齐所有必填项")
+                if review_status == "approved":
+                    if current.get("review_status") in {"suspected", "infringing", "risk"}:
+                        raise ValueError("商品仍标记为侵权风险或待复核，请先处理 Mercado 状态")
+                    from erp.ai_original_state import manual_listing_issues
+                    issues = manual_listing_issues(current)
+                    if issues:
+                        raise ValueError("审核通过前需补齐所有必填项：" + "；".join(issues))
+                draft["review_status"] = review_status
+            elif set(data).difference({"target_platform"}):
+                draft["review_status"] = "unreviewed"
+            if draft["validation"]["errors"] and not (
+                set(data) <= {"target_platform", "review_status"}
+                and review_status in {"failed", "suspected", "infringing", "risk"}
+            ):
                 raise ValueError("；".join(draft["validation"]["errors"]))
             # Saving text cannot turn a failed generation or missing image into a completed job.
             draft["manually_edited"] = True
@@ -4727,6 +5512,9 @@ def update_ai_original_listing(
             current = cursor.fetchone()
             if not current:
                 raise KeyError("AI 原创产品不存在")
+            user = product_access.actor()
+            if user and not product_access.can_operate(current, user):
+                raise PermissionError("只能修改自己有操作权限的 AI 原创产品")
             snapshot = _loads(current.get("source_snapshot_json"), {})
             if not isinstance(snapshot, dict):
                 snapshot = {}
@@ -4736,6 +5524,14 @@ def update_ai_original_listing(
 
             source_title = _editor_text(data.get("source_title"), 255)
             source_description = _editor_text(data.get("source_description"), 50000)
+            source_title_changed = (
+                "source_title" in data and bool(source_title)
+                and source_title != _editor_text(original.get("title"), 255)
+            )
+            source_description_changed = (
+                "source_description" in data
+                and source_description != _editor_text(original.get("description_text"), 50000)
+            )
             category_id = _editor_text(data.get("category_id", prepared.get("category_id") or source.get("category_id") or current.get("category_id")), 64).upper()
             category_name = _editor_text(data.get("category_name", prepared.get("category_name") or source.get("category_name") or current.get("category_name")), 255)
             if "category_locked" in data and not isinstance(data["category_locked"], bool):
@@ -4813,6 +5609,11 @@ def update_ai_original_listing(
             if "variations" in data:
                 prepared["variations"] = variations
                 source["variations"] = variations
+                from erp.sku_matrix import sync_single_sku_cover
+                cover = sync_single_sku_cover(prepared)
+                sync_single_sku_cover(source)
+                if cover:
+                    cursor.execute(f"UPDATE `{PRODUCT_TABLE}` SET `main_image_url` = %s WHERE `id` = %s", (cover, row_id))
                 if variations_changed:
                     prepared["source_variations"] = variations
             if "variation_dimensions" in data:
@@ -4820,19 +5621,46 @@ def update_ai_original_listing(
                 source["variation_dimensions"] = variation_dimensions
                 if dimensions_changed:
                     prepared["source_variation_dimensions"] = variation_dimensions
-            checkpoint = prepared.get("preparation")
-            if isinstance(checkpoint, dict):
-                checkpoint = dict(checkpoint)
-                if category_changed:
-                    checkpoint.update(category_ready=False, variations_ready=False, required_ready=False)
-                if variations_changed or dimensions_changed:
-                    checkpoint.update(variations_ready=False, required_ready=False)
-                if attributes_changed:
-                    checkpoint["required_ready"] = False
-                prepared["preparation"] = checkpoint
+            checkpoint = dict(prepared.get("preparation") or {})
+            if category_changed:
+                checkpoint.update(category_ready=False, variations_ready=False, required_ready=False)
+            if variations_changed or dimensions_changed:
+                checkpoint.update(variations_ready=False, required_ready=False)
+            if attributes_changed:
+                checkpoint["required_ready"] = False
+            prepared["preparation"] = checkpoint
             if any(field in data for field in ("source_title", "source_description", "category_id", "category_name")):
                 snapshot["original_1688"] = original
+            manual = {}
+            for field in ("weight_g", "net_proceeds_usd", "package_length_cm", "package_width_cm", "package_height_cm"):
+                if field not in data:
+                    continue
+                value = _decimal_from_text(data[field])
+                if data[field] not in (None, "") and (value is None or value <= 0):
+                    raise ValueError(f"{field} 必须大于 0")
+                manual[field] = value
+            if manual:
+                manual_changed = any(
+                    _decimal_from_text(current.get(field)) != value
+                    or (field == "weight_g" and current.get("weight_basis") != "ai_original_manual")
+                    for field, value in manual.items()
+                )
+                assignments = [f"`{field}` = %s" for field in manual]
+                if "weight_g" in manual:
+                    assignments.append("`weight_basis` = 'ai_original_manual'")
+                if any(field.startswith("package_") for field in manual):
+                    assignments.append("`volumetric_weight_kg` = CASE WHEN `package_length_cm` > 0 AND `package_width_cm` > 0 AND `package_height_cm` > 0 THEN ROUND(`package_length_cm` * `package_width_cm` * `package_height_cm` / 6000, 4) ELSE NULL END")
+                cursor.execute(f"UPDATE `{PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `id` = %s", tuple(manual.values()) + (row_id,))
+                current.update(manual)
+            else:
+                manual_changed = False
+            _sync_original_package_attributes(prepared, current)
+            _sync_original_package_attributes(source, current)
+            from erp.ai_original_platforms import validate_platform_listing
+            prepared["validation"] = validate_platform_listing(prepared, "mercadolibre")
             prepared["edit_revision"] = _ai_original_edit_revision(prepared) + 1
+            if source_title_changed or source_description_changed or variations_changed or dimensions_changed or manual_changed:
+                _mark_ai_marketplace_drafts_unreviewed(snapshot)
             snapshot["ai_original"] = prepared
             snapshot.setdefault("marketplace_listings", {})["mercadolibre"] = dict(prepared)
             snapshot["source"] = source
@@ -4844,11 +5672,12 @@ def update_ai_original_listing(
             row_description = description_for_row or str(current.get("description_text") or "")
             cursor.execute(
                 f"UPDATE `{PRODUCT_TABLE}` SET `title` = %s, `description_text` = %s, "
-                "`category_id` = %s, `category_name` = %s, `source_snapshot_json` = %s "
+                "`category_id` = %s, `category_name` = %s, `source_snapshot_json` = %s, "
+                "`review_status` = %s "
                 "WHERE `id` = %s AND `source_type` = 'ai_original'",
                 (
                     row_title[:255], row_description[:50000], category_id,
-                    category_name, _dumps(snapshot), row_id,
+                    category_name, _dumps(snapshot), "unreviewed", row_id,
                 ),
             )
             cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
@@ -4889,6 +5718,9 @@ def translate_ai_original_listing(
             current = cursor.fetchone()
             if not current:
                 raise KeyError("AI 原创产品不存在")
+            user = product_access.actor()
+            if user and not product_access.can_operate(current, user):
+                raise PermissionError("只能修改自己有操作权限的 AI 原创产品")
             snapshot = _loads(current.get("source_snapshot_json"), {})
             if not isinstance(snapshot, dict):
                 snapshot = {}
@@ -4944,12 +5776,14 @@ def translate_ai_original_listing(
             # Translation performs a network call. Re-read after it completes so
             # a newly generated/edited platform draft is not lost to this old snapshot.
             cursor.execute(
-                f"SELECT `source_snapshot_json` FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
+                f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s "
                 "AND `source_type` = 'ai_original' FOR UPDATE", (row_id,),
             )
             latest = cursor.fetchone()
             if not latest:
                 raise KeyError("AI 原创产品不存在")
+            if user and not product_access.can_operate(latest, user):
+                raise PermissionError("只能修改自己有操作权限的 AI 原创产品")
             latest_snapshot = _loads(latest.get("source_snapshot_json"), {})
             if (latest_snapshot.get("ai_original") != snapshot.get("ai_original")
                     or latest_snapshot.get("original_1688") != snapshot.get("original_1688")):
@@ -4968,8 +5802,9 @@ def translate_ai_original_listing(
             source["variations"] = variations
             snapshot["source"] = source
             cursor.execute(
-                f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s WHERE `id` = %s",
-                (_dumps(snapshot), row_id),
+                f"UPDATE `{PRODUCT_TABLE}` SET `source_snapshot_json` = %s, `review_status` = %s "
+                "WHERE `id` = %s",
+                (_dumps(snapshot), "unreviewed", row_id),
             )
             cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `id` = %s", (row_id,))
             row = cursor.fetchone()
@@ -5336,7 +6171,7 @@ def upsert_pulled_store_links_to_products(
         "source_snapshot_json",
     )
     updates = ",\n                    ".join(
-        f"`{field}` = IF(`source_type` = 'pulled', "
+        f"`{field}` = IF(`source_type` = 'pulled' AND JSON_EXTRACT(IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{{}}'), '$.sku_family') IS NULL, "
         + (
             _preserve_purchase_snapshot_sql()
             if field == "source_snapshot_json"
@@ -5352,6 +6187,10 @@ def upsert_pulled_store_links_to_products(
     try:
         with connection.cursor() as cursor:
             ensure_collection_tables(cursor)
+            # Mark the transaction in DBUtils too: its max-usage recycle must
+            # not reconnect halfway through a product/SKU batch.
+            if callable(getattr(connection, "begin", None)):
+                connection.begin()
             for salesperson, values in values_by_salesperson.items():
                 # Store ownership is per site, never the user who started sync.
                 inherited = dict(token, owner_name=salesperson, owner_user_id=None)
@@ -5370,6 +6209,17 @@ def upsert_pulled_store_links_to_products(
                     `owner_user_id` = IF(`source_type` = 'pulled', VALUES(`owner_user_id`), `owner_user_id`),
                     `updated_at` = CURRENT_TIMESTAMP
                 """, values, many=True, inherited=inherited)
+                from erp.product_sku_groups import update_rows as update_sku_groups
+                item_ids = [value[3] for value in values]
+                cursor.execute(
+                    f"SELECT id, source_type, organization_key, title, category_id, source_snapshot_json "
+                    f"FROM `{PRODUCT_TABLE}` WHERE source_item_id IN ({','.join(['%s'] * len(item_ids))})",
+                    tuple(item_ids))
+                synced_rows = cursor.fetchall()
+                update_sku_groups(cursor, synced_rows)
+                from erp.product_sku_groups import identity as sku_identity
+                from erp.product_sku_materialize import materialize
+                materialize(cursor, [group[0] for row in synced_rows if (group := sku_identity(row))])
         connection.commit()
         return {"count": sum(map(len, values_by_salesperson.values())), "skipped": skipped}
     except BaseException:
@@ -5942,11 +6792,13 @@ def update_product_publish_state(
 
 
 def _purchase_profitability_guard_sql(alias: str = "") -> str:
-    """Keep a purchase target authoritative during automatic fee refreshes."""
+    """Keep purchase and explicitly edited targets authoritative during refreshes."""
     prefix = f"{alias}." if alias else ""
     return (
         f"LOWER(TRIM(COALESCE({prefix}`profitability_source`, ''))) "
-        f"<> '{PURCHASE_PROFITABILITY_SOURCE}'"
+        f"<> '{PURCHASE_PROFITABILITY_SOURCE}' AND "
+        f"LOWER(TRIM(COALESCE({prefix}`profitability_source`, ''))) "
+        f"<> '{MANUAL_PRODUCT_PROFITABILITY_SOURCE}'"
     )
 
 
@@ -5956,11 +6808,13 @@ def _preserve_purchase_assignment_sql(assignment: str, *, alias: str = "") -> st
 
 
 def _preserve_purchase_snapshot_sql(*, zying: bool = False) -> str:
-    """Merge only purchase metadata into a new source snapshot atomically."""
+    """Merge authoritative target metadata into a new source snapshot atomically."""
     old_snapshot = "IF(JSON_VALID(`source_snapshot_json`), `source_snapshot_json`, '{}')"
     purchase_fields = (
         "'$.purchase_net_proceeds', "
-        f"JSON_EXTRACT({old_snapshot}, '$.purchase_net_proceeds')"
+        f"JSON_EXTRACT({old_snapshot}, '$.purchase_net_proceeds'), "
+        "'$.manual_net_proceeds', "
+        f"JSON_EXTRACT({old_snapshot}, '$.manual_net_proceeds')"
     )
     if zying:
         purchase_fields += ", '$.zying_net_proceeds_usd', `net_proceeds_usd`"
@@ -6082,7 +6936,7 @@ def update_item_profitability(
         raise ValueError("商品编号不能为空")
     if str(snapshot.get("source_type") or "").strip().lower() in {
         "zying", "ai_original",
-    } or str(snapshot.get("profitability_source") or "").strip().lower() == PURCHASE_PROFITABILITY_SOURCE:
+    } or str(snapshot.get("profitability_source") or "").strip().lower() in {PURCHASE_PROFITABILITY_SOURCE, MANUAL_PRODUCT_PROFITABILITY_SOURCE}:
         # Protect source-owned proceeds even when a row was already fetched by
         # an estimator worker before the queue exclusion took effect. ZYing
         # supplies the value directly; AI-original rows use the manually
@@ -6416,6 +7270,12 @@ def _add_collection_items_to_products_once(
                 tuple(ids),
             )
             selected_rows = [dict(row) for row in cursor.fetchall()]
+            user = product_access.actor()
+            if user and (len(selected_rows) != len(ids) or any(
+                not product_access.can_operate(row, user)
+                for row in selected_rows
+            )):
+                raise ValueError("只能认领自己采集的产品；无采集归属的产品不可认领")
             incomplete_rows: list[dict[str, Any]] = []
             complete_rows: list[dict[str, Any]] = []
             for row in selected_rows:
@@ -6485,6 +7345,7 @@ def _add_collection_items_to_products_once(
                     row.get("infringement_checked_at"),
                     *(row.get(column) for column in PROFITABILITY_COLUMNS),
                     _dumps(snapshot), _now(), row.get("ai_weight_price_json"),
+                    row.get("infringement_check_json"),
                 )
                 _execute_access_insert(cursor, f"""
                     INSERT INTO `{PRODUCT_TABLE}` (
@@ -6498,7 +7359,8 @@ def _add_collection_items_to_products_once(
                         `infringement_risk_level`, `infringement_keywords`,
                         `infringement_reason`, `infringement_checked_at`,
                         {profitability_columns_sql},
-                        `source_snapshot_json`, `added_at`, `ai_weight_price_json`
+                        `source_snapshot_json`, `added_at`, `ai_weight_price_json`,
+                        `infringement_check_json`
                     ) VALUES ({", ".join(["%s"] * len(values))})
                     ON DUPLICATE KEY UPDATE
                         `collection_item_id` = VALUES(`collection_item_id`),
@@ -6524,20 +7386,13 @@ def _add_collection_items_to_products_once(
                         `infringement_checked_at` = VALUES(`infringement_checked_at`),
                         {profitability_updates_sql},
                         `ai_weight_price_json` = VALUES(`ai_weight_price_json`),
+                        `infringement_check_json` = VALUES(`infringement_check_json`),
                         `source_snapshot_json` = {_preserve_purchase_snapshot_sql()},
                         `updated_at` = CURRENT_TIMESTAMP
                     """, values, inherited=row)
             complete_ids = [int(row["id"]) for row in complete_rows]
             if complete_ids:
                 complete_placeholders = ", ".join(["%s"] * len(complete_ids))
-                cursor.execute(
-                    f"UPDATE `{PRODUCT_TABLE}` AS products INNER JOIN `{COLLECTION_TABLE}` AS collections "
-                    "ON products.`collection_item_id` = collections.`id` "
-                    "SET products.`infringement_check_json` = collections.`infringement_check_json`, "
-                    "products.`category_id` = collections.`category_id`, products.`category_name` = collections.`category_name` "
-                    f"WHERE collections.`id` IN ({complete_placeholders})",
-                    tuple(complete_ids),
-                )
                 cursor.execute(
                     f"UPDATE `{COLLECTION_TABLE}` SET `added_to_products` = 1 "
                     f"WHERE `id` IN ({complete_placeholders})",
@@ -6672,7 +7527,7 @@ def add_collection_items_to_products(
     raise RuntimeError("加入产品列表重试结束但没有返回结果")
 
 
-def check_catalog_access(item_type, item_ids, *, manage_visibility=False, connection_factory=None):
+def check_catalog_access(item_type, item_ids, *, manage_visibility=False, operate=False, connection_factory=None):
     """Validate the whole selection before returning or mutating any product."""
     user = product_access.actor()
     if not user:
@@ -6690,6 +7545,8 @@ def check_catalog_access(item_type, item_ids, *, manage_visibility=False, connec
             rows = cursor.fetchall()
             if len(rows) != len(ids) or any(not product_access.can_view(row, user) for row in rows):
                 raise PermissionError('当前账号无权访问所选产品')
+            if operate and any(not product_access.can_operate(row, user) for row in rows):
+                raise PermissionError('只能操作自己的产品')
             if manage_visibility and any(not (product_access.is_admin(user) or product_access.owns(row, user)) for row in rows):
                 raise PermissionError('只能设置自己采集产品的可见性')
     finally:
@@ -6752,6 +7609,7 @@ def _protect_catalog_function(function):
                     continue
                 check_catalog_access('products' if key.startswith('product') else 'collection',
                                      value if key.endswith('ids') else [value],
+                                     operate=not function.__name__.startswith('get_'),
                                      connection_factory=kwargs.get('connection_factory'))
         return function(*args, **kwargs)
     return protected
@@ -6761,3 +7619,94 @@ def _protect_catalog_function(function):
 for _catalog_name, _catalog_function in list(globals().items()):
     if callable(_catalog_function) and getattr(_catalog_function, '__module__', '') == __name__ and not _catalog_name.startswith('_'):
         globals()[_catalog_name] = _protect_catalog_function(_catalog_function)
+
+
+def update_catalog_attributes(kind, item_ids, schemas, operation, *, connection_factory=None):
+    """Apply attribute-only changes to locked current rows, with full selection ACLs."""
+    from copy import deepcopy
+    from erp.catalog_attributes import KINDS, facts, apply
+    if kind not in KINDS:
+        raise ValueError('不支持的产品列表')
+    ids = sorted(_normalize_row_ids(item_ids, empty_message='请至少选择一个产品'))
+    if len(ids) > 100:
+        raise ValueError('每批最多修改 100 件产品')
+    if not isinstance(schemas, dict) or not isinstance(operation, dict):
+        raise ValueError('属性参数无效')
+    table = COLLECTION_TABLE if kind == 'collection' else PRODUCT_TABLE
+    connection = (connection_factory or _connect)()
+    try:
+        with connection.cursor() as cursor:
+            ensure_collection_tables(cursor)
+            cursor.execute(f"SELECT * FROM `{table}` WHERE `id` IN ({', '.join(['%s'] * len(ids))}) ORDER BY `id` FOR UPDATE", tuple(ids))
+            rows = cursor.fetchall()
+            user = product_access.actor()
+            if not user or len(rows) != len(ids) or any(not product_access.can_operate(row, user) for row in rows):
+                raise PermissionError('只能修改自己有操作权限的产品')
+            if kind in {'supplier', 'original'} and any(row.get('source_type') != 'ai_original' for row in rows):
+                raise ValueError('所选产品不属于当前列表')
+            work = [(row, kind, True) for row in rows]
+            # Collected and added-to-catalog rows represent the same logical product.
+            # Apply the operation to each copy's own values, never copy a whole SKU matrix.
+            if kind in {'collection', 'products'}:
+                for row in rows:
+                    if row.get('source_type') == 'ai_original':
+                        continue
+                    if kind == 'collection':
+                        cursor.execute(f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `collection_item_id` = %s AND `organization_key` = %s ORDER BY `id` FOR UPDATE",
+                                       (row['id'], row.get('organization_key')))
+                        linked_rows, linked_kind = cursor.fetchall(), 'products'
+                    else:
+                        cursor.execute(f"SELECT * FROM `{COLLECTION_TABLE}` WHERE `id` = %s AND `organization_key` = %s FOR UPDATE",
+                                       (row.get('collection_item_id') or 0, row.get('organization_key')))
+                        linked_rows, linked_kind = cursor.fetchall(), 'collection'
+                    for linked in linked_rows:
+                        if not product_access.can_operate(linked, user):
+                            raise PermissionError('关联产品没有操作权限，未保存本批属性')
+                        if facts(linked, linked_kind)['category_id'] == facts(row, kind)['category_id']:
+                            work.append((linked, linked_kind, False))
+            changed, results, processed = 0, [], set()
+            for row, current_kind, requested in work:
+                table = COLLECTION_TABLE if current_kind == 'collection' else PRODUCT_TABLE
+                identity = (table, row['id'])
+                if identity in processed:
+                    continue
+                processed.add(identity)
+                category = facts(row, current_kind)['category_id']
+                schema = schemas.get(category)
+                source, count, report = apply(row, current_kind, schema, operation)
+                if count:
+                    if current_kind == 'collection':
+                        cursor.execute(f"UPDATE `{table}` SET `source_json` = %s WHERE `id` = %s", (_dumps(source), row['id']))
+                    else:
+                        snapshot = _loads(row.get('source_snapshot_json'), {}) or {}
+                        if current_kind == 'supplier':
+                            snapshot['original_1688'] = source
+                            snapshot.setdefault('source_1688_overrides', {})['attributes'] = source.get('attributes') or []
+                        elif current_kind == 'original' or row.get('source_type') == 'ai_original':
+                            prepared = source
+                            prepared['manual_attributes'] = source.get('attributes') or []
+                            prepared['manual_attribute_removed_ids'] = [key for key in prepared.get('manual_attribute_removed_ids') or []
+                                                                       if key not in {a.get('id') for a in prepared['manual_attributes']}]
+                            if 'variations' in prepared:
+                                prepared['source_variations'] = deepcopy(prepared['variations'])
+                            prepared['preparation'] = {**(prepared.get('preparation') or {}), 'required_ready': False}
+                            prepared['review_status'] = 'unreviewed'
+                            prepared['edit_revision'] = _ai_original_edit_revision(prepared) + 1
+                            snapshot['ai_original'] = prepared
+                            snapshot.setdefault('marketplace_listings', {})['mercadolibre'] = dict(prepared)
+                            snapshot.setdefault('source', {}).update({key: prepared[key] for key in ('attributes', 'variations') if key in prepared})
+                        else:
+                            snapshot['source'] = source
+                        _mark_ai_marketplace_drafts_unreviewed(snapshot)
+                        cursor.execute(f"UPDATE `{table}` SET `source_snapshot_json` = %s, `review_status` = %s WHERE `id` = %s",
+                                       (_dumps(snapshot), 'unreviewed', row['id']))
+                    changed += int(requested)
+                if requested:
+                    results.append({**report, 'changed_fields': count})
+        connection.commit()
+        return {'requested': len(ids), 'changed': changed, 'results': results}
+    except BaseException:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()

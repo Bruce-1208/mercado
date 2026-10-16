@@ -351,22 +351,17 @@ def test_manual_prohibited_sync_route_can_target_one_store():
     start.assert_called_once_with([7])
 
 
-def test_due_prohibited_sync_respects_disabled_full_refresh_switch(monkeypatch):
-    monkeypatch.setattr(
-        sync,
-        "get_overview_sync_settings",
-        lambda _scope: {"enabled": False},
-    )
-    monkeypatch.setattr(
-        sync,
-        "list_due_prohibited_token_ids",
-        lambda **_kwargs: pytest.fail("disabled scheduler must not query due stores"),
-    )
-
+def test_due_prohibited_sync_uses_enterprise_filtered_stores(monkeypatch):
+    monkeypatch.setattr(sync, "get_overview_sync_settings", lambda _: pytest.fail("must not use one enterprise's switch globally"))
+    monkeypatch.setattr(sync, "get_lock_owner", lambda _: None)
+    monkeypatch.setattr(sync, "list_due_prohibited_token_ids", lambda **_: [22])
+    monkeypatch.setattr(sync, "due_batch", lambda ids: ids)
+    calls = []
+    monkeypatch.setattr(sync, "start_prohibited_listing_sync",
+                        lambda ids: (calls.append(ids) or True, {}))
     result = sync.start_due_prohibited_listing_sync()
-
-    assert result["disabled"] is True
-    assert result["started"] is False
+    assert result["started"] is True
+    assert calls == [[22]]
 
 
 def test_all_store_prohibited_sync_ignores_selected_ids():
@@ -411,3 +406,42 @@ def test_salesperson_sync_resolves_authorized_store_ids():
 
 # These route tests mock business data; they must not authenticate against production MySQL.
 pytestmark = pytest.mark.usefixtures("isolated_legacy_console_user")
+
+
+def test_prohibited_large_history_splits_before_offset_cap():
+    calls = []
+
+    class Client:
+        def request(self, method, path, params):
+            calls.append(dict(params))
+            assert params['offset'] + params['limit'] < 10000
+            if not params.get('date_created_to'):
+                return {'infractions': [{'id': 'parent'}], 'paging': {'total': 10000}}
+            return {'infractions': [{'id': params['date_created_since']}], 'paging': {'total': 1}}
+
+    rows = list(sync._iter_infractions(Client(), 'seller', date_created_since='2026-10-01'))
+    assert len(calls) == 3
+    assert len(rows) == 2
+    assert all(row['id'] != 'parent' for row in rows)
+    from datetime import date, timedelta
+    assert date.fromisoformat(calls[1]['date_created_to']) + timedelta(days=1) == date.fromisoformat(calls[2]['date_created_since'])
+
+
+def test_prohibited_single_day_overflow_preserves_snapshot():
+    class Client:
+        def request(self, *args, **kwargs):
+            return {'infractions': [{'id': 'one'}], 'paging': {'total': 10000}}
+
+    with pytest.raises(RuntimeError, match='保留上次完整快照'):
+        list(sync._iter_infractions(Client(), 'seller', date_created_since='2026-10-01', date_created_to='2026-10-01'))
+
+
+def test_prohibited_repeated_pages_fail_instead_of_completing(monkeypatch):
+    monkeypatch.setattr(sync, 'PROHIBITED_PAGE_SIZE', 1)
+
+    class Client:
+        def request(self, *args, **kwargs):
+            return {'infractions': [{'id': 'repeated'}], 'paging': {'total': 5}}
+
+    with pytest.raises(RuntimeError, match='分页无进展'):
+        list(sync._iter_infractions(Client(), 'seller'))

@@ -401,7 +401,9 @@ async function runProductBatch(run) {
           seen.add(key);
           candidates.push(itemUrl);
         }
-        url = listing.next_url;
+        // A site may ignore a synthesized offset and return the same cards.
+        // Do not keep inventing URLs when that page yielded no new products.
+        url = listing.next_url_synthesized && !candidates.length ? "" : listing.next_url;
       }
       return candidates[index++];
     });

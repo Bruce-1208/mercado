@@ -1,0 +1,36 @@
+{
+  "version": "1.8.65",
+  "package": "zeshun-collector-extension-1.8.65-mercado-speed.zip",
+  "simulation": {
+    "page_ms": 4000,
+    "cold_data_ms": 4000,
+    "upload_ms": 500,
+    "observed_ms": 4525,
+    "live_measurement": false
+  },
+  "checks": {
+    "data_card_browser_and_manifest": "56 passed",
+    "batch_scheduler": "1 passed",
+    "single_collection_and_auth": "26 passed",
+    "speed_cache_prefetch": "9 passed",
+    "latency_display": "1 passed",
+    "syntax_and_diff_check": "passed",
+    "package_crc_and_allowlist": "passed"
+  },
+  "limitations": [
+    "No live Mercado end-to-end latency measurement; network, service queueing and verification may exceed 10 seconds.",
+    "Existing stored rest setting is preserved; set it to 0 for the speed target.",
+    "The broad extension suite also reported 7 failures outside the changed Mercado flow (1688 selector, pause notice, AI weight-price permissions/routes and infringement arguments). These were not changed in this task.",
+    "Legacy test_zeshun_product_pause.cjs expects an absent 10-minute automatic retry constant; current implementation already stops on rate limiting. This test failed before exercising the optimized flow.",
+    "Full popup browser suite encountered setup errors and was interrupted; the new latency rendering was verified separately."
+  ],
+  "changed_features": [
+    "Parallel data prefetch during navigation",
+    "20ms request coalescing with maximum 50 items",
+    "Account/console/product/price scoped 60s result cache; failure and missing item eviction",
+    "Mercado document_end injection and retry for missing gallery image",
+    "200ms page polling",
+    "Default rest 0 seconds; preserve explicit user rest values",
+    "Per-success latency and 10s threshold metrics"
+  ]
+}

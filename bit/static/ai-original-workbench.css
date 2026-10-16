@@ -254,3 +254,34 @@
 .product-drawer-body .ai-original-sku-image-list small { color:#64748b; }
 .product-drawer-body .ai-original-variant-thumbnails { display:flex; flex-wrap:wrap; gap:8px; }
 .product-drawer-body .ai-original-variant-thumbnails img { width:90px; height:90px; object-fit:contain; border:1px solid #e0e7f0; border-radius:6px; }
+
+/* Incomplete listing checks remain visible even while the details are closed. */
+#tab-ai-original-products .ai-original-check-panel.has-failure,
+#tab-ai-original-products .ai-original-check-panel.needs-input {
+  padding: var(--zs-space-2);
+  border: 1px solid var(--zs-stroke);
+  border-radius: var(--zs-radius-control);
+}
+#tab-ai-original-products .ai-original-check-panel.has-failure {
+  background: var(--zs-danger-tint);
+  border-color: var(--zs-danger);
+}
+#tab-ai-original-products .ai-original-check-panel.has-failure > summary {
+  color: var(--zs-danger);
+}
+#tab-ai-original-products .ai-original-check-panel.needs-input {
+  background: var(--zs-warning-tint);
+  border-color: var(--zs-warning);
+}
+#tab-ai-original-products .ai-original-check-panel.needs-input > summary {
+  color: var(--zs-warning);
+}
+
+/* Shared product-list publishing steps; retain business-specific form fields. */
+#tab-ai-original-products .ai-original-publish-panel[hidden],
+#tab-ai-original-products .ai-original-publish-panel [hidden] { display:none !important; }
+#tab-ai-original-products .ai-original-publish-panel > .zs-publish-workspace { padding:0 var(--zs-space-4); box-sizing:border-box; }
+#tab-ai-original-products .ai-original-publish-panel .zs-publish-review { padding:var(--zs-space-4) 0; }
+#ai-original-publish-next { margin-left:auto; }
+
+#tab-ai-original-products .ai-original-product-number { grid-column:1 / -1; min-width:0; overflow-wrap:anywhere; color:var(--zs-secondary); font-size:var(--zs-text-small); padding-top:var(--zs-space-1); }

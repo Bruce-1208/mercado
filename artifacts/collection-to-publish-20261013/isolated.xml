@@ -1,0 +1,1614 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="22" failures="10" skipped="0" tests="315" time="146.299" timestamp="2026-10-13T16:25:24.891505+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_bit_interface_mercado_collection" name="test_startup_maintenance_runs_in_daemon_threads" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_login_edge_starts_at_mercado_home_only" time="0.016" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_profitability_worker_continues_when_reference_refresh_fails" time="0.010" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_matches_fixed_shipping_before_write_and_wakes_profit_worker" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_workbench_splits_collection_and_product_list_into_separate_modules" time="0.148"><failure message="assert b'&lt;option value=&quot;500&quot; selected&gt;500' in b'&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\...js?v=20261012&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;/static/mercado-product-editor.js?v=20261013-1&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;'&#10; +  where b'&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\...js?v=20261012&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;/static/mercado-product-editor.js?v=20261013-1&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;' = &lt;WrapperTestResponse 2060553 bytes [200 OK]&gt;.data">def test_workbench_splits_collection_and_product_list_into_separate_modules():
+        client = _client()
+        response = client.get("/")
+    
+        assert response.status_code == 200
+        assert b'data-ui-version="2026-10-04-responsive-ui"' in response.data
+        assert b'window.location.protocol === "file:"' in response.data
+        assert b'window.location.replace("http://127.0.0.1:5000/")' in response.data
+        assert b'data-tab="mercado-collection"' in response.data
+        assert b'data-tab="mercado-products"' in response.data
+        assert b'id="tab-mercado-collection"' in response.data
+        assert b'id="tab-mercado-products"' in response.data
+        assert b'id="mercado-list-collection-host"' in response.data
+        assert b'id="mercado-list-products-host"' in response.data
+        assert b'id="mercado-list-module"' in response.data
+        assert b'id="mercado-view-collection"' not in response.data
+        assert b'id="mercado-view-products"' not in response.data
+        assert "美客多跟卖采集".encode("utf-8") in response.data
+        assert "产品资料库".encode("utf-8") in response.data
+        assert "审核工作区".encode("utf-8") in response.data
+        assert b'mountMercadoListModule("collection")' in response.data
+        assert b'mountMercadoListModule("products")' in response.data
+        assert b'data-tab="mercado-publish-records"' in response.data
+        assert b'id="tab-mercado-publish-records"' in response.data
+        assert b'id="publish-record-body"' in response.data
+        assert b'id="publish-record-select-all"' in response.data
+        assert b'id="publish-record-retry"' in response.data
+        assert b'id="publish-record-start-date"' in response.data
+        assert b'id="publish-record-end-date"' in response.data
+        assert b'id="publish-record-group"' in response.data
+        assert "重新上架所选".encode("utf-8") in response.data
+        assert "失败原因 / 接口明细".encode("utf-8") in response.data
+        assert b"mercadoPublishRecordPollTimer" not in response.data
+        assert b'id="mercado-list-body"' in response.data
+        assert b'class="tab-page mercado-workbench"' in response.data
+        assert b'class="tab-heading mercado-workbench-heading"' in response.data
+        assert b'class="market-flow-indicator"' in response.data
+        assert "安装插件".encode("utf-8") in response.data
+        assert "页面采集".encode("utf-8") in response.data
+        assert "审核资料".encode("utf-8") in response.data
+        assert b'class="panel collector-plugin-panel"' in response.data
+        assert b'href="/api/browser-extension/download"' in response.data
+        assert "下载泽顺插件".encode("utf-8") in response.data
+        assert "采集操作已迁移到泽顺插件".encode("utf-8") in response.data
+        assert b'id="mercado-add-selected"' in response.data
+        assert b'id="mercado-management-category-filter"' in response.data
+        assert b'id="mercado-platform-category-filter"' in response.data
+        assert b'id="mercado-management-category-bulk"' in response.data
+        assert b'id="mercado-category-dialog"' in response.data
+        assert "运营分类管理".encode("utf-8") in response.data
+        assert "全部产品分类".encode("utf-8") in response.data
+        assert "美客多分类".encode("utf-8") in response.data
+        assert b'id="mercado-collection-workers"' not in response.data
+        assert b'id="mercado-collection-site"' not in response.data
+        assert b'id="mercado-collection-browser-type"' not in response.data
+        assert b'id="mercado-playwright-setup"' not in response.data
+        assert "计泡重".encode("utf-8") in response.data
+        assert "长×宽×高 ÷ 6000".encode("utf-8") in response.data
+        assert "美元售价".encode("utf-8") in response.data
+        assert "分类佣金".encode("utf-8") in response.data
+        assert "最新运费".encode("utf-8") in response.data
+        assert b'data-tab="mercado-shipping-standards"' in response.data
+        assert b'id="tab-mercado-shipping-standards"' in response.data
+        assert b'id="mercado-shipping-rate-content"' in response.data
+        assert b'id="mercado-shipping-rate-refresh"' in response.data
+        assert "美客多运费标准".encode("utf-8") in response.data
+        assert "Global Selling 跨境运费公告".encode("utf-8") in response.data
+        assert "更新官方最新标准".encode("utf-8") in response.data
+        assert "不混用本地卖家信誉表".encode("utf-8") in response.data
+        assert b"loadMercadoShippingRates" in response.data
+        assert "净收益".encode("utf-8") in response.data
+        assert "只按智赢实际重量，不使用计泡重".encode("utf-8") in response.data
+        assert b'mercadoListMode === "collection"' in response.data
+        assert b'id="mercado-delete-selected"' in response.data
+        assert b'id="mercado-publish-store"' in response.data
+        assert b'id="mercado-publish-site"' in response.data
+        assert b'id="mercado-publish-mode"' in response.data
+        assert b'id="mercado-publish-group"' in response.data
+        assert b'id="mercado-group-publish-mode"' in response.data
+        assert b'value="random" selected' in response.data
+        assert b'value="polling"' in response.data
+        assert b'id="mercado-publish-store" multiple' in response.data
+        assert b'id="mercado-publish-site" multiple' in response.data
+        assert "按分组".encode("utf-8") in response.data
+        assert "账号、分组和站点均支持勾选多项".encode("utf-8") in response.data
+        assert b'id="mercado-publish-workers"' in response.data
+        assert b'id="mercado-publish-quantity" type="number" min="1" max="9999" value="500"' in response.data
+        assert b'id="mercado-publish-workers" type="number" min="1" value="16"' in response.data
+        assert b'market-multi-picker' in response.data
+        assert b'class="market-selection-meta"' in response.data
+        assert b'class="market-selection-tools"' in response.data
+        assert b'class="market-publish-footer"' in response.data
+        assert b'class="market-table-heading"' in response.data
+        assert "批量发布设置".encode("utf-8") in response.data
+        for site_name in ("墨西哥", "巴西", "阿根廷", "智利", "哥伦比亚", "乌拉圭"):
+            assert site_name.encode("utf-8") in response.data
+        assert b'id="mercado-publish-selected"' in response.data
+        assert b'id="mercado-product-review-actions"' in response.data
+        assert b'id="mercado-source-collected"' in response.data
+        assert b'id="mercado-source-pulled"' in response.data
+        assert b'id="mercado-source-zying"' in response.data
+        assert b'class="market-source-filter market-product-only-filter"' in response.data
+        assert b'class="market-source-option active" id="mercado-source-all"' in response.data
+        assert b'class="market-source-tag-icon"' in response.data
+        assert "美客多采集".encode("utf-8") in response.data
+        assert "店铺同步".encode("utf-8") in response.data
+        assert "智赢采集".encode("utf-8") in response.data
+        assert b'id="mercado-list-pagination"' in response.data
+        assert b'id="mercado-page-size"' in response.data
+&gt;       assert b'&lt;option value="500" selected&gt;500' in response.data
+E       assert b'&lt;option value="500" selected&gt;500' in b'&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\...js?v=20261012"&gt;&lt;/script&gt;\n    &lt;script src="/static/mercado-product-editor.js?v=20261013-1"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;'
+E        +  where b'&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\...js?v=20261012"&gt;&lt;/script&gt;\n    &lt;script src="/static/mercado-product-editor.js?v=20261013-1"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;' = &lt;WrapperTestResponse 2060553 bytes [200 OK]&gt;.data
+
+tests/test_bit_interface_mercado_collection.py:399: AssertionError</failure></testcase><testcase classname="tests.test_bit_interface_mercado_collection" name="test_official_shipping_rate_endpoints_list_and_start_refresh" time="0.003" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_api_requires_login" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_finish_status_does_not_label_all_failures_completed" time="0.000" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_duration_is_live_then_stable_after_finish" time="0.000" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_quality_pass_retries_only_rows_missing_actual_weight" time="0.006"><failure message="assert 'hasUsableActualWeight &amp;&amp; row.title &amp;&amp; row.main_image_url' in '&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\n...ipt src=&quot;{{ url_for(\'static\', filename=\'mercado-product-editor.js\') }}?v=20261013-1&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n'">def test_collection_quality_pass_retries_only_rows_missing_actual_weight():
+        rows = [
+            {
+                "source_item_id": "MLM1",
+                "title": "Product 1",
+                "main_image_url": "https://example.test/1.webp",
+                "scrape_status": "partial",
+                "error_message": "旧状态未刷新",
+                "weight_g": 300,
+                "package_length_cm": 10,
+                "package_width_cm": 20,
+                "package_height_cm": 5,
+            },
+            {
+                "source_item_id": "MLM2",
+                "title": "Product 2",
+                "main_image_url": "https://example.test/2.webp",
+                "scrape_status": "partial",
+                "error_message": "智赢插件已显示，但 DOM 中没有完整的重量/尺寸",
+            },
+            {
+                "source_item_id": "MLM3",
+                "title": "Product 3",
+                "main_image_url": "https://example.test/3.webp",
+                "scrape_status": "partial",
+                "error_message": "详情页未检测到智赢插件重量尺寸",
+            },
+            {
+                "source_item_id": "MLM4",
+                "title": "Product 4",
+                "main_image_url": "https://example.test/4.webp",
+                "scrape_status": "partial",
+                "weight_g": 300,
+                "error_message": "尺寸未完整",
+            },
+            {
+                "source_item_id": "MLM5",
+                "title": "Product 5",
+                "main_image_url": "https://example.test/5.webp",
+                "scrape_status": "partial",
+                "error_message": "列表页未读取到智赢批量重量数据",
+                "page_snapshot": {"detail_acquisition": "listing_page_batch"},
+            },
+        ]
+    
+        assert [
+            row["source_item_id"]
+            for row in workbench._mercado_collection_rows_needing_repair(rows)
+        ] == ["MLM2", "MLM3"]
+    
+        template = Path(workbench.app.template_folder, "index.html").read_text(
+            encoding="utf-8"
+        )
+&gt;       assert "hasUsableActualWeight &amp;&amp; row.title &amp;&amp; row.main_image_url" in template
+E       assert 'hasUsableActualWeight &amp;&amp; row.title &amp;&amp; row.main_image_url' in '&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\n...ipt src="{{ url_for(\'static\', filename=\'mercado-product-editor.js\') }}?v=20261013-1"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n'
+
+tests/test_bit_interface_mercado_collection.py:581: AssertionError</failure></testcase><testcase classname="tests.test_bit_interface_mercado_collection" name="test_product_list_select_all_uses_current_page_rows_as_source_of_truth" time="0.005" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_database_write_retries_transient_network_failure" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_start_collection_creates_background_task" time="0.000" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_start_collection_requests_login_setup_cleanup_before_running" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_start_collection_reports_when_login_setup_cannot_close" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_playwright_login_setup_stop_event_closes_temporary_tab" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_playwright_login_setup_starts_background_window" time="0.003"><failure message="assert 400 == 200&#10; +  where 400 = &lt;WrapperTestResponse 85 bytes [400 BAD REQUEST]&gt;.status_code">def test_playwright_login_setup_starts_background_window():
+        _reset_state()
+        client = _client()
+        with patch.object(workbench.threading.Thread, "start") as start_thread:
+            response = client.post("/api/mercado-collection/playwright-setup", json={})
+    
+        payload = response.get_json()
+        assert response.status_code == 200
+        assert payload["data"]["running"] is True
+        start_thread.assert_called_once()
+        _reset_state()
+        client = _client()
+        with patch.object(
+            workbench, "db_create_mercado_collection_task", return_value=42
+        ) as create_task, patch.object(workbench.threading.Thread, "start"):
+            response = client.post(
+                "/api/mercado-collection/start",
+                json={
+                    "source_url": "https://listado.mercadolibre.com.mx/bolsas",
+                    "requested_count": 12,
+                    "worker_count": 10,
+                },
+            )
+    
+        payload = response.get_json()
+&gt;       assert response.status_code == 200
+E       assert 400 == 200
+E        +  where 400 = &lt;WrapperTestResponse 85 bytes [400 BAD REQUEST]&gt;.status_code
+
+tests/test_bit_interface_mercado_collection.py:767: AssertionError</failure></testcase><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_browser_params_default_to_mexico_bit_window" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_browser_windows_endpoint_returns_safe_choices" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_login_setup_uses_selected_edge_browser" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_start_collection_passes_selected_browser_to_worker" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_list_and_batch_add_endpoints" time="0.004" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_management_category_endpoints_support_crud_assignment_and_filtering" time="0.005" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_product_publish_record_list_endpoint_supports_filters[None]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_product_publish_record_list_endpoint_supports_filters[scope1]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_retry_publish_records_starts_grouped_background_task" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_retry_publish_records_rejects_successful_record" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_start_collection_builds_country_url_from_keyword_and_scope" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_product_list_filters_and_review_status_endpoint" time="0.003" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_product_list_supports_zying_category_and_developer_filters" time="0.003" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_product_content_update_endpoint" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_bulk_product_content_update_endpoint" time="0.003" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_bulk_collection_measurement_update_endpoint" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_and_product_delete_endpoints" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_starts_background_task_for_selected_store" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_builds_all_compatible_account_site_targets" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_can_select_targets_by_site_group" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_group_random_publish_assigns_each_product_to_one_account_and_all_its_sites" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_group_polling_publish_moves_to_next_account_every_ten_products" time="0.000" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_group_publish_endpoint_applies_strategy_and_historical_account_ownership" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_multi_target_publish_runner_aggregates_progress_and_results" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_multi_target_publish_runner_uses_retry_rows_and_original_quantities" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_multi_target_publish_runner_skips_historical_success_for_same_target" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_rejects_unsupported_site" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_moves_unapproved_product_to_collection" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_manual_approval_admits_imports_without_moving_them_to_collection[zying]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_manual_approval_admits_imports_without_moving_them_to_collection[collected]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_manual_approval_admits_imports_without_moving_them_to_collection[pulled]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_scheduled_import_uses_the_same_approval_and_risk_screening_flow" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_moves_missing_weight_back_to_collection" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_moves_nonpositive_net_to_collection" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_rejects_nonpositive_worker_count" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_batch_publish_endpoint_rejects_cross_site_for_local_store" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_collection_list_passes_salesperson_and_directory_options" time="0.003" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_mercado_category_options_route" time="0.001" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_publish_accepts_unchecked_and_risky_products_for_recorded_screening[None]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_publish_accepts_unchecked_and_risky_products_for_recorded_screening[2]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_publish_attempt_exists_before_screening_and_records_setup_failure[screening]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_publish_attempt_exists_before_screening_and_records_setup_failure[publisher_setup]" time="0.002" /><testcase classname="tests.test_bit_interface_mercado_collection" name="test_publish_attempt_exists_before_screening_and_records_setup_failure[none]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_create_task_rejects_non_url_before_database_connection" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_create_task_persists_worker_count_for_task_summary" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_add_products_rejects_invalid_or_empty_ids_before_database_connection" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_zying_detail_snapshot_is_upserted_as_third_product_source" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_add_products_keeps_missing_weight_rows_in_collection_list" time="0.003" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_delete_and_publish_selection_reject_empty_ids_before_database_connection" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_weight_dimension_completeness_uses_current_values_not_scrape_status" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_profitability_updates_exact_collection_duplicate_and_only_newest_product" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_profitability_updates_do_not_overwrite_collection_history[collected]" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_profitability_updates_do_not_overwrite_collection_history[pulled]" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_profitability_estimator_never_overwrites_source_owned_net_proceeds[zying]" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_profitability_estimator_never_overwrites_source_owned_net_proceeds[ai_original]" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_profitability_update_uses_input_cas_and_stops_mirror_on_conflict" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_profitability_queue_excludes_source_owned_rows_and_retries_incomplete_rows" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_add_products_retries_transient_lock_timeout" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_existing_schema_still_installs_refresh_indexes_once" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column0]" time="0.002" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column1]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column2]" time="0.002" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column3]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column4]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column5]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column6]" time="0.002" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column7]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column8]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column9]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_missing_required_column_triggers_schema_migration[missing_column10]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_move_pulled_product_preserves_weight_basis_before_deleting_product[official_api-ok]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_move_pulled_product_preserves_weight_basis_before_deleting_product[plugin_volumetric_fallback-partial]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_dimension_only_store_link_sync_does_not_relabel_weight_as_actual" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_review_status_validates_and_updates_selected_rows" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_content_update_validates_persists_and_invalidates_profitability" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_dimension_only_product_edit_keeps_profitability_snapshot_current" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_bulk_product_content_update_uses_one_transaction_and_selected_fields_only" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_bulk_collection_measurement_update_mirrors_products_atomically" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_failed_refresh_cannot_overwrite_an_existing_complete_item" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_save_calculates_usd_price_from_fixed_database_rate" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_plugin_collection_saves_official_freight_and_net_atomically[600-7.71]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_plugin_collection_saves_official_freight_and_net_atomically[None-None]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_recollection_replaces_stale_profitability_and_weight_basis_atomically" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_volumetric_fallback_upsert_clears_fake_actual_weight" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_unique_index_is_scoped_to_each_task" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_list_can_hide_items_already_added_to_products" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_lists_filter_by_management_category_and_include_category_name" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_assign_management_category_updates_selected_list_and_mirrors_source_items" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_management_category_name_validation_happens_before_connecting" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_list_applies_weight_profit_and_collection_time_filters" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_list_filters_by_actual_weight_status[available-(`weight_g` IS NOT NULL AND `weight_g` &gt; 0]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_list_filters_by_actual_weight_status[missing-NOT (`weight_g` IS NOT NULL AND `weight_g` &gt; 0]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_applies_status_range_and_date_filters_in_database" time="0.001"><failure message="StopIteration">def test_product_list_applies_status_range_and_date_filters_in_database():
+        connection = _FakeConnection()
+        store.list_product_items(
+            search="cosplay",
+            source_type="collected",
+            review_status="approved",
+            publish_status="failed",
+            mercado_category="Costumes",
+            weight_min="100",
+            weight_max="500",
+            price_min="200",
+            price_max="900",
+            net_proceeds_min="-5",
+            net_proceeds_max="40",
+            date_from="2026-08-01",
+            date_to="2026-08-25",
+            connection_factory=lambda: connection,
+        )
+    
+&gt;       count_sql, params = next(
+            (query, params)
+            for query, params in connection.fake_cursor.queries
+            if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+        )
+E       StopIteration
+
+tests/test_erp_mercadolibre_collection_store.py:1258: StopIteration</failure></testcase><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_filters_zying_category_and_product_developer" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_applies_minute_datetime_range_in_database" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_rejects_invalid_filter_ranges_before_connecting" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_exchange_price_backfill_updates_collection_and_product_tables" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_recover_interrupted_tasks_marks_only_prestartup_rows" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_publish_attempt_records_copy_product_details_and_save_failure_reason" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_published_product_ids_are_scoped_to_account_and_site" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_published_product_account_ids_keep_latest_successful_owner" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_existing_user_product_ids_are_reused_across_sites_for_same_account" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_publish_records_can_be_loaded_by_selected_ids_for_retry" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_publish_record_list_supports_time_and_store_group_filters" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_publish_record_salesperson_filters_counts_and_rows_with_store_scope[\u5f20\u4e09]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_publish_record_salesperson_filters_counts_and_rows_with_store_scope[__unassigned__]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_publish_record_salesperson_rejects_oversized_name_before_querying" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_1688_recollection_clears_unverified_old_weight_and_package" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_owner_filter_applies_before_pagination[collector_salesperson-$.plugin_snapshot.created_by]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_owner_filter_applies_before_pagination[generator_salesperson-$.ai_original.generated_by]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_limits_before_join_and_records_query_stages" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_closes_connection_on_query_timeout" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_total_pins_narrow_index_only_without_filters[filters0-True]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_total_pins_narrow_index_only_without_filters[filters1-False]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_total_pins_narrow_index_only_without_filters[filters2-False]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_total_pins_narrow_index_only_without_filters[filters3-False]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_products-list_product_items]" time="0.001"><failure message="AssertionError: assert '(SELECT `id` FROM `erp_mercadolibre_products` WHERE' in 'SELECT /*+ MAX_EXECUTION_TIME(8000) */ `erp_mercadolibre_products`.*, category.`name` AS `management_category_name`, ...ON category.`id` = `erp_mercadolibre_products`.`management_category_id` ORDER BY `erp_mercadolibre_products`.`id` DESC'">table = 'erp_mercadolibre_products'
+listing = &lt;function list_product_items at 0x11fd844a0&gt;
+
+    @pytest.mark.parametrize('table,listing', [
+        (store.PRODUCT_TABLE, store.list_product_items),
+        (store.COLLECTION_TABLE, store.list_collection_items),
+    ])
+    def test_list_materializes_only_ids_before_loading_full_page(table, listing):
+        connection = _FakeConnection()
+        with patch.object(store, 'ensure_collection_tables'):
+            listing(search='sample', limit=100, offset=200,
+                    connection_factory=lambda: connection)
+        sql, params = connection.fake_cursor.queries[-1]
+&gt;       assert f'(SELECT `id` FROM `{table}` WHERE' in sql
+E       AssertionError: assert '(SELECT `id` FROM `erp_mercadolibre_products` WHERE' in 'SELECT /*+ MAX_EXECUTION_TIME(8000) */ `erp_mercadolibre_products`.*, category.`name` AS `management_category_name`, ...ON category.`id` = `erp_mercadolibre_products`.`management_category_id` ORDER BY `erp_mercadolibre_products`.`id` DESC'
+
+tests/test_erp_mercadolibre_collection_store.py:1687: AssertionError</failure></testcase><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_collection_items-list_collection_items]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_pending_review_publish_records_are_saved_and_filterable" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_scope_union_preserves_all_ownership_paths[tokens0--3]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_scope_union_preserves_all_ownership_paths[tokens1--1]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_scope_union_preserves_all_ownership_paths[tokens2--4]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_scope_union_preserves_all_ownership_paths[tokens3--0]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_scope_union_preserves_all_ownership_paths[tokens4-zying-2]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_scope_union_preserves_all_ownership_paths[tokens5--0]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_salesperson_filter_is_exact_and_applies_before_pagination" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_unassigned_filter_includes_non_personnel_creators" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_collection_personnel_directory_and_unassigned_rows_with_saved_creators" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_count_deadline_still_returns_filtered_page[row_ids0-True]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_count_deadline_still_returns_filtered_page[row_ids1-False]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_count_deadline_still_returns_filtered_page[row_ids2-False]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_count_connection_loss_is_not_hidden" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_category_options_are_permission_scoped_and_not_paginated" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_category_options_empty_scope_never_reads_database" time="0.000" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_parent_category_filter_uses_complete_exact_ids" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_salesperson_filter_matches_display_and_directory_respects_scope" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_slow_legacy_salesperson_directory_does_not_block_product_rows" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_pulled_products_use_each_site_salesperson_instead_of_sync_operator" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_pulled_sync_loads_site_settings_for_secret_token_records" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_continues_after_an_item_failure_and_records_each_state" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_successful_probe_allows_remaining_products_to_run_concurrently" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_account_listing_restriction_stops_remaining_items" time="0.056" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_validates_quantity_before_contacting_store" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_rejects_products_that_are_not_approved" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_product_publish_issues_reports_all_local_blockers" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_rejects_missing_weight_or_nonpositive_net_before_store_call[changes0-\u672a\u586b\u5199\u6709\u6548\u91cd\u91cf]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_rejects_missing_weight_or_nonpositive_net_before_store_call[changes1-\u51c0\u6536\u76ca\u5c1a\u672a\u8ba1\u7b97]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_rejects_missing_weight_or_nonpositive_net_before_store_call[changes2-\u51c0\u6536\u76ca\u5c0f\u4e8e\u7b49\u4e8e 0]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_discounted_net_proceeds_uses_site_percentage_and_rounds_half_up" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_rejects_nonpositive_worker_count_before_contacting_store" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_local_store_cannot_publish_to_another_site" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_product_snapshot_is_refreshed_before_publish" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_embedded_product_snapshot_avoids_publish_write_read_round_trip" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_embedded_zying_snapshot_recovers_legacy_nameid_attributes" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_embedded_zying_snapshot_does_not_publish_minus_one_value_id" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_batch_publish_passes_reusable_user_product_to_follow_sell" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_successful_upload_is_not_reported_failed_when_latest_state_save_fails" time="0.002" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_500_item_publish_orchestration_has_low_local_overhead" time="0.021" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_family_partial_failure_preserves_remote_results_in_publish_record" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_family_result_does_not_expose_one_variants_up_id_for_reuse" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_infringement_is_held_for_review_while_other_products_publish[False]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_infringement_is_held_for_review_while_other_products_publish[True]" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_explicitly_removed_zying_attributes_are_not_recovered_from_capture" time="0.001" /><testcase classname="tests.test_erp_mercadolibre_batch_publish" name="test_switching_main_image_keeps_sku_picture_id" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_current_row_hash_is_identical_to_candidate_and_changes_with_final_titles" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_result_state_reads_snapshot_and_never_reuses_changed_content_or_rules" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_review_is_bound_to_content_expiry_and_site" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_item_identity_deduplicates_per_source_not_numeric_id" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_moved_list_json_cannot_replace_current_item_identity" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_private_image_urls_are_rejected_before_network" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_knowledge_version_ignores_pending_and_changes_with_scope_aliases" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_title_image_sends_actual_bytes_and_uses_explicit_vision_model" time="0.010" /><testcase classname="tests.test_infringement_screening" name="test_image_failure_never_writes_safe_result" time="0.029" /><testcase classname="tests.test_infringement_screening" name="test_empty_titles_and_missing_ai_rows_are_failed_not_zero" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_stop_is_checked_between_batches_and_retains_completed_results" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_scoped_alias_matches_only_current_site" time="0.002" /><testcase classname="tests.test_infringement_screening" name="test_precise_candidates_use_current_product_rows_for_every_source" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_ai_writer_preserves_manual_fields_and_stores_failure_metadata" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_manual_review_updates_independent_history_and_snapshot" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_results_include_unchecked_stale_and_failed" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_move_helper_copies_human_review_metadata_with_bound_ids" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_db_api_forwards_precise_items_and_review" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_image_revision_changes_image_hash_even_when_url_is_reused" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_title_only_manual_review_still_invalidates_when_picture_changes" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_saved_result_translations_cannot_override_current_snapshot" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_precise_items_disappearing_before_candidate_read_are_task_failures_only" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_local_generated_image_route_reads_only_known_bounded_asset" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_collection_and_transferred_product_generated_copy_share_current_hash" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_collection_candidate_selects_current_generated_copy" time="0.001" /><testcase classname="tests.test_infringement_screening" name="test_product_and_collection_scope_context_comes_from_current_plugin_snapshot" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_service_detects_only_selected_current_ids_and_titles" time="0.007" /><testcase classname="tests.test_mercado_infringement_service" name="test_cached_valid_screening_reuses_result_without_model_credential" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_cancel_while_waiting_for_execution_capacity" time="0.106" /><testcase classname="tests.test_mercado_infringement_service" name="test_filtered_selection_reads_all_pages_and_risk_filter_then_paginates" time="0.003" /><testcase classname="tests.test_mercado_infringement_service" name="test_existing_valid_result_reuses_cache_but_content_changes_queue_scan" time="0.005" /><testcase classname="tests.test_mercado_infringement_service" name="test_task_and_selected_product_permissions_are_account_scoped" time="0.005" /><testcase classname="tests.test_mercado_infringement_service" name="test_failed_retry_selects_only_unfinished_products" time="0.011" /><testcase classname="tests.test_mercado_infringement_service" name="test_cancelled_queue_keeps_completed_snapshots_and_releases_active_items" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_normal_execution_never_persists_credential" time="0.006" /><testcase classname="tests.test_mercado_infringement_service" name="test_service_rejects_missing_credential_before_creating_task" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_restart_marks_only_unfinished_items_interrupted" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_same_item_cannot_have_two_active_tasks" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_requires_risk_disposition_independent_of_ordinary_review[0-None]" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_requires_risk_disposition_independent_of_ordinary_review[1-\u7591\u4f3c]" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_requires_risk_disposition_independent_of_ordinary_review[2-\u9ad8\u98ce\u9669]" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_rejects_unchecked_failed_and_changed_content" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_scoped_authorization_requires_current_content_site_evidence_and_expiry" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_manual_block_is_enforced_even_when_ai_low" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_collection_tasks_reject_already_moved_rows" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_credential_revoked_after_queue_does_not_fall_back_to_environment_key" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_error_logs_and_callback_results_cannot_persist_credentials" time="0.004" /><testcase classname="tests.test_mercado_infringement_service" name="test_new_retry_activity_wins_when_task_timestamps_are_identical" time="0.006" /><testcase classname="tests.test_mercado_infringement_service" name="test_historical_failed_task_cannot_override_new_database_result" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_filtered_selection_respects_current_product_visibility_on_every_page" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_detail_links_precise_matched_rule_ids_including_alias_hits" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_manual_block_applies_to_its_declared_site" time="0.001" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_auto_check_completes_before_returning_rows" time="0.167" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_auto_check_rejects_existing_active_task" time="0.153" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_auto_check_failure_never_returns_publishable_rows" time="0.149" /><testcase classname="tests.test_mercado_infringement_service" name="test_publication_existing_high_risk_reaches_individual_review_gate" time="0.146" /><testcase classname="tests.test_mercado_infringement_service" name="test_final_draft_preflight_screens_actual_outgoing_title_and_target" time="0.148" /><testcase classname="tests.test_mercado_infringement_service" name="test_final_draft_preflight_blocks_changed_content_and_final_title_risk" time="0.146" /><testcase classname="tests.test_mercado_infringement_service" name="test_collection_risk_filters_keep_salesperson_scope" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_detection_cannot_modify_coworker_products[selected]" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_detection_cannot_modify_coworker_products[filtered]" time="0.002" /><testcase classname="tests.test_mercado_infringement_service" name="test_detection_cannot_modify_coworker_products[unchecked]" time="0.002" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_local_path_blocks_all_missing_fields_before_create_and_keeps_evidence" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_unknown_optional_attribute_has_a_visible_mapping_report" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_id_and_name_conflict_cannot_be_hidden_by_id_matching" time="0.003" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_format_constraints_block_create[attribute0-definition0-invalid_unit]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_format_constraints_block_create[attribute1-definition1-invalid_number]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_format_constraints_block_create[attribute2-definition2-invalid_length]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_format_constraints_block_create[attribute3-definition3-read_only]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_lost_or_unmapped_variation_dimensions_never_reach_platform[UNKNOWN]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_lost_or_unmapped_variation_dimensions_never_reach_platform[COLOR]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_duplicate_sku_combinations_block_without_merging_stock" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_preview_and_submit_use_identical_payload_and_checkpoint_before_post" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_draft_invalidates_on_all_material_changes[product]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_draft_invalidates_on_all_material_changes[quantity]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_draft_invalidates_on_all_material_changes[schema]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_draft_invalidates_on_all_material_changes[tamper]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_draft_invalidates_on_all_material_changes[expired]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_checkpoint_failure_stops_remote_publication" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_concurrent_reports_do_not_mix_source_evidence" time="0.002" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_exact_unit_conversion_preserves_original_evidence" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_explicit_correction_is_scoped_to_draft_and_keeps_original_snapshot" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_invalid_manual_corrections_never_bypass_checks[evidence]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_invalid_manual_corrections_never_bypass_checks[category_id]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_invalid_manual_corrections_never_bypass_checks[value_name]" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_manual_correction_choices_come_from_failed_draft_schema" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_expired_retry_reuses_evidence_but_checks_new_rules" time="0.001" /><testcase classname="tests.test_mercadolibre_publication_preflight" name="test_retry_cannot_apply_manual_facts_to_changed_source" time="0.001" /><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_preview_checks_account_access_before_reading_products" time="0.005"><failure message="assert 503 == 403&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">workbench = &lt;module 'bit.bit_interface' from '/private/tmp/mercado-publish-e2e-20261013/bit/bit_interface.py'&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x13bdf4680&gt;
+
+    def test_preview_checks_account_access_before_reading_products(workbench, monkeypatch):
+        monkeypatch.setattr(workbench.bit_db_api, "list_mercado_store_tokens", lambda: {"rows": []})
+        monkeypatch.setattr(workbench, "_filter_mercado_tokens_for_user", lambda data, *args: data)
+        monkeypatch.setattr(workbench, "db_get_mercado_product_items_by_ids", lambda ids: (_ for _ in ()).throw(AssertionError("must not read")))
+        client = workbench.app.test_client()
+        assert client.post('/api/mercado-products/attribute-preflight', json={}).status_code == 401
+        response = logged_client(workbench).post('/api/mercado-products/attribute-preflight', headers=HEADERS,
+                               json={"product_item_ids": [1], "token_id": 99})
+&gt;       assert response.status_code == 403
+E       assert 503 == 403
+E        +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code
+
+tests/test_mercado_attribute_preflight_routes.py:21: AssertionError</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_preview_persists_server_generated_draft_and_returns_only_report_and_revision" time="0.003"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">workbench = &lt;module 'bit.bit_interface' from '/private/tmp/mercado-publish-e2e-20261013/bit/bit_interface.py'&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x12b8f1df0&gt;
+
+    def test_preview_persists_server_generated_draft_and_returns_only_report_and_revision(workbench, monkeypatch):
+        from erp import mercadolibre_batch_publish as batch
+        from erp import mercadolibre_follow_sell as publisher
+        from erp import mercadolibre_publication_drafts as storage
+        monkeypatch.setattr(workbench.bit_db_api, "list_mercado_store_tokens", lambda: {"rows": [{"id": 7}]})
+        monkeypatch.setattr(workbench, "_filter_mercado_tokens_for_user", lambda data, *args: data)
+        monkeypatch.setattr(workbench, "db_get_mercado_product_items_by_ids", lambda ids: [{"id": 1, "source_item_id": "MLM123"}])
+        monkeypatch.setattr(workbench, "db_get_existing_mercado_user_product_ids", lambda *a, **k: {})
+        monkeypatch.setattr(batch, "DatabaseMercadoLibreClient", lambda token: object())
+        monkeypatch.setattr(batch, "_prepared_listing_from_product_row", lambda *a: ({"id": "MLM123"}, {}))
+        monkeypatch.setattr(batch, "discounted_net_proceeds_usd", lambda *a: 10)
+        monkeypatch.setattr(batch, "site_discount_rate", lambda *a: 100)
+        calls = []
+        def fake_follow(*args, **kwargs):
+            assert not kwargs.get("publish")
+            return {"preflight": {"status": "ready", "issues": [], "mappings": []},
+                    "draft": {"revision": "rev-1", "source": {"attributes": []}}}
+        monkeypatch.setattr(publisher, "follow_sell", fake_follow)
+        monkeypatch.setattr(storage, "shared_draft_storage", lambda *a, **kw: calls.append((a, kw)))
+        response = logged_client(workbench).post('/api/mercado-products/attribute-preflight', headers=HEADERS,
+                     json={"product_item_ids": [1], "token_id": 7, "site_id": "MLM"})
+&gt;       assert response.status_code == 200
+E       assert 503 == 200
+E        +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code
+
+tests/test_mercado_attribute_preflight_routes.py:45: AssertionError</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_preview_rejects_unbounded_work" time="0.002"><failure message="assert 503 == 400&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">workbench = &lt;module 'bit.bit_interface' from '/private/tmp/mercado-publish-e2e-20261013/bit/bit_interface.py'&gt;
+
+    def test_preview_rejects_unbounded_work(workbench):
+        response = logged_client(workbench).post('/api/mercado-products/attribute-preflight', headers=HEADERS,
+                       json={"product_item_ids": list(range(51))})
+&gt;       assert response.status_code == 400
+E       assert 503 == 400
+E        +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code
+
+tests/test_mercado_attribute_preflight_routes.py:57: AssertionError</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_publish_loads_owned_server_draft_and_passes_it_to_worker" time="0.002"><failure message="AssertionError: {'code': 'database_unavailable', 'message': '数据库暂时不可用，请稍后重试', 'status': 'error'}&#10;assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">workbench = &lt;module 'bit.bit_interface' from '/private/tmp/mercado-publish-e2e-20261013/bit/bit_interface.py'&gt;
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x13bdf5370&gt;
+
+    def test_publish_loads_owned_server_draft_and_passes_it_to_worker(workbench, monkeypatch):
+        from test_erp_mercadolibre_batch_publish import _rows
+        from erp import mercadolibre_publication_drafts as storage
+        monkeypatch.setattr(workbench.bit_db_api, 'list_mercado_store_tokens', lambda: {'rows':[{'id':7, 'site_id':'CBT', 'display_name':'测试店铺'}]})
+        monkeypatch.setattr(workbench.bit_db_api, 'publish_workers', lambda value=None: value or 16)
+        monkeypatch.setattr(workbench, '_filter_mercado_tokens_for_user', lambda data, *args: data)
+        monkeypatch.setattr(workbench, 'db_get_mercado_product_items_by_ids', lambda ids: [_rows()[0]])
+        loaded = []
+        def load(action, **kwargs):
+            loaded.append((action, kwargs))
+            return {'revision':'owned-draft'}
+        monkeypatch.setattr(storage, 'shared_draft_storage', load)
+        workers = []
+        class Worker:
+            def __init__(self, **kwargs):
+                workers.append(kwargs)
+            def start(self):
+                pass
+        monkeypatch.setattr(workbench.threading, 'Thread', Worker)
+        monkeypatch.setattr(workbench, '_mercado_publish_state', {'running':False})
+        response = logged_client(workbench).post('/api/mercado-products/publish', json={
+            'product_item_ids':[11], 'selection_mode':'accounts', 'token_ids':[7], 'site_ids':['MLM'],
+            'quantity':1, 'net_proceeds_ratio':100, 'draft_revisions':{'11:7:MLM':'owned-draft'},
+        })
+&gt;       assert response.status_code == 200, response.json
+E       AssertionError: {'code': 'database_unavailable', 'message': '数据库暂时不可用，请稍后重试', 'status': 'error'}
+E       assert 503 == 200
+E        +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code
+
+tests/test_mercado_attribute_preflight_routes.py:84: AssertionError</failure></testcase><testcase classname="tests.test_mercado_collection_quality" name="test_valid_measurements_attributes_and_zero_shipping_have_no_warning" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[None]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[ ]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[0]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[-1]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[NaN]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[Infinity]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_invalid_weight_and_partial_dimensions_are_named[broken]" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_volumetric_fallback_does_not_count_as_actual_weight" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_missing_net_names_calculation_inputs_and_preserves_negative_results" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_partial_and_variant_attributes_are_reported_and_alternate_evidence_is_used" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_malformed_snapshot_does_not_hide_missing_attributes" time="0.001" /><testcase classname="tests.test_mercado_collection_quality" name="test_list_and_detail_report_the_same_missing_fields" time="0.001" /><testcase classname="tests.test_mercado_infringement_browser" name="test_both_lists_render_clickable_risk_and_single_item_detection[collection]" time="11.433"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x138d86980&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_both_lists_render_clickable_risk_and_single_item_detection[products]" time="0.124"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x138d86020&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_selected_task_keeps_scope_filter_snapshot_and_page" time="10.211"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x138d86160&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_detail_escapes_evidence_and_requires_scoped_release" time="0.127"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x12b7f5a80&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_mobile_dialog_stays_inside_viewport_and_range_is_explicit" time="10.260"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x12b1ad080&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_cross_page_ranges_send_explicit_filters_without_page_limit[filtered]" time="0.126"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x12b1acf40&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_cross_page_ranges_send_explicit_filters_without_page_limit[unchecked]" time="10.228"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x12c770180&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_publish_readiness_retains_risky_product_and_checks_review_sites" time="0.146"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x12c771da0&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_task_failures_offer_details_and_retry_only_unfinished" time="10.281"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x13d4954e0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_review_permission_is_separate_and_candidates_preserve_manual_rules" time="0.743"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b961fd0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x13d495d00&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_preflight_shows_reports_and_invalidates_after_settings_change" time="2.332" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_report_escapes_untrusted_collected_values" time="0.603" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[1440]" time="5.740"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for get_by_label(&quot;型号&quot;, exact=True)">console_page = &lt;Page url='http://console.test/'&gt;, width = 1440
+
+    @pytest.mark.parametrize("width", [1440, 390])
+    def test_user_can_complete_a_missing_attribute_and_recheck(console_page, width):
+        page = console_page
+        page.set_viewport_size({"width": width, "height": 1000})
+        calls = []
+        def preview(route):
+            data = route.request.post_data_json
+            calls.append(data)
+            corrected = bool(data.get('corrections'))
+            result = {"product_id": 1, "source_item_id": "MLM123", "preflight": {
+                "status": "ready" if corrected else "needs_completion", "mappings": [],
+                "issues": [] if corrected else [{"scope":"商品", "attribute_id":"MODEL", "severity":"error", "message":"缺少型号"}]}}
+            if corrected:
+                result['revision'] = 'corrected-draft'
+            else:
+                result['correction_fields'] = [{"category_id":"MLM1", "attribute_id":"MODEL", "sku_index":None,
+                                               "scope":"商品", "name":"型号", "choices":[], "combination":False}]
+            route.fulfill(content_type='application/json', body=json.dumps({'status':'success','data':{'results':[result]}}))
+        page.route('**/api/mercado-products/attribute-preflight', preview)
+        page.evaluate("""() =&gt; {
+            mercadoListMode = 'products'; selectedMercadoCollectionIds.add(1);
+            mercadoStoreTokenRows = [{id:7, site_id:'CBT', display_name:'测试店铺', site_settings:[]}];
+            mercadoPublishMode.value = 'accounts';
+            mercadoPublishStore.innerHTML = '&lt;option value="7" selected&gt;测试店铺&lt;/option&gt;';
+            mercadoPublishSite.innerHTML = '&lt;option value="MLM" selected&gt;墨西哥&lt;/option&gt;';
+            mercadoPublishQuantity.value = 1; mercadoPublishRatio.value = 100;
+            window.syncConsoleWorkflow();
+            const card = document.getElementById('mercado-product-actions');
+            card.closest('.tab-page').classList.add('active'); card.style.display = 'block';
+            card.closest('#mercado-list-module').classList.add('products-mode');
+            document.getElementById('mercado-publish-workspace').open = true;
+        }""")
+        page.locator('#mercado-attribute-preflight-run').click()
+&gt;       page.get_by_label('型号', exact=True).fill('M-123')
+
+tests/test_mercado_attribute_preflight_browser.py:112: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x13bb46630&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x12c7afce0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E           Call log:
+E             - waiting for get_by_label("型号", exact=True)
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[390]" time="1.997" /><testcase classname="tests.test_mercado_collection_quality_browser" name="test_collection_hover_preview_and_visible_missing_fields[1440]" time="10.699"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x13b46b2c0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x13d4b82c0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_collection_quality_browser" name="test_collection_hover_preview_and_visible_missing_fields[390]" time="0.136"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x13b46b2c0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x138d86f20&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_mercado_collection_quality_browser" name="test_collection_hover_preview_and_visible_missing_fields[320]" time="10.234"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x13b46b2c0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x12ac88e00&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_mercado_collection_quality_browser" name="test_stale_salesperson_option_is_removed_and_query_resets" time="13.233"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x13b46b2c0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x12bce7420&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_advanced_filters_keep_values_and_show_active_count" time="10.759"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x12c782700&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_product_filters_and_selection_gate[1440]" time="0.141"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x13b45c220&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_product_filters_and_selection_gate[390]" time="10.249"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x13bb8d300&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_review_preserves_settings_and_selection_changes_invalidate_it" time="0.136"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x12c7ae340&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_invalid_stock_cannot_reach_review" time="10.264"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x13d41bba0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_group_review_and_cancel_do_not_publish" time="0.143"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+&gt;       page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_console_ui_browser.py:272: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+run_regression.py:113: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Browser.new_page.&lt;locals&gt;.inner at 0x13d41aa20&gt;
+is_internal = False, title = 'Create page'
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_past_schedule_stays_in_settings" time="10.641"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">console_browser = &lt;Browser type=&lt;BrowserType name=chromium executable_path=/Users/a11/Library/Caches/ms-playwright/chromium-1181/chrome-mac/Chromium.app/Contents/MacOS/Chromium&gt; version=155.0.4283.45&gt;
+
+    @pytest.fixture
+    def console_page(console_browser):
+        env = Environment(loader=FileSystemLoader(ROOT / "bit/templates"))
+        html = env.get_template("index.html").render(
+            current_user={"username": "preview", "display_name": "界面预览", "is_admin": True},
+            can_change_task_workers=False,
+            runtime_role="server", url_for=lambda endpoint, filename: "/static/" + filename,
+        )
+        page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+    
+        def route(request):
+            path = urlsplit(request.request.url).path
+            if path == "/":
+                request.fulfill(body=html, content_type="text/html")
+            elif path.startswith("/static/"):
+                request.fulfill(path=str(ROOT / "bit" / path.lstrip("/")))
+            else:
+                request.fulfill(content_type="application/json", body=json.dumps(
+                    {"success": True, "data": [], "items": [], "stores": [], "groups": [], "total": 0}
+                ))
+    
+        page.route("**/*", route)
+&gt;       page.goto("http://console.test/")
+
+tests/test_console_ui_browser.py:286: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x13bbd0e00&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E           Call log:
+E             - navigating to "http://console.test/", waiting until "load"
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</error><error message="failed on teardown with &quot;FileNotFoundError: Browser.close: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'&quot;">@pytest.fixture(scope="module")
+    def console_browser():
+        playwright = pytest.importorskip("playwright.sync_api")
+        with playwright.sync_playwright() as pw:
+            candidates = [
+                os.environ.get("CONSOLE_TEST_BROWSER", ""), pw.chromium.executable_path,
+                "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+            ]
+            executable = next((path for path in candidates if path and Path(path).is_file()), None)
+            if not executable:
+                pytest.skip("Install Playwright Chromium or set CONSOLE_TEST_BROWSER")
+            browser = pw.chromium.launch(executable_path=executable, headless=True)
+            yield browser
+&gt;           browser.close()
+
+tests/test_console_ui_browser.py:235: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14261: in close
+    return mapping.from_maybe_impl(self._sync(self._impl_obj.close(reason=reason)))
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:241: in close
+    raise e
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:238: in close
+    await self._channel.send("close", None, {"reason": reason})
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x12b2e3bf0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x12c781ee0&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           FileNotFoundError: Browser.close: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-publish-e2e-20261013/bit/static/images/zeshun-monogram-gold.png'
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: FileNotFoundError</error></testcase></testsuite></testsuites>

@@ -25,6 +25,7 @@ class EnrollmentMock:
         self.item_requests = []
         self.previews = []
         self.submissions = []
+        self.job_requests = []
         self.list_refreshes = []
         self.target_status = target_status
         self.campaign = {
@@ -139,9 +140,24 @@ class EnrollmentMock:
                                    "item_id": ITEM_ID, "deal_price": 400,
                                    "currency_id": "MXN", "status": "ready",
                                }]})
-        elif path == "/api/promotions/jobs" and request.method == "POST":
+        elif path == "/api/promotions/enroll" and request.method == "POST":
             self.submissions.append(request.post_data_json)
+            self.json(route, {"status": "running", "job_id": "offline-enrollment-job",
+                              "submitted_count": 1, "excluded_count": 0,
+                              "excluded_reasons": []})
+        elif path == "/api/promotions/jobs" and request.method == "POST":
             self.json(route, {"results": [{"item_id": ITEM_ID, "status": "succeeded"}]})
+        elif path == "/api/promotions/jobs":
+            query = parse_qs(url.query)
+            if query.get("job_id"):
+                self.job_requests.append(query)
+                self.json(route, {"rows": [{
+                    "job_id": "offline-enrollment-job", "action": "enroll",
+                    "status": "succeeded", "total_count": 1,
+                    "success_count": 1, "failed_count": 0, "unknown_count": 0,
+                }]})
+            else:
+                self.json(route, {"rows": []})
         elif path == "/api/store-links":
             self.list_refreshes.append(request.url)
             enrolled_link = dict(self.link, available_promotions=[],
@@ -170,7 +186,7 @@ def enrollment_page(console_browser):
     page.close()
 
 
-def test_link_enrollment_opens_exact_campaign_prices_previews_and_submits(enrollment_page):
+def test_link_enrollment_opens_exact_campaign_prices_and_submits_directly(enrollment_page):
     mock = EnrollmentMock(enrollment_page)
     button = enrollment_page.locator(f'button[onclick="openStoreLinkPromotion(42, {PROMOTION_ID})"]')
     assert button.is_enabled()
@@ -199,25 +215,21 @@ def test_link_enrollment_opens_exact_campaign_prices_previews_and_submits(enroll
     assert "至少降价 10%" in frame.locator("#itemRows").inner_text()
     mock.screenshot("02-selected-product-and-price.png")
 
+    assert frame.locator("#enrollBtn").is_enabled()
     frame.locator("#enrollBtn").click()
-    frame.locator("#previewDialog").wait_for(state="visible")
-    assert mock.previews == [{
-        "promotion_id": PROMOTION_ID, "action": "enroll", "rows": [{
+    assert mock.submissions == [{
+        "promotion_id": PROMOTION_ID, "rows": [{
             "item_local_id": ITEM_LOCAL_ID, "deal_price": "400.00",
             "start_date": "", "finish_date": "",
         }],
     }]
-    assert ITEM_ID in frame.locator("#previewRows").inner_text()
-    assert "MXN 400.00" in frame.locator("#previewRows").inner_text()
-    assert "校验通过" in frame.locator("#previewRows").inner_text()
-    assert frame.locator("#confirmBtn").inner_text() == "确认提交 1 件商品"
-    assert not mock.submissions
-    mock.screenshot("03-enrollment-confirmation-preview.png")
-
-    frame.locator("#confirmBtn").click()
-    frame.locator("#previewDialog").wait_for(state="hidden")
+    assert frame.locator("#previewDialog").is_hidden()
+    assert not mock.previews
     frame.locator("#selectionText").filter(has_text="已选择 0 件商品").wait_for()
-    assert mock.submissions == [{"preview_id": "offline-preview-1", "confirmed": True}]
+    assert len(mock.job_requests) == 1
+    poll_query = mock.job_requests[0]
+    assert poll_query["summary"] == ["1"]
+    assert poll_query["job_id"] == ["offline-enrollment-job"]
     assert len(mock.item_requests) == 2
     assert frame.locator('#itemRows input[type="checkbox"]:checked').count() == 0
 

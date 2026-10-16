@@ -44,6 +44,8 @@ def test_publish_record_salesperson_filter_and_store_linkage(console_page, width
     }""")
     page.wait_for_function("mercadoPublishRecordRows.length === 1")
     selector = page.locator("#publish-record-salesperson")
+    if not selector.is_visible():
+        page.locator(".zs-advanced-filters:has(#publish-record-salesperson) > summary").click()
     assert selector.is_visible()
     assert set(selector.locator("option").all_text_contents()) == {"全部业务员", "未分配", "张三", "李四"}
     bounds = selector.bounding_box()
@@ -65,6 +67,8 @@ def test_publish_record_salesperson_filter_and_store_linkage(console_page, width
     assert requests[-1]["salesperson"] == ["张三"]
 
     # Group and salesperson must match the same site setting.
+    if not page.locator("#publish-record-group").is_visible():
+        page.locator(".zs-advanced-filters:has(#publish-record-group) > summary").click()
     page.locator("#publish-record-group").select_option("普通组")
     assert page.locator("#publish-record-store option").count() == 0
     page.locator("#publish-record-group").select_option("")

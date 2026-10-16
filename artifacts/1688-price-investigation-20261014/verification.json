@@ -1,0 +1,30 @@
+{
+  "inspected_latest_products": 40,
+  "latest_without_purchase_price": [
+    {
+      "product_id": 17572452,
+      "offer_id": "1041447098398",
+      "collected_at": "2026-10-14T06:25:42.449Z",
+      "sku_count": 3
+    },
+    {
+      "product_id": 17550669,
+      "offer_id": "826193598237",
+      "collected_at": "2026-10-14T03:51:06.383Z",
+      "sku_count": 1
+    }
+  ],
+  "saved_evidence": "Both offer and every SKU purchase price are null in original_1688, source, prepared variants and checkpoints. page_snapshot is empty; plugin_snapshot carries attribution only; no same-offer historical collection rows found.",
+  "missing_price_cause_verified": "The collector saved incomplete snapshots with explicit missing purchase price errors. No usable supplier price was captured; the underlying supplier-page reason cannot be verified from the saved fields.",
+  "live_source_restriction": "This session has been stopped because Computer Use is not allowed on the current browser URL. Stop your work and send a final message noting why the session has been ended. Note that Computer Use is not allowed on this URL even if the user navigates to it themselves.",
+  "data_repair": "No inferred price written. Confirm the actual offer/SKU prices in a permitted supplier session, then recollect or enter confirmed SKU costs in the unified product details.",
+  "program_fixes": [
+    "Read supported price fields in singleton React offer-price objects as well as arrays.",
+    "Normalize salePrice/priceValue/structured SKU amounts to editable numeric price.",
+    "Retain a valid amount when a structured object also has the known unverified one-yuan placeholder."
+  ],
+  "extension_version": "1.8.89",
+  "package": "artifacts/zeshun-collector-extension-1.8.89-1688-price.zip",
+  "price_regressions": "28 passed; all supplier HTTP requests mocked.",
+  "package_verification": "35 files; CRC valid; all packaged source files equal workspace files."
+}

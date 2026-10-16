@@ -112,6 +112,21 @@ def test_empty_primary_price_does_not_hide_valid_amount(supplier_page):
     assert supplier_extract(supplier_page)['product']['price'] == 18.5
 
 
+@pytest.mark.parametrize('value', [{'price': '18.50'}, {'price': '', 'priceAmount': '18.50'}])
+def test_single_offer_price_object_survives_page_bridge(supplier_page, value):
+    clear_sku_prices(supplier_page)
+    supplier_page.evaluate("""value => {
+      const node=document.createElement('div');node.id='productPrice';document.body.append(node);
+      node.__reactFiber$test={memoizedProps:{offerPrice:value,
+        recommendations:[{price:'0.01'}]}};
+      const now=Date.now;let reads=0;Date.now=()=>now()+(reads++ > 1 ? 20000 : 0);
+    }""", value)
+    product = supplier_extract(supplier_page)['product']
+    assert product['price'] == 18.5
+    assert product['scrape_status'] == 'partial'
+    assert all(row['price'] is None for row in product['variations'])
+
+
 def test_one_yuan_placeholder_does_not_hide_real_sku_cost(supplier_page):
     supplier_page.evaluate("""() => {
       for (const row of document.querySelector('#skuSelection').__reactFiber$test.memoizedProps.skuItems) {

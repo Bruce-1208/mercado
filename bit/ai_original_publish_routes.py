@@ -4,6 +4,7 @@ import threading
 
 from flask import jsonify, request
 
+from bit import product_access
 from erp.ai_original_publish import PublicationService, PublicationStore, platform_id
 
 
@@ -18,11 +19,19 @@ def register_routes(app, *, login_required, current_user, has_permission, load_r
                     own_store_only=lambda user: False, service=None):
     initialization_lock = threading.Lock()
 
+    def authorize_row(row):
+        user = current_user() or {}
+        if not product_access.can_operate(row, user):
+            raise PermissionError("当前账号无权发布所选 AI 原创产品")
+
     def backend():
         nonlocal service
         with initialization_lock:
             if service is None:
-                service = PublicationService(PublicationStore(secret_key=app.secret_key), load_rows)
+                service = PublicationService(
+                    PublicationStore(secret_key=app.secret_key), load_rows,
+                    authorize_row=authorize_row,
+                )
         return service
 
     def scope(write=False, admin=False):

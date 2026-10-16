@@ -1,0 +1,26 @@
+{
+  "version": "1.8.66",
+  "fix": "Async appeal plan preparation with durable request receipts; immediate popup progress, polling, stop handling, and endpoint-specific timeout messages.",
+  "verification": {
+    "node_appeal_and_auth_tests_passed": 34,
+    "python_appeal_ui_and_package_tests_passed": 33,
+    "broader_extension_suite": {
+      "passed": 57,
+      "failed": 7,
+      "failure_areas": [
+        "1688 collection selector assertion",
+        "weight/price pause interval assertion",
+        "weight/price endpoint expectations",
+        "Zying infringement title batch assertion",
+        "collection AI permissions"
+      ]
+    },
+    "real_store_submission_tested": false
+  },
+  "deployment": {
+    "web_pid": 44962,
+    "worker_restart_required": false
+  },
+  "package": "zeshun-collector-extension-1.8.66-appeal-startup.zip",
+  "user_action": "Install/reload extension 1.8.66, then retry starting from the store page."
+}

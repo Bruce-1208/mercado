@@ -80,7 +80,7 @@ def main():
                         a = recovered['ai_original']
                         cursor.execute("UPDATE erp_mercadolibre_products SET source_snapshot_json=%s, title=%s, description_text=%s, review_status='unreviewed' WHERE id=%s", (json.dumps(recovered, ensure_ascii=False), a['title'], a['description'], row['id']))
                     if category_missing:
-                        cursor.execute('UPDATE erp_mercadolibre_products SET category_id=%s, category_name=%s WHERE id=%s', (category, state.get('category_name') or category, row['id']))
+                        cursor.execute("UPDATE erp_mercadolibre_products SET category_id=%s, category_name=%s, review_status='unreviewed' WHERE id=%s", (category, state.get('category_name') or category, row['id']))
         if args.apply:
             connection.commit()
         else:

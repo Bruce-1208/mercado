@@ -283,3 +283,47 @@ def test_incoming_translation_reuses_known_site_without_network():
                      session, lambda texts, source, target: ['您好'])
     assert result == {'translations': ['您好']}
     assert not session.calls
+
+
+def test_claim_images_upload_before_message_without_translation():
+    import base64
+    import io
+    from PIL import Image
+    stream = io.BytesIO()
+    Image.new('RGB', (2, 2), 'blue').save(stream, format='PNG')
+    session = Session([Response(payload={'file_name': 'uploaded.png'}), Response(201, {'id': 'sent'})])
+    execute('claims-send', {'claim_id': '100', 'receiver_role': 'complainant',
+        'auto_translate': True, 'images': [{'content_base64': base64.b64encode(stream.getvalue()).decode()}]}, session)
+    assert session.calls[0][1].endswith('/claims/100/attachments')
+    assert session.calls[-1][2]['json']['attachments'] == ['uploaded.png']
+    assert session.calls[-1][2]['json']['message'] == 'Please see the attached images.'
+
+
+@pytest.mark.parametrize('images', [[{'content_base64': 'invalid'}], [{'content_base64': 'aGVsbG8='}], [{}] * 6])
+def test_claim_invalid_images_never_upload_or_send(images):
+    session = Session([])
+    with pytest.raises(ValueError):
+        execute('claims-send', {'claim_id': '100', 'receiver_role': 'complainant', 'images': images}, session)
+    assert not session.calls
+
+
+def test_claim_attachment_upload_failure_does_not_send():
+    import base64
+    import io
+    from PIL import Image
+    stream = io.BytesIO()
+    Image.new('RGB', (2, 2)).save(stream, format='PNG')
+    session = Session([Response(400, {'message': 'upload rejected'})])
+    with pytest.raises(Exception, match='upload rejected'):
+        execute('claims-send', {'claim_id': '100', 'receiver_role': 'complainant',
+            'images': [{'content_base64': base64.b64encode(stream.getvalue()).decode()}]}, session)
+    assert len(session.calls) == 1
+
+
+def test_claim_image_upload_uses_legacy_fallback():
+    session = Session([Response(400, {'message': 'This functionality is not available for Claims 1.0.'}),
+                       Response(payload={'file_name': 'legacy.png'})])
+    client = MercadoCommunicationsClient('secret', session=session)
+    result = client.upload_claim_attachment('100', 'image.png', b'image', content_type='image/png')
+    assert result['file_name'] == 'legacy.png'
+    assert session.calls[-1][1].endswith('/post-purchase/v1/claims/100/attachments')

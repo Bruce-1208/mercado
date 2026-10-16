@@ -65,7 +65,8 @@ def test_ad_account_currency_requires_consistent_explicit_billing_currency(monke
     assert result['account']['currency_id'] == expected
 
 
-def test_lock_discovery_never_locks_unrelated_scan_rows():
+def test_lock_discovery_never_locks_unrelated_scan_rows(monkeypatch):
+    monkeypatch.setattr("erp.product_title_index.available", lambda _: False)
     cursor = Mock()
     cursor.fetchall.side_effect = [[{'id':4}, {'id':2}], [{'id':2,'review_status':'approved'}]]
     rows = lock_matching_products(cursor, 'a', 'Exact title', 'id,review_status')
@@ -142,3 +143,15 @@ def test_closed_stores_require_explicit_history_scope():
         assert _today_store_matches({'enabled':True}, {})
     with app.test_request_context('/today?include_inactive=1'):
         assert _today_store_matches({'enabled':False}, {})
+
+
+def test_short_transaction_preserves_query_error_on_broken_connection():
+    db, cursor = fake_connection()
+    original = RuntimeError(2013, 'query timed out')
+    db.rollback.side_effect = RuntimeError(0, '')
+    cursor.execute.side_effect = [None, None, RuntimeError(0, '')]
+    operation = Mock(side_effect=original)
+    with pytest.raises(RuntimeError) as error:
+        run(db, operation)
+    assert error.value is original
+    operation.assert_called_once()

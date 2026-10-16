@@ -32,7 +32,8 @@ def test_advanced_filters_keep_values_and_show_active_count(console_page):
     field.fill('待复核')
     summary.click()
     assert not field.is_visible()
-    assert '已设置 1 项' in summary.inner_text()
+    assert summary.inner_text() == '高级筛选 (1)'
+    assert '已设置 1 项' in summary.get_attribute('aria-label')
     assert field.input_value() == '待复核'
     page.locator('#tab-orders .order-filter-actions').get_by_role('button', name='重置').click()
     assert summary.inner_text() == '高级筛选'
@@ -42,19 +43,26 @@ def test_advanced_filters_keep_values_and_show_active_count(console_page):
 def test_product_filters_and_selection_gate(product_page, width):
     page = product_page
     page.set_viewport_size({'width': width, 'height': 1000})
-    assert page.locator('#mercado-review-filter').is_visible()
+    review_filter = page.locator('#mercado-review-filter')
+    if width <= 760:
+        summary = page.locator('#mercado-product-filters > .zs-advanced-filters > summary')
+        summary.click()
+        assert review_filter.is_visible()
+        summary.click()
+    else:
+        assert review_filter.is_visible()
     assert not page.locator('#mercado-weight-min').is_visible()
     assert not page.locator('#mercado-publish-quantity').is_visible()
     assert page.locator('#mercado-publish-next').is_disabled()
-    assert not page.locator('.zs-bulk-menu').is_visible()
+    assert not page.locator('#mercado-collection-actions > .zs-bulk-menu').is_visible()
     page.locator('.mercado-item-select').check()
     assert page.locator('#mercado-publish-next').is_enabled()
-    assert page.locator('.zs-bulk-menu').is_visible()
+    assert page.locator('#mercado-collection-actions > .zs-bulk-menu').is_visible()
     assert not page.locator('#mercado-delete-selected').is_visible()
     page.locator('#mercado-publish-next').click()
     assert page.locator('#mercado-publish-quantity').is_visible()
     assert not page.locator('#mercado-publish-selected').is_visible()
-    box = page.locator('.zs-publish-workspace').bounding_box()
+    box = page.locator('#mercado-publish-workspace').bounding_box()
     assert box['x'] >= 0 and box['x'] + box['width'] <= width
 
 

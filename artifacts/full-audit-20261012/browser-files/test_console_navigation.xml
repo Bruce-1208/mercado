@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="3" time="35.785" timestamp="2026-10-12T16:44:34.781743+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_console_navigation" name="test_navigation_search_collapse_and_permissions" time="7.377"><failure message="playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.">tests/test_console_navigation.py:22: in test_navigation_search_collapse_and_permissions
+    page.wait_for_function("document.querySelector('[data-group=system]').hidden")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:11559: in wait_for_function
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:1111: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:860: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.</failure></testcase><testcase classname="tests.test_console_navigation" name="test_mobile_navigation_survives_saved_desktop_collapse" time="1.775" /><testcase classname="tests.test_console_navigation" name="test_mobile_navigation_focus_escape_and_backdrop" time="26.047"><failure message="assert False&#10; +  where False = evaluate(&quot;getComputedStyle(document.body).overflow !== 'hidden'&quot;)&#10; +    where evaluate = &lt;Page url='http://console.test/'&gt;.evaluate">tests/test_console_navigation.py:68: in test_mobile_navigation_focus_escape_and_backdrop
+    assert page.evaluate("getComputedStyle(document.body).overflow !== 'hidden'")
+E   assert False
+E    +  where False = evaluate("getComputedStyle(document.body).overflow !== 'hidden'")
+E    +    where evaluate = &lt;Page url='http://console.test/'&gt;.evaluate</failure></testcase></testsuite></testsuites>

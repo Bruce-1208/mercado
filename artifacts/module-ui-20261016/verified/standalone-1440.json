@@ -1,0 +1,605 @@
+[
+  {
+    "page": "account_billing",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "account_billing-view-0",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "account_billing-view-1",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "print-wallet-record-order",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 170
+      },
+      {
+        "id": "print-wallet-record-printer",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 170
+      },
+      {
+        "id": "print-wallet-record-kind",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 125
+      },
+      {
+        "id": "print-wallet-record-date-from-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 125
+      }
+    ]
+  },
+  {
+    "page": "account_profile",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "ai_billing",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "ai-billing-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 200.15625
+      },
+      {
+        "id": "ai-billing-task-type",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 200.15625
+      },
+      {
+        "id": "ai-billing-model",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 200.171875
+      },
+      {
+        "id": "ai-billing-keyword",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 257.34375
+      },
+      {
+        "id": "ai-billing-start-date-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 200.15625
+      }
+    ]
+  },
+  {
+    "page": "ai_video_details",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 297.5625
+      },
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 297.5625
+      },
+      {
+        "id": "",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 231.4375
+      },
+      {
+        "id": "",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 231.4375
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "task-scope",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "all",
+        "width": 270.609375
+      },
+      {
+        "id": "filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 270.625
+      },
+      {
+        "id": "search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 270.609375
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-view-0",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "task-scope",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "all",
+        "width": 270.609375
+      },
+      {
+        "id": "filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 270.625
+      },
+      {
+        "id": "search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 270.609375
+      }
+    ]
+  },
+  {
+    "page": "ai_weight_price-view-1",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "ai_weight_price-view-2",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "ai_weight_price-view-3",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "automation_center",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 204.640625
+      },
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 204.65625
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 159.171875
+      },
+      {
+        "id": "",
+        "type": "datetime-local",
+        "tag": "INPUT",
+        "value": "",
+        "width": 159.171875
+      },
+      {
+        "id": "",
+        "type": "datetime-local",
+        "tag": "INPUT",
+        "value": "",
+        "width": 159.171875
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 159.1875
+      }
+    ]
+  },
+  {
+    "page": "clearance_alerts",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "ca-store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 258.0625
+      },
+      {
+        "id": "ca-site",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 258.0625
+      },
+      {
+        "id": "ca-status",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 258.0625
+      },
+      {
+        "id": "ca-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 331.8125
+      }
+    ]
+  },
+  {
+    "page": "employee_tasks",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "active",
+        "width": 1152
+      }
+    ]
+  },
+  {
+    "page": "infraction_dashboard",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "search-input",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 213.171875
+      },
+      {
+        "id": "view-mode-select",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "current",
+        "width": 165.796875
+      },
+      {
+        "id": "days-select-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "30",
+        "width": 165.8125
+      },
+      {
+        "id": "group-select",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 165.796875
+      },
+      {
+        "id": "salesperson-select",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 165.8125
+      },
+      {
+        "id": "source-select",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 165.796875
+      },
+      {
+        "id": "category-select",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 165.8125
+      }
+    ]
+  },
+  {
+    "page": "integration_settings",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "login",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "mercado_action_center",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "active",
+        "width": 1156
+      }
+    ]
+  },
+  {
+    "page": "mercado_collection_detail",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "mercado_promotions",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "storeTrigger",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 113
+      },
+      {
+        "id": "salespersonFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "groupFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "siteFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "typeFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "statusFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.875
+      },
+      {
+        "id": "participatedFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "searchFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 179.828125
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-view-0",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "storeTrigger",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 113
+      },
+      {
+        "id": "salespersonFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "groupFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "siteFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "typeFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "statusFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.875
+      },
+      {
+        "id": "participatedFilter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 139.859375
+      },
+      {
+        "id": "searchFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 179.828125
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-view-1",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "itemProductFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 564
+      },
+      {
+        "id": "itemIdFilter",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 564
+      }
+    ]
+  },
+  {
+    "page": "mercado_promotions-view-2",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "price_competition",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 359.734375
+      },
+      {
+        "id": "site",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 359.734375
+      },
+      {
+        "id": "search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 462.53125
+      }
+    ]
+  },
+  {
+    "page": "print_wallet",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "product_diagnosis",
+    "width": 1440,
+    "fields": [
+      {
+        "id": "pd-store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 219.828125
+      },
+      {
+        "id": "pd-site",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 219.84375
+      },
+      {
+        "id": "pd-risk",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 219.828125
+      },
+      {
+        "id": "pd-category",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 219.84375
+      },
+      {
+        "id": "pd-search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 282.65625
+      }
+    ]
+  },
+  {
+    "page": "register",
+    "width": 1440,
+    "fields": []
+  },
+  {
+    "page": "size_charts",
+    "width": 1440,
+    "fields": []
+  }
+]

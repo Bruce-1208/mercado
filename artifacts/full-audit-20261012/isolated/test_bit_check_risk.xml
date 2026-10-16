@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="18" time="0.141" timestamp="2026-10-12T16:37:30.205240+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_bit_check_risk" name="test_normalize_ai_results_supports_three_levels_and_keywords" time="0.001" /><testcase classname="tests.test_bit_check_risk" name="test_normalize_ai_results_rejects_missing_rows" time="0.000" /><testcase classname="tests.test_bit_check_risk" name="test_classify_risk_records_sends_only_title_to_ai" time="0.000" /><testcase classname="tests.test_bit_check_risk" name="test_classify_risk_records_forwards_openai_compatible_connection" time="0.000" /><testcase classname="tests.test_bit_check_risk" name="test_scan_products_filters_category_and_writes_all_risk_levels" time="0.001" /><testcase classname="tests.test_bit_check_risk" name="test_multisource_scan_uses_blacklist_before_deepseek" time="0.002" /><testcase classname="tests.test_bit_check_risk" name="test_whitelist_match_is_sent_to_deepseek_as_non_infringing_constraint" time="0.001" /><testcase classname="tests.test_bit_check_risk" name="test_unreviewed_knowledge_neither_blocks_nor_allows_products[manual-pending]" time="0.001"><failure message="AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'borderline': []}&#10;  Use -v to get more diff">tests/test_bit_check_risk.py:269: in test_unreviewed_knowledge_neither_blocks_nor_allows_products
+    assert captured["products"][0]["knowledge"] == {"blacklist": [], "whitelist": []}
+E   AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+E     
+E     Omitting 2 identical items, use -vv to show
+E     Left contains 1 more item:
+E     {'borderline': []}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_bit_check_risk" name="test_unreviewed_knowledge_neither_blocks_nor_allows_products[auto-blacklist]" time="0.001"><failure message="AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'borderline': []}&#10;  Use -v to get more diff">tests/test_bit_check_risk.py:269: in test_unreviewed_knowledge_neither_blocks_nor_allows_products
+    assert captured["products"][0]["knowledge"] == {"blacklist": [], "whitelist": []}
+E   AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+E     
+E     Omitting 2 identical items, use -vv to show
+E     Left contains 1 more item:
+E     {'borderline': []}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_bit_check_risk" name="test_unreviewed_knowledge_neither_blocks_nor_allows_products[auto-whitelist]" time="0.001"><failure message="AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'borderline': []}&#10;  Use -v to get more diff">tests/test_bit_check_risk.py:269: in test_unreviewed_knowledge_neither_blocks_nor_allows_products
+    assert captured["products"][0]["knowledge"] == {"blacklist": [], "whitelist": []}
+E   AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+E     
+E     Omitting 2 identical items, use -vv to show
+E     Left contains 1 more item:
+E     {'borderline': []}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_bit_check_risk" name="test_unreviewed_knowledge_neither_blocks_nor_allows_products[wipo-blacklist]" time="0.001"><failure message="KeyError: 'products'">tests/test_bit_check_risk.py:269: in test_unreviewed_knowledge_neither_blocks_nor_allows_products
+    assert captured["products"][0]["knowledge"] == {"blacklist": [], "whitelist": []}
+           ^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'products'</failure></testcase><testcase classname="tests.test_bit_check_risk" name="test_unreviewed_knowledge_neither_blocks_nor_allows_products[wikidata-blacklist]" time="0.001"><failure message="AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'borderline': []}&#10;  Use -v to get more diff">tests/test_bit_check_risk.py:269: in test_unreviewed_knowledge_neither_blocks_nor_allows_products
+    assert captured["products"][0]["knowledge"] == {"blacklist": [], "whitelist": []}
+E   AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+E     
+E     Omitting 2 identical items, use -vv to show
+E     Left contains 1 more item:
+E     {'borderline': []}
+E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_bit_check_risk" name="test_manual_allow_rule_cannot_mask_a_different_blocked_brand" time="0.002" /><testcase classname="tests.test_bit_check_risk" name="test_manual_allow_rule_preserves_independent_ai_risk" time="0.001" /><testcase classname="tests.test_bit_check_risk" name="test_update_zying_product_risks_clears_keywords_for_level_zero" time="0.000" /><testcase classname="tests.test_bit_check_risk" name="test_multisource_risk_writer_mirrors_result_to_product_list" time="0.001" /><testcase classname="tests.test_bit_check_risk" name="test_get_zying_risk_candidates_filters_zying_category" time="0.000" /><testcase classname="tests.test_bit_check_risk" name="test_get_zying_risk_results_filters_and_uses_whitelisted_sort" time="0.000" /></testsuite></testsuites>

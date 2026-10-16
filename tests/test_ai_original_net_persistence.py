@@ -64,6 +64,9 @@ class ProductDB:
     def fetchone(self):
         return deepcopy(self.row)
 
+    def fetchall(self):
+        return [deepcopy(self.row)] if self.row else []
+
     def commit(self):
         self.committed = True
 

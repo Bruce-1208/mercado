@@ -32,10 +32,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import requests
+import agent_update
 
 
-AGENT_VERSION = "1.2.9"
-DEFAULT_SERVER_URL = "https://wuhanzeshun.com"
+AGENT_VERSION = "1.3.0"
+DEFAULT_SERVER_URL = "https://wuhanzeshun.cn"
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_HEARTBEAT_SECONDS = 10.0
 RUNNING_HEARTBEAT_SECONDS = 5.0
@@ -216,7 +217,13 @@ class AgentRuntimeLog:
             # unset.  The status window and agent.log remain the authoritative
             # outputs in that mode.
             if sys.stdout is not None:
-                print(rendered, flush=True)
+                try:
+                    print(rendered, flush=True)
+                except (OSError, UnicodeError, ValueError):
+                    # Detached updates and English-language Windows consoles
+                    # can expose a closed/CP1252 stdout. Logging must still reach
+                    # agent.log and must never abort an update transaction.
+                    pass
             try:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 self._rotate(len(encoded))
@@ -372,7 +379,7 @@ class AgentStatusWindow:
         self.save_server_url_button.grid(row=0, column=2, padx=(10, 0))
         tk.Label(
             connection,
-            text="填写完整地址，例如 https://wuhanzeshun.com 或 http://127.0.0.1:5000。保存后重启 Agent 生效。",
+            text="填写完整地址，例如 https://wuhanzeshun.cn 或 http://127.0.0.1:5000。保存后重启 Agent 生效。",
             font=("Microsoft YaHei UI", 8),
             foreground="#64778b",
             background="#eaf1f8",
@@ -417,7 +424,8 @@ class AgentStatusWindow:
         self.update_text = tk.StringVar(value="")
         tk.Label(self.update_banner, textvariable=self.update_text, background="#fff3cd",
                  foreground="#754700", wraplength=620, justify="left").pack(side="left")
-        tk.Button(self.update_banner, text="下载新版", command=self._open_update_download).pack(side="right")
+        self.update_button = tk.Button(self.update_banner, text="确定更新", command=self._confirm_update)
+        self.update_button.pack(side="right")
         self.update_banner.pack(fill="x")
         self.update_banner.pack_forget()
 
@@ -539,15 +547,17 @@ class AgentStatusWindow:
         elif "已启动" in content or "业务代码已更新" in content:
             self.status_text.set("在线，等待任务")
 
-    def _open_update_download(self):
-        import webbrowser
-        target = "macos" if sys.platform == "darwin" else "windows"
-        webbrowser.open(f"{self.agent.config.server_url.rstrip('/')}/api/local-agents/download?platform={target}")
+    def _confirm_update(self):
+        if self.agent.request_client_update():
+            self.update_button.configure(state="disabled")
 
     def _drain_logs(self):
         latest = self.agent.latest_agent_version
-        if latest:
-            self.update_text.set(f"Agent 有新版本：{AGENT_VERSION} → {latest}\n请在任务结束后更新，覆盖程序时保留 local-agent.json。")
+        if latest or self.agent.update_status:
+            self.update_text.set(self.agent.update_status or (
+                f"Agent 有新版本：{AGENT_VERSION} → {latest}\n"
+                "点击确定更新后自动下载并重启；会等待当前任务完成，保留配置和设备身份。"))
+            self.update_button.configure(state="disabled" if self.agent.update_requested.is_set() else "normal")
             self.update_banner.pack(fill="x", before=self.log_view.master)
         else:
             self.update_banner.pack_forget()
@@ -559,6 +569,10 @@ class AgentStatusWindow:
             self._append_log(content)
             self._set_status_from_log(content)
         self._refresh_task_button()
+        if self.agent.update_exiting:
+            self.closing = True
+            self._wait_for_shutdown()
+            return
         self.root.after(100, self._drain_logs)
 
     def _refresh_task_button(self):
@@ -776,6 +790,7 @@ class AgentConfig:
             or os.environ.get("BIT_LOCAL_AGENT_CONFIG")
             or (_application_dir() / "local-agent.json")
         )
+        self.config_path = config_path.expanduser().resolve()
         payload = _load_json(config_path)
         self.data_dir = Path(
             _first_nonempty(args.data_dir, payload.get("data_dir")) or _default_data_dir()
@@ -941,6 +956,7 @@ class AgentProcessLock:
 
 
 class LocalAgent:
+    version = AGENT_VERSION
     capabilities = ("appeal", "daily_task", "ai_weight_price", "heartbeat_claim")
 
     def __init__(self, config):
@@ -963,6 +979,37 @@ class LocalAgent:
         self._current_cancel_file = None
         self.queue_id = ""
         self.latest_agent_version = ""
+        self.update_requested = threading.Event()
+        self.update_status = ""
+        self.update_version = ""
+        self.update_exiting = False
+        self.update_token = ""
+        self.restart_arguments = []
+
+    def request_client_update(self):
+        if self.update_requested.is_set() or not self.latest_agent_version:
+            return False
+        if not getattr(sys, "frozen", False):
+            self.update_status = "源码版不支持一键更新，请使用正式 Windows/macOS Agent。"
+            return False
+        self.update_version = self.latest_agent_version
+        self.update_status = "已确认更新，等待当前任务完成后自动下载并重启…"
+        self.update_requested.set()
+        self.log(self.update_status)
+        return True
+
+    def perform_client_update(self):
+        try:
+            agent_update.prepare_update(self, self.update_version)
+        except Exception as exc:
+            self.update_status = f"更新失败：{exc}；可点击确定更新重试。"
+            self.log(self.update_status)
+            self.update_requested.clear()
+            return False
+        self.update_status = "更新已下载并校验，正在自动重启…"
+        self.log(self.update_status)
+        self.update_exiting = True
+        return True
 
     def log(self, message):
         self.runtime_log.write(message)
@@ -1198,7 +1245,7 @@ class LocalAgent:
             return tuple(int(part) for part in parts) if len(parts) == 3 and all(part.isdigit() for part in parts) else (0, 0, 0)
         available = latest if version_parts(latest) > version_parts(AGENT_VERSION) else ""
         if available and available != self.latest_agent_version:
-            self.log(f"Agent 有新版本：{AGENT_VERSION} → {available}；请在任务结束后下载更新，保留 local-agent.json。")
+            self.log(f"Agent 有新版本：{AGENT_VERSION} → {available}；点击“确定更新”即可自动更新，保留配置和设备身份。")
         self.latest_agent_version = available
         return data
 
@@ -1570,6 +1617,13 @@ class LocalAgent:
         self._clear_current_worker(worker_guard)
 
     def run(self):
+        if self.update_token:
+            agent_update.acknowledge_startup(self.config.data_dir, self.update_token, AGENT_VERSION)
+            # Do not claim jobs until the updater commits, so a failed startup
+            # rollback can never interrupt a newly claimed business task.
+            while agent_update.read_pending(self.config.data_dir):
+                if self.shutdown_event.wait(0.2):
+                    return 0
         self.log(
             f"泽顺本机 Agent {AGENT_VERSION} 已启动：{self.config.name} "
             f"({self.config.agent_id})；本地日志：{self.runtime_log.path}"
@@ -1580,6 +1634,11 @@ class LocalAgent:
                 self.log("Agent 已停止")
                 return 0
             try:
+                # This boundary is reached only after run_job has uploaded its
+                # final result. A confirmation during a claim finishes that job
+                # before updating, rather than abandoning its lease.
+                if self.update_requested.is_set() and self.perform_client_update():
+                    return 0
                 self.ensure_enrolled()
                 heartbeat = self.heartbeat()
                 heartbeat_claim_supported = "job" in heartbeat
@@ -1679,6 +1738,8 @@ def build_argument_parser():
         help="不显示图形运行状态窗口，仅写控制台和本地日志",
     )
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--apply-update", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--update-token", default="", help=argparse.SUPPRESS)
     parser.add_argument("--release-dir", default="", help=argparse.SUPPRESS)
     parser.add_argument("--job-file", default="", help=argparse.SUPPRESS)
     parser.add_argument("--cancel-file", default="", help=argparse.SUPPRESS)
@@ -1710,17 +1771,34 @@ def _install_shutdown_handlers(agent):
 
 def main(argv=None):
     args = build_argument_parser().parse_args(argv)
+    if args.apply_update:
+        return agent_update.apply_update(args.apply_update, AgentProcessLock, AgentRuntimeLog)
     if args.worker:
         _attach_worker_output_streams()
         return _run_external_worker(args)
     config = AgentConfig(args)
+    if not agent_update.startup_allowed(config.data_dir, args.update_token):
+        return 2
     agent = LocalAgent(config)
+    agent.update_token = args.update_token
+    # Persist absolute config/data paths and all user-supplied options. Drop the
+    # one-time handoff token so a later update has fresh startup credentials.
+    original = list(sys.argv[1:] if argv is None else argv)
+    while "--update-token" in original:
+        index = original.index("--update-token")
+        del original[index:index + 2]
+    original = [arg for arg in original if not arg.startswith("--update-token=")]
+    agent.restart_arguments = [*original, "--config", str(config.config_path), "--data-dir", str(config.data_dir)]
     _install_shutdown_handlers(agent)
     process_lock = AgentProcessLock(config.data_dir / "agent.lock")
     if not process_lock.acquire():
         agent.log("泽顺本机 Agent 已在运行，本次重复启动退出。")
         return 2
     try:
+        if not agent_update.startup_allowed(config.data_dir, args.update_token):
+            return 2
+        if getattr(sys, "frozen", False):
+            agent_update.cleanup_updates(sys.executable)
         if args.rollback is not None:
             try:
                 version = agent.rollback_release(args.rollback)
@@ -1733,6 +1811,9 @@ def main(argv=None):
             try:
                 return AgentStatusWindow(agent).run()
             except Exception as exc:
+                if args.update_token:
+                    agent.log(f"新版状态窗口启动失败，等待更新器回退：{exc}")
+                    return 1
                 agent.log(f"状态窗口启动失败，已切换到控制台模式：{exc}")
         return agent.run()
     finally:

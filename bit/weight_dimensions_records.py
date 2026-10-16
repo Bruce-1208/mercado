@@ -812,6 +812,25 @@ def _public_record(row: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _zeshun_block_reason(row: Mapping[str, Any]) -> str:
+    """Explain why a freight record cannot enter the Zeshun update pipeline."""
+    if row.get("_zeshun_status") == "成功":
+        return ""
+    if not row.get("_dimension_compensation_confirmed"):
+        return "运费变动记录尚未完成重量尺寸核对"
+    if row.get("query_status") != "已读取":
+        return str(row.get("query_error") or "订单商品信息尚未读取成功")
+    if not str(row.get("actual_weight_g") or "").strip():
+        return "缺少经官方核验的实际重量"
+    if not row.get("_token_id"):
+        return "缺少订单关联店铺"
+    if not str(row.get("_global_item_id") or "").strip():
+        return str(row.get("query_error") or "商品没有可更新的 Global Selling 产品编号")
+    if not str(row.get("marketplace_item_id") or "").strip():
+        return str(row.get("query_error") or "商品没有可更新的站点链接编号")
+    return "当前记录不满足泽顺数据更新条件"
+
+
 def _finish_stopped_execute(task):
     action = task.get("execute_action")
     selected = set(task.get("execute_order_numbers") or ())
@@ -1318,6 +1337,12 @@ def _expand_same_title_records(records, authorized_ids, settings_cache=None, *, 
         if stop_requested is not None and stop_requested():
             break
         if not _public_record(row)["can_execute_zeshun"]:
+            if row.get("_zeshun_status") == "成功":
+                continue
+            row["_zeshun_status"] = "失败"
+            row["execution_status"] = "失败"
+            row["execution_error"] = _zeshun_block_reason(row)
+            _log_execution(row, "准备", "失败", row["execution_error"])
             continue
         row["execution_error"] = ""
         row["execution_status"] = "执行中"
@@ -1771,6 +1796,11 @@ def _run_execute(
             len(items), UPDATE_MAX_WORKERS, UPDATE_MAX_WORKERS,
             "WEIGHT_DIMENSIONS_UPDATE_WORKERS",
         )
+        # The automation worker owns a four-slot DB pool and keeps one slot for
+        # its cross-process lease. Limit fan-out so parallel callbacks plus the
+        # reserved authorization slot cannot exhaust that pool.
+        if str(task.get("owner") or "").startswith("automation:"):
+            workers = min(workers, 2)
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="wdr-update") as executor:
             future_groups = {}
             for key, grouped in items:

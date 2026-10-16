@@ -36,7 +36,8 @@
             this.panel.querySelector('[data-category-clear]').onclick = () => this.commit(null, []);
             this.panel.querySelector('[data-category-retry]').onclick = () => {
                 this.rows = null;
-                return this.load(20);
+                clearTimeout(this.timer);
+                return this.load(120);
             };
             this.columns.addEventListener('change', event => {
                 const select = event.target.closest('select[data-depth]');
@@ -77,7 +78,7 @@
             this.panel.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - Math.min(520, window.innerWidth - 24) - 12))}px`;
             this.panel.style.top = `${Math.max(12, Math.min(rect.bottom + 4, window.innerHeight - Math.min(470, window.innerHeight - 24) - 12))}px`;
             this.render();
-            this.load(20);
+            this.load(120);
         }
         render() {
             this.tree = buildTree(this.rows || [], this.paths);
@@ -136,7 +137,7 @@
                     if (generation !== this.generation) return;
                     this.render();
                     if (failures.length) this.status(`${failures[0]}，请点击重试。`);
-                    if (this.tree.pending && retries && !this.panel.hidden) {
+                    if ((this.tree.pending || failures.length) && retries && !this.panel.hidden) {
                         clearTimeout(this.timer);
                         this.timer = setTimeout(() => this.load(retries - 1), 1500);
                     }

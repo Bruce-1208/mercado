@@ -1,0 +1,159 @@
+[
+  {
+    "id": 16763283,
+    "status": "metadata_ready",
+    "category_id": "CBT458687",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16763284,
+    "status": "metadata_ready",
+    "category_id": "CBT458687",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16763286,
+    "status": "metadata_ready",
+    "category_id": "CBT456734",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764089,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764090,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764093,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764092,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764094,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764097,
+    "status": "metadata_ready",
+    "category_id": "CBT458687",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764098,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764100,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764273,
+    "status": "metadata_ready",
+    "category_id": "CBT401907",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764277,
+    "status": "metadata_ready",
+    "category_id": "CBT456980",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764278,
+    "status": "metadata_ready",
+    "category_id": "CBT403348",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764282,
+    "status": "metadata_ready",
+    "category_id": "CBT458661",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764283,
+    "status": "metadata_ready",
+    "category_id": "CBT456980",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16763285,
+    "status": "attributes_incomplete",
+    "category_id": "CBT457092",
+    "attributes": 3,
+    "error": "AI 已尝试补全，仍缺少必填属性：VEHICLE_TYPE；请重试生成或手动补齐",
+    "missing": [
+      {
+        "id": "VEHICLE_TYPE",
+        "name": "Vehicle type"
+      }
+    ]
+  },
+  {
+    "id": 16764286,
+    "status": "metadata_ready",
+    "category_id": "CBT86978",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764269,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  }
+]

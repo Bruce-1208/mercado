@@ -1,0 +1,276 @@
+/* Shared component finish. Load after module styles and erp-density.css.
+   Tokens live in zeshun-theme.css; geometry stays in the existing layout files. */
+body:is(.zs-console, .zs-standalone) {
+    --zs-corner: var(--zs-radius-card);
+    --zs-control-corner: var(--zs-radius-control);
+    --zs-radius: var(--zs-radius-control);
+    font-family: var(--zs-font);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Keyboard, disabled and selection states are shared across all workspaces. */
+body:is(.zs-console, .zs-standalone) :is(button, a, summary, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--zs-brand);
+    outline-offset: 2px;
+}
+body:is(.zs-console, .zs-standalone) :is(button, input, select, textarea):disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
+body:is(.zs-console, .zs-standalone) :is(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--zs-brand);
+}
+body:is(.zs-console, .zs-standalone) :is(input, textarea)::placeholder { color: var(--zs-secondary); }
+body:is(.zs-console, .zs-standalone) :is(button.primary, a.primary, .primary-button) {
+    background: var(--zs-brand);
+    border-color: var(--zs-brand);
+    color: var(--zs-white);
+    border-radius: var(--zs-radius-control);
+    font-weight: 600;
+    box-shadow: none;
+}
+body:is(.zs-console, .zs-standalone) :is(button.primary, a.primary, .primary-button):hover:not(:disabled) {
+    background: var(--zs-brand-hover);
+    border-color: var(--zs-brand-hover);
+}
+body:is(.zs-console, .zs-standalone) :is(button.secondary, a.secondary, .ghost-button) {
+    background: var(--zs-card);
+    color: var(--zs-copy);
+    border: 1px solid var(--zs-stroke-strong);
+    border-radius: var(--zs-radius-control);
+    box-shadow: none;
+}
+body:is(.zs-console, .zs-standalone) :is(button.secondary, a.secondary, .ghost-button):hover:not(:disabled) {
+    background: var(--zs-card-soft);
+    border-color: var(--zs-brand);
+    color: var(--zs-brand-hover);
+}
+body:is(.zs-console, .zs-standalone) button.danger {
+    background: var(--zs-danger);
+    color: var(--zs-white);
+    border-color: var(--zs-danger);
+}
+body:is(.zs-console, .zs-standalone) button.danger:hover:not(:disabled) { background: var(--zs-danger-hover); }
+
+/* Clear headers and row tracking without covering business status colors. */
+body:is(.zs-console, .zs-standalone) table { font-variant-numeric: tabular-nums; }
+body:is(.zs-console, .zs-standalone) thead th {
+    background: var(--zs-card-soft);
+    color: var(--zs-copy);
+    border-color: var(--zs-stroke);
+    font-weight: 600;
+    line-height: 1.5;
+}
+body:is(.zs-console, .zs-standalone) tbody td { border-color: var(--zs-stroke); }
+body:is(.zs-console, .zs-standalone) tbody tr:hover > td { box-shadow: inset 0 0 0 9999px rgb(37 99 235 / 3%); }
+body:is(.zs-console, .zs-standalone) tbody tr:has(input[type="checkbox"]:checked) > td {
+    box-shadow: inset 0 0 0 9999px rgb(37 99 235 / 6%);
+}
+body:is(.zs-console, .zs-standalone) :is(dialog, .market-multi-panel) {
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-radius-dialog);
+    box-shadow: var(--zs-shadow-overlay);
+}
+body:is(.zs-console, .zs-standalone) dialog::backdrop { background: rgb(15 23 42 / 40%); }
+
+/* Shell: a restrained blue accent connects the tabs, navigation and panels. */
+body.zs-console .workspace-tab { border-color: var(--zs-stroke); color: var(--zs-copy); }
+body.zs-console .workspace-tab.active {
+    background: var(--zs-brand-tint);
+    border-color: var(--zs-brand-line);
+    color: var(--zs-brand-hover);
+    box-shadow: inset 0 -2px var(--zs-brand);
+}
+body.zs-console .sidebar :is(button, a, summary, input):focus-visible { outline-color: var(--zs-nav-focus); outline-offset: -2px; }
+body.zs-console .sidebar .nav-tools input::placeholder { color: var(--zs-nav-muted); }
+body.zs-console .sidebar .tab-button { text-decoration: none; }
+body.zs-console .tab-heading h2 { font-size: var(--zs-text-title); letter-spacing: -.02em; }
+body.zs-console :is(.zs-filter-panel, .wdr-filters, .store-link-audit-filters, .inventory-toolbar) {
+    background: var(--zs-card-soft);
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-radius-card);
+}
+body.zs-console :is(.market-list-toolbar, .order-pagination, .store-link-pagination) { color: var(--zs-secondary); }
+
+/* Overview keeps operational information prominent at compact density. */
+body.zs-console .overview-hero {
+    background: var(--zs-brand-tint);
+    border: 1px solid var(--zs-brand-line);
+    border-left: 3px solid var(--zs-brand);
+    border-radius: var(--zs-radius-card);
+    padding: var(--zs-space-4) var(--zs-space-6);
+    box-shadow: none;
+}
+body.zs-console .overview-hero h2 { font-size: 24px; color: var(--zs-heading); }
+body.zs-console .overview-date {
+    background: var(--zs-card);
+    border: 1px solid var(--zs-brand-line);
+    border-radius: var(--zs-radius-control);
+    box-shadow: none;
+}
+body.zs-console :is(.overview-eyebrow, .section-kicker) {
+    color: var(--zs-brand-hover);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+}
+body.zs-console :is(.overview-metric, .quick-card) {
+    background: var(--zs-card);
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-radius-card);
+    box-shadow: none;
+}
+body.zs-console :is(.overview-metric, .quick-card):hover {
+    background: var(--zs-brand-tint);
+    border-color: var(--zs-brand-line);
+    box-shadow: none;
+    transform: none;
+}
+body.zs-console :is(.overview-metric small, .quick-card small, .overview-date span, .heading-note) {
+    color: var(--zs-secondary);
+    font-size: var(--zs-text-small);
+    font-weight: 400;
+    line-height: 1.6;
+}
+body.zs-console :is(.metric-icon, .quick-icon) {
+    background: var(--zs-brand-tint);
+    color: var(--zs-brand-hover);
+    border-radius: var(--zs-radius-control);
+}
+body.zs-console .notice-tag { background: var(--zs-brand-tint); color: var(--zs-brand-hover); }
+body.zs-console .overview-metric .online-dot { background: var(--zs-success-tint); color: var(--zs-success); }
+body.zs-auth :is(.panel, .login-panel) { box-shadow: 0 12px 40px rgb(15 23 42 / 7%); }
+
+/* Keep the public filing link in normal flow so it never covers page actions. */
+body.zs-auth { grid-template-rows: 1fr auto; gap: var(--zs-space-4); }
+.zs-icp-footer {
+    padding: var(--zs-space-3) var(--zs-space-4);
+    text-align: center;
+    font-size: var(--zs-text-small);
+    line-height: 1.5;
+    color: var(--zs-secondary);
+}
+.zs-icp-footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--zs-height-touch);
+    color: inherit;
+    text-decoration: none;
+}
+.zs-icp-footer a:hover { color: var(--zs-brand-hover); text-decoration: underline; }
+.zs-icp-footer a:focus-visible {
+    outline: 2px solid var(--zs-brand);
+    outline-offset: var(--zs-space-1);
+    border-radius: var(--zs-radius-control);
+}
+
+@media (max-width: 760px) {
+    body.zs-console #tab-overview .overview-hero { padding: var(--zs-space-4); }
+    body.zs-console .overview-hero h2 { font-size: var(--zs-text-title); }
+    body.zs-console .overview-metric { grid-template-columns: minmax(0, 1fr) auto; gap: var(--zs-space-2); padding: var(--zs-space-3); }
+    body.zs-console .overview-metric > span:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+    body.zs-console .overview-metric > b { grid-column: 2; grid-row: 1; justify-self: end; }
+    body.zs-console .overview-metric .metric-icon { width: 32px; height: 32px; font-size: 18px; }
+    body:is(.zs-console, .zs-standalone) :is(button.primary, button.secondary, button.danger) { min-height: var(--zs-height-touch); }
+    /* Fixed-height order workspace: reclaim chrome spacing, keep touch targets. */
+    body.zs-console:has(#tab-orders.active) .topbar { padding-block: 6px; gap: var(--zs-space-2); }
+    body.zs-console:has(#tab-orders.active) .page { padding-top: var(--zs-space-2); }
+}
+@media (prefers-reduced-motion: reduce) {
+    body:is(.zs-console, .zs-standalone) *,
+    body:is(.zs-console, .zs-standalone) *::before,
+    body:is(.zs-console, .zs-standalone) *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Shared catalog surfaces; semantic status colours continue to come from each module. */
+body.zs-console #products-1688-body > tr,
+body.zs-console #mercado-list-module.collection-mode #mercado-list-body > tr,
+body.zs-console #mercado-list-module .market-product-card,
+body.zs-console #tab-ai-original-products .ai-original-card {
+    border-color: var(--zs-stroke);
+    border-radius: var(--zs-radius-card);
+    background: var(--zs-card);
+    box-shadow: none;
+}
+body.zs-console #products-1688-body > tr:has(input:checked),
+body.zs-console #mercado-list-module.collection-mode .market-collection-row:has(input:checked),
+body.zs-console #mercado-list-module .market-product-card.is-selected,
+body.zs-console #tab-ai-original-products .ai-original-card.selected {
+    border-color: var(--zs-brand);
+    box-shadow: 0 0 0 1px var(--zs-brand);
+}
+body.zs-console #products-1688-body td[data-label]::before,
+body.zs-console #mercado-list-module.collection-mode td[data-label]::before {
+    color: var(--zs-secondary);
+    font-size: var(--zs-text-small);
+}
+body.zs-console :is(#products-1688-body, #mercado-list-body, #ai-original-grid) {
+    font-variant-numeric: tabular-nums;
+}
+body.zs-console :is(#mercado-list-body .market-card-image a, #products-1688-body .p1688-product-image-link, #products-1688-body img.p1688-thumb, #ai-original-grid .ai-original-image-pair img) {
+    cursor: zoom-in;
+    border-radius: var(--zs-radius-control);
+}
+body.zs-console :is(#mercado-list-body .market-card-image a, #products-1688-body .p1688-product-image-link, #products-1688-body img.p1688-thumb, #ai-original-grid .ai-original-image-pair img):focus-visible {
+    outline: 2px solid var(--zs-brand);
+    outline-offset: var(--zs-space-1);
+}
+body.zs-console .order-image-preview.catalog-image-preview {
+    box-sizing: border-box;
+    width: min(340px, calc(100vw - 2 * var(--zs-space-2)));
+    height: min(340px, calc(100vh - 2 * var(--zs-space-2)));
+    padding: var(--zs-space-2);
+    border: 1px solid var(--zs-stroke);
+    border-radius: var(--zs-radius-card);
+    background: var(--zs-card);
+    box-shadow: var(--zs-shadow-overlay);
+}
+
+/* Shared catalog chrome; do not override semantic product states or visibility. */
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) > .zs-catalog-heading {
+    background: transparent; border: 0; border-bottom: 1px solid var(--zs-stroke);
+    border-radius: 0; box-shadow: none;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading h2 { color: var(--zs-heading); font-size: var(--zs-text-title); font-weight: 700; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading p { color: var(--zs-secondary); font-size: var(--zs-text-small); font-weight: 400; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-filters {
+    background: var(--zs-card-soft); border: 1px solid var(--zs-stroke); border-radius: var(--zs-radius-card); box-shadow: none;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-selection,
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-pagination {
+    background: var(--zs-card); border: 0; border-bottom: 1px solid var(--zs-stroke); border-radius: 0; box-shadow: none;
+    font-size: var(--zs-text-body); color: var(--zs-secondary);
+}
+body.zs-console .zs-catalog-selection-count { color: var(--zs-brand-hover); font-weight: 600; font-variant-numeric: tabular-nums; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-bulk-menu, .zs-catalog-help) > summary {
+    color: var(--zs-copy); font-size: var(--zs-text-body); font-weight: 500;
+    background: var(--zs-card); border: 1px solid var(--zs-stroke-strong); border-radius: var(--zs-radius-control); cursor: pointer;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-bulk-menu, .zs-catalog-help)[open] > summary,
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-bulk-menu, .zs-catalog-help) > summary:hover {
+    color: var(--zs-brand-hover); background: var(--zs-brand-tint); border-color: var(--zs-brand-line);
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading .market-module-link {
+    color: var(--zs-copy); background: var(--zs-card); border: 1px solid var(--zs-stroke-strong);
+    border-radius: var(--zs-radius-control); box-shadow: none;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(button.primary, a.primary) {
+    background: var(--zs-brand); border-color: var(--zs-brand); color: var(--zs-white);
+    border-radius: var(--zs-radius-control); box-shadow: none;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(button.primary, a.primary):hover:not(:disabled) { background: var(--zs-brand-hover); border-color: var(--zs-brand-hover); }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(button.secondary, a.secondary) {
+    background: var(--zs-card); color: var(--zs-copy); border: 1px solid var(--zs-stroke-strong);
+    border-radius: var(--zs-radius-control); box-shadow: none;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(button.secondary, a.secondary):hover:not(:disabled) {
+    background: var(--zs-card-soft); color: var(--zs-brand-hover); border-color: var(--zs-brand);
+}
+/* Card outlines carry selection; per-cell overlays fragment the card surface. */
+body.zs-console #products-1688-body > tr:has(input[type=checkbox]:checked) > td,
+body.zs-console #mercado-list-module.collection-mode #mercado-list-body > tr:has(input[type=checkbox]:checked) > td { box-shadow: none; }

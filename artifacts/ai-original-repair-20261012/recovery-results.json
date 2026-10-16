@@ -1,0 +1,989 @@
+[
+  {
+    "product_id": 11180444,
+    "status": "skipped",
+    "message": "该平台已生成成功，已跳过；可直接编辑现有草稿"
+  },
+  {
+    "product_id": 16764290,
+    "status": "skipped",
+    "message": "该平台已生成成功，已跳过；可直接编辑现有草稿"
+  },
+  {
+    "product_id": 16764291,
+    "status": "skipped",
+    "message": "该平台已生成成功，已跳过；可直接编辑现有草稿"
+  },
+  {
+    "product_id": 11271693,
+    "source_item_id": "16881072183184339",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 11271696,
+    "source_item_id": "1688750366702703",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 11271695,
+    "source_item_id": "1688755262352658",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 11373944,
+    "source_item_id": "1688734091201459",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 11373942,
+    "source_item_id": "1688908359704935",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088980,
+    "source_item_id": "16881043126752964",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088982,
+    "source_item_id": "1688965772301190",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088983,
+    "source_item_id": "1688984152928588",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088984,
+    "source_item_id": "16881044671666136",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 11271694,
+    "source_item_id": "1688749299393092",
+    "status": "completed",
+    "target_platform": "mercadolibre",
+    "title": "Peluca Cosplay Denji Chainsaw Man Rubia Corta",
+    "title_es": "Peluca Cosplay Denji Chainsaw Man Rubia Corta",
+    "title_pt": "Peruca Cosplay Denji Chainsaw Man Loira Curta"
+  },
+  {
+    "product_id": 13088986,
+    "source_item_id": "1688895352426974",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088987,
+    "source_item_id": "1688902907013347",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088988,
+    "source_item_id": "16881072982382127",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088989,
+    "source_item_id": "16881082990889866",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091055,
+    "source_item_id": "16881077499534005",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091056,
+    "source_item_id": "1688537254924476",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091057,
+    "source_item_id": "1688780171015411",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088985,
+    "source_item_id": "1688985068919320",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091059,
+    "source_item_id": "1688668125880641",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091060,
+    "source_item_id": "1688931099018084",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091061,
+    "source_item_id": "16881075332656756",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069593,
+    "source_item_id": "16881074482135666",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069594,
+    "source_item_id": "1688891479379335",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069595,
+    "source_item_id": "1688654674039745",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069596,
+    "source_item_id": "1688751103480734",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069597,
+    "source_item_id": "16881058803376913",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069598,
+    "source_item_id": "16881074730204939",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069599,
+    "source_item_id": "16881078033754554",
+    "status": "completed",
+    "target_platform": "mercadolibre",
+    "title": "Máscara de Halloween estilo payaso terrorífico, látex",
+    "title_es": "Máscara de Halloween estilo payaso terrorífico, látex",
+    "title_pt": "Máscara de Halloween Payasso Assustador Látex Rosto Inteiro"
+  },
+  {
+    "product_id": 14069600,
+    "source_item_id": "1688655023969650",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069601,
+    "source_item_id": "1688694346829675",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13088981,
+    "source_item_id": "1688706652142494",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069603,
+    "source_item_id": "1688900322270474",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069604,
+    "source_item_id": "1688613190587256",
+    "status": "completed",
+    "target_platform": "mercadolibre",
+    "title": "Máscara de Halloween lático rostro podrido zombie fiesta",
+    "title_es": "Máscara de Halloween lático rostro podrido zombie fiesta",
+    "title_pt": "Máscara Halloween látex rosto apodrecido zumbi festa"
+  },
+  {
+    "product_id": 14069605,
+    "source_item_id": "1688895194555763",
+    "status": "completed",
+    "target_platform": "mercadolibre",
+    "title": "Máscara de Halloween con Gesto de Dedo Medio, Disfraz de",
+    "title_es": "Máscara de Halloween con Gesto de Dedo Medio, Disfraz de",
+    "title_pt": "Máscara de Halloween com Gesto de Dedo Médio, Fantasia de"
+  },
+  {
+    "product_id": 14069606,
+    "source_item_id": "16881079576364779",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14322895,
+    "source_item_id": "16881032410554580",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15001055,
+    "source_item_id": "16881084436589318",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15157623,
+    "source_item_id": "1688948949016431",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15157624,
+    "source_item_id": "1688906032637991",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15158025,
+    "source_item_id": "1688900687507489",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15158026,
+    "source_item_id": "1688778013007434",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15158331,
+    "source_item_id": "1688778060021914",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16326846,
+    "source_item_id": "16881065702132821",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16326847,
+    "source_item_id": "1688844417214464",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16326848,
+    "source_item_id": "1688966135411256",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16326850,
+    "source_item_id": "1688909785064824",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16326851,
+    "source_item_id": "1688684307066325",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16326852,
+    "source_item_id": "1688900118866232",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327015,
+    "source_item_id": "1688987904208888",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327016,
+    "source_item_id": "1688795983192437",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327055,
+    "source_item_id": "1688567816387093",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327056,
+    "source_item_id": "16881002743754302",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327057,
+    "source_item_id": "16881057061096515",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327058,
+    "source_item_id": "16881069012635162",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327207,
+    "source_item_id": "1688940732720692",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327260,
+    "source_item_id": "1688890432888427",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327261,
+    "source_item_id": "16881059660545484",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327262,
+    "source_item_id": "1688821938436723",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16327263,
+    "source_item_id": "16881073256451805",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16763283,
+    "source_item_id": "1688805542967249",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 14069602,
+    "source_item_id": "1688902239499773",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16763284,
+    "source_item_id": "1688607235703304",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16763286,
+    "source_item_id": "16881020577412003",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16763285,
+    "source_item_id": "16881046883338745",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764089,
+    "source_item_id": "1688891043260780",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764090,
+    "source_item_id": "16881073396360819",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764092,
+    "source_item_id": "16881023381101904",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764088,
+    "source_item_id": "1688677670034879",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764093,
+    "source_item_id": "16881043968123011",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764094,
+    "source_item_id": "1688565133741357",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764095,
+    "source_item_id": "16881082378016063",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764096,
+    "source_item_id": "16881019800354037",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764097,
+    "source_item_id": "1688826652801609",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764099,
+    "source_item_id": "16881082367124855",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764098,
+    "source_item_id": "1688893997049309",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764101,
+    "source_item_id": "1688886914705151",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 13091058,
+    "source_item_id": "16881070593482312",
+    "status": "failed",
+    "message": "自动映射已尝试 3 次：AI 变体映射包含重复或未知选项，未保存",
+    "failed_step": "variations",
+    "workflow_status": "needs_variations"
+  },
+  {
+    "product_id": 16764100,
+    "source_item_id": "1688576024310876",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764270,
+    "source_item_id": "1688980017129835",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764269,
+    "source_item_id": "16881086785647564",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764271,
+    "source_item_id": "1688567672431021",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764273,
+    "source_item_id": "1688732927555653",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764272,
+    "source_item_id": "16881086461326950",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764274,
+    "source_item_id": "16881002945735807",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764278,
+    "source_item_id": "1688999059746566",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764281,
+    "source_item_id": "16881076130399499",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764277,
+    "source_item_id": "1688756368413549",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764282,
+    "source_item_id": "16881004013168215",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764276,
+    "source_item_id": "1688722263868314",
+    "status": "failed",
+    "message": "费用记录保存失败，已停止后续付费调用。",
+    "failed_step": "attributes",
+    "workflow_status": "needs_budget_review"
+  },
+  {
+    "product_id": 16764283,
+    "source_item_id": "16881076752161435",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764286,
+    "source_item_id": "16881065838233121",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764287,
+    "source_item_id": "16881000620557252",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16943230,
+    "source_item_id": "16881033217735742",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16943431,
+    "source_item_id": "16881032582597137",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 15158332,
+    "source_item_id": "1688625324015225",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 17318194,
+    "source_item_id": "1688753156884559",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318193,
+    "source_item_id": "16881061899935419",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318195,
+    "source_item_id": "1688685581315033",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318196,
+    "source_item_id": "16881073411884339",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318197,
+    "source_item_id": "16881073741547073",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318198,
+    "source_item_id": "1688691621184004",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318199,
+    "source_item_id": "1688798227854179",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318200,
+    "source_item_id": "16881074726964358",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318201,
+    "source_item_id": "16881064822759907",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318203,
+    "source_item_id": "1688654314129598",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318202,
+    "source_item_id": "1688825598324469",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318206,
+    "source_item_id": "16881069392782908",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318207,
+    "source_item_id": "1688984797456002",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318205,
+    "source_item_id": "1688951833110936",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318209,
+    "source_item_id": "1688823452008422",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318211,
+    "source_item_id": "1688931134413962",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318208,
+    "source_item_id": "16881065138757434",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318213,
+    "source_item_id": "1688975315956860",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 17318212,
+    "source_item_id": "1688652574110099",
+    "status": "failed",
+    "message": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。",
+    "failed_step": "",
+    "workflow_status": "processing"
+  },
+  {
+    "product_id": 16616090,
+    "source_item_id": "1688915778682292",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16619491,
+    "source_item_id": "1688959047437338",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  },
+  {
+    "product_id": 16764091,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764275,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764279,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764280,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764284,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764285,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764288,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  },
+  {
+    "product_id": 16764289,
+    "status": "blocked",
+    "message": "生成账号未配置百炼凭证"
+  }
+]

@@ -58,6 +58,25 @@ class ListingTranslationError(RuntimeError):
     """Listing text could not be translated safely."""
 
 
+@lru_cache(maxsize=1)
+def _title_language_identifier():
+    try:
+        from langid.langid import LanguageIdentifier, model
+    except ImportError as exc:
+        raise ListingTranslationError("服务器缺少语言识别组件") from exc
+    # Listing titles mix platform language with brands and character names.
+    # Use a separate classifier: changing langid's global languages would also
+    # change customer-message language detection and translation routing.
+    identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
+    identifier.set_languages(['en', 'es', 'pt'])
+    return identifier
+
+
+@lru_cache(maxsize=4096)
+def _listing_title_language(text):
+    return _title_language_identifier().classify(text)[0]
+
+
 def title_language_issue(text, language):
     """Conservative validation: keep brands/numbers, reject obvious wrong copy."""
     text = str(text or "").strip()
@@ -65,7 +84,7 @@ def title_language_issue(text, language):
         return "标题含中文，请在编辑器中修正目标语言后重新校验"
     if language in {"es", "pt-BR"} and len(re.findall(r"[A-Za-zÀ-ÿ]+", text)) >= 5:
         try:
-            if detect_text_language(text) == "en":
+            if _listing_title_language(text) == "en":
                 return "标题疑似整段英文，请修正为目标语言并保留品牌、型号"
         except ListingTranslationError:
             return "标题语言无法核实，请检查语言识别服务后重试"

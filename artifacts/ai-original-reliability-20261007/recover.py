@@ -40,7 +40,7 @@ for product_id in IDS:
     assert api_key, 'Original generation account has no configured key'
     app._run_ai_original_task(rows, api_key=api_key, model=QWEN_MODEL,
         base_url=QWEN_BASE_URL, workers=1, category_token_id=token_id,
-        generated_by=actor, template_id=previous.get('template_id') or 'standard', cost_control=True)
+        generated_by=actor, billing_actor=app.ai_billing_actor_context(app.get_workbench_user(user_id=user_id)), template_id=previous.get('template_id') or 'standard', cost_control=True)
     state = app._ai_original_task_snapshot()
     summaries.extend(state['results'])
     print(json.dumps(state['results'], ensure_ascii=False), flush=True)

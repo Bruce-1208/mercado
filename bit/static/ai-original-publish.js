@@ -10,7 +10,8 @@ const AiOriginalPublisher = (() => {
   const node = id => document.getElementById(`aip-${id}`);
   const escape = value => aiOriginalEscape(value);
   const label = platform => platform === "amazon" ? "亚马逊美国站" : "Yandex Market";
-  const selectedRows = () => aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id)));
+  const selectedRows = () => aiOriginalRows.filter(row =>
+    aiOriginalSelected.has(Number(row.id)) && aiOriginalProductStatus(row, state.platform) === "approved");
   const key = id => `${state.platform}:${Number(id)}`;
   const messageText = value => typeof value === "string" ? value : value?.message || value?.description || value?.code || "";
   const messages = values => (Array.isArray(values) ? values : values ? [values] : []).map(messageText).filter(Boolean);
@@ -85,8 +86,9 @@ const AiOriginalPublisher = (() => {
         <label class="wide"><span>公开主图地址（选填）</span><input data-product-id="${id}" data-field="image_url" type="url" value="${escape(settings.image_url)}" placeholder="https://；留空使用此平台已生成主图"><small>需能被平台直接访问，并真实展示本商品。</small></label>
         <label class="wide"><span>其他类目字段（JSON 对象）</span><textarea data-product-id="${id}" data-field="additional_attributes" rows="4" spellcheck="false" placeholder="${escape(example)}">${escape(settings.additional_attributes)}</textarea><small>${state.platform === "amazon" ? "按照所选商品类型的官方属性结构填写；示例只用于说明格式，请使用真实资料。" : "填写字段编号对应的真实值；也支持 parameterValues 官方数组格式。"}</small><code>${escape(example)}</code></label>
       </div></div></details>`;
-    }).join("") : '<div class="aip-empty">先在上方列表勾选要上架的商品，再逐件确认真实品牌、条码、价格及库存。</div>';
-    node("selected-count").textContent = `已选择 ${rows.length} 件`;
+    }).join("") : '<div class="aip-empty">先在商品卡片中将当前平台状态手动设为“通过”并勾选商品，再逐件确认真实品牌、条码、价格及库存。</div>';
+    const selectedCount = aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id))).length;
+    node("selected-count").textContent = `已选择 ${rows.length} 件通过商品${selectedCount > rows.length ? ` · 忽略 ${selectedCount - rows.length} 件未通过` : ""}`;
     updateButtons();
   }
 
@@ -103,6 +105,8 @@ const AiOriginalPublisher = (() => {
     if (platform !== state.platform) { syncPlatform(); return; }
     if (platform === "mercadolibre") return;
     const rows = selectedRows();
+    const selectedCount = aiOriginalRows.filter(row => aiOriginalSelected.has(Number(row.id))).length;
+    node("selected-count").textContent = `已选择 ${rows.length} 件通过商品${selectedCount > rows.length ? ` · 忽略 ${selectedCount - rows.length} 件未通过` : ""}`;
     // Rebuild only after selection/draft changes, never while typing an input.
     const signature = JSON.stringify(rows.map(row => [row.id, aiOriginalPlatformDraft(row, platform)]));
     if (signature !== state.signature) {

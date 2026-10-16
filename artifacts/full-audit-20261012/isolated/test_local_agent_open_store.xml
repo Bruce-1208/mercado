@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="3" time="0.115" timestamp="2026-10-12T16:39:54.398693+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_local_agent_open_store" name="test_agent_open_store_uses_local_window_lookup_and_fixed_reputation_url" time="0.001" /><testcase classname="tests.test_local_agent_open_store" name="test_local_agent_resolves_profile_by_authorized_store_alias" time="0.000" /><testcase classname="tests.test_local_agent_open_store" name="test_open_store_worker_saves_actionable_error_result" time="0.003"><failure message="AssertionError: assert {'status': 'e...浏览器 API 无法连接'} == {'status': 'e...浏览器 API 无法连接'}&#10;  &#10;  Omitting 2 identical items, use -vv to show&#10;  Left contains 1 more item:&#10;  {'worker_error': '本机比特浏览器 API 无法连接'}&#10;  Use -v to get more diff">tests/test_local_agent_open_store.py:133: in test_open_store_worker_saves_actionable_error_result
+    assert json.loads(job_file.with_name("result.json").read_text(encoding="utf-8")) == {
+E   AssertionError: assert {'status': 'e...浏览器 API 无法连接'} == {'status': 'e...浏览器 API 无法连接'}
+E     
+E     Omitting 2 identical items, use -vv to show
+E     Left contains 1 more item:
+E     {'worker_error': '本机比特浏览器 API 无法连接'}
+E     Use -v to get more diff</failure></testcase></testsuite></testsuites>

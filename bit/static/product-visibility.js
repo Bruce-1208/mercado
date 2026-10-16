@@ -1,4 +1,30 @@
 (function () {
+  window.catalogCanOperate = function (row) {
+    // Server authorization is still authoritative. This only prevents an old
+    // or partially cached row projection from making administrators read-only.
+    const role = String(
+      (typeof currentWorkbenchUser !== "undefined" ? currentWorkbenchUser : null)?.role_key || ""
+    );
+    return row?.can_operate !== false || role === "super_admin" || role === "enterprise_admin";
+  };
+
+  window.catalogOperationMarkup = function (row, markup) {
+    if (window.catalogCanOperate(row)) return markup;
+    const template = document.createElement("template");
+    template.innerHTML = markup;
+    template.content.querySelectorAll("input, select, textarea, button").forEach(control => {
+      const action = control.getAttribute("onclick") || "";
+      if (/^(products1688OpenDetail|openAiOriginalDetail|openAiOriginalEditor|openMercadoProductDetail|openMercadoCollectionCopy|openMercadoProductPublishLogs)\(/.test(action)) return;
+      control.disabled = true;
+      control.title = "只能操作自己的产品";
+    });
+    template.content.querySelectorAll(".p1688-editable-row").forEach(row => {
+      row.removeAttribute("onclick");
+      row.title = "其他成员的产品，仅可查看";
+    });
+    return template.innerHTML;
+  };
+
   window.catalogVisibilityControl = function (row, itemType) {
     const privateItem = row.visibility === "private";
     const label = privateItem ? "私有" : "企业共享";

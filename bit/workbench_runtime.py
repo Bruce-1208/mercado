@@ -23,7 +23,7 @@ from typing import Mapping, MutableMapping, Sequence
 
 
 DEFAULT_SERVER_DB_HOST = "127.0.0.1"
-DEFAULT_DB_API_BASE_URL = "https://wuhanzeshun.com"
+DEFAULT_DB_API_BASE_URL = "https://wuhanzeshun.cn"
 DEFAULT_CONFIG_FILENAME = "workbench-runtime.json"
 
 SERVER_ROLE_ALIASES = frozenset(("server", "service", "direct", "local", "mysql"))

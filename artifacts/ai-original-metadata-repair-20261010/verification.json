@@ -1,0 +1,686 @@
+[
+  {
+    "id": 13088981,
+    "category_id": "CBT116631",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 11
+  },
+  {
+    "id": 13088985,
+    "category_id": "CBT116631",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [],
+    "removed_unsupported": [
+      {
+        "id": "AMBIENTS",
+        "name": "Ambients",
+        "value_name": "Indoor",
+        "value_id": "115340"
+      },
+      {
+        "id": "POWER_SUPPLY_TYPE",
+        "name": "Power supply type",
+        "value_name": "Battery",
+        "value_id": "4491927"
+      },
+      {
+        "id": "INCLUDES_CELL_BATTERIES",
+        "name": "Includes cell batteries",
+        "value_name": "No",
+        "value_id": "242084"
+      },
+      {
+        "id": "WITH_REMOTE_CONTROL",
+        "name": "With remote control",
+        "value_name": "No",
+        "value_id": "242084"
+      }
+    ],
+    "usage_records": 4
+  },
+  {
+    "id": 13091058,
+    "category_id": "CBT24790",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 3
+  },
+  {
+    "id": 14069594,
+    "category_id": "CBT457414",
+    "attributes": 15,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 3
+  },
+  {
+    "id": 14069602,
+    "category_id": "CBT457414",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 5
+  },
+  {
+    "id": 14069603,
+    "category_id": "CBT378179",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 1
+  },
+  {
+    "id": 14069605,
+    "category_id": "CBT378179",
+    "attributes": 3,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 1
+  },
+  {
+    "id": 16619491,
+    "category_id": "CBT418448",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 2
+  },
+  {
+    "id": 16763283,
+    "category_id": "CBT458687",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Silicone Coated Wiper Blade"
+      },
+      {
+        "id": "BLADE_MATERIAL",
+        "name": "Blade material",
+        "value_name": "Steel",
+        "value_id": "3603050"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16763284,
+    "category_id": "CBT458687",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Wiper Blade Refill"
+      }
+    ],
+    "usage_records": 6
+  },
+  {
+    "id": 16763285,
+    "category_id": "CBT457092",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Generic Wiper Blade"
+      }
+    ],
+    "usage_records": 64
+  },
+  {
+    "id": 16763286,
+    "category_id": "CBT456734",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "AU Type Winter Wiper"
+      }
+    ],
+    "usage_records": 8
+  },
+  {
+    "id": 16764088,
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 16
+  },
+  {
+    "id": 16764089,
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "U-Type Frameless Wiper Blade"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16764090,
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "U-Type Wiper Blade"
+      }
+    ],
+    "usage_records": 4
+  },
+  {
+    "id": 16764092,
+    "category_id": "CBT5751",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Generic"
+      }
+    ],
+    "usage_records": 4
+  },
+  {
+    "id": 16764093,
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Wiper Blade 350-700mm Universal"
+      }
+    ],
+    "usage_records": 4
+  },
+  {
+    "id": 16764094,
+    "category_id": "CBT5751",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "UTV-WIPER-ARM-BLADE"
+      }
+    ],
+    "usage_records": 4
+  },
+  {
+    "id": 16764095,
+    "category_id": "CBT373111",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 5
+  },
+  {
+    "id": 16764096,
+    "category_id": "CBT127693",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 6
+  },
+  {
+    "id": 16764097,
+    "category_id": "CBT458687",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Generic"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16764098,
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Universal Wiper Blade"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16764099,
+    "category_id": "CBT458684",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764100,
+    "category_id": "CBT5751",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Generic"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16764101,
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 7
+  },
+  {
+    "id": 16764269,
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Multi-functional Three-Stage Wiper Blade"
+      }
+    ],
+    "usage_records": 19
+  },
+  {
+    "id": 16764270,
+    "category_id": "CBT388866",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764271,
+    "category_id": "CBT373348",
+    "attributes": 6,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 8
+  },
+  {
+    "id": 16764272,
+    "category_id": "CBT371414",
+    "attributes": 13,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764273,
+    "category_id": "CBT401907",
+    "attributes": 5,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Jinniu Variable Light Switch"
+      }
+    ],
+    "usage_records": 4
+  },
+  {
+    "id": 16764274,
+    "category_id": "CBT372145",
+    "attributes": 9,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764275,
+    "category_id": "CBT456502",
+    "attributes": 3,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Steel Braided Brake Hose"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16764276,
+    "category_id": "CBT372054",
+    "attributes": 14,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764277,
+    "category_id": "CBT456980",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Universal Plastic Nylon Car Clip"
+      }
+    ],
+    "usage_records": 7
+  },
+  {
+    "id": 16764278,
+    "category_id": "CBT403348",
+    "attributes": 5,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Generic"
+      }
+    ],
+    "usage_records": 5
+  },
+  {
+    "id": 16764279,
+    "category_id": "CBT416792",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764280,
+    "category_id": "CBT456354",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "Generic"
+      }
+    ],
+    "usage_records": 24
+  },
+  {
+    "id": 16764281,
+    "category_id": "CBT413526",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 5
+  },
+  {
+    "id": 16764282,
+    "category_id": "CBT458661",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供实际零件编号"
+      }
+    ],
+    "removed_unsupported": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "value_name": "100PCS Car Trim Panel Clip Kit"
+      }
+    ],
+    "usage_records": 11
+  },
+  {
+    "id": 16764283,
+    "category_id": "CBT456980",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number"
+      }
+    ],
+    "removed_unsupported": [],
+    "usage_records": 7
+  },
+  {
+    "id": 16764284,
+    "category_id": "CBT388866",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 4
+  },
+  {
+    "id": 16764285,
+    "category_id": "CBT373347",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 6
+  },
+  {
+    "id": 16764286,
+    "category_id": "CBT86978",
+    "attributes": 4,
+    "status": "failed",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供零件编号，不能用商品名称代替"
+      }
+    ],
+    "removed_unsupported": [],
+    "usage_records": 8
+  },
+  {
+    "id": 16764287,
+    "category_id": "CBT412470",
+    "attributes": 4,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 6
+  },
+  {
+    "id": 16943230,
+    "category_id": "CBT24790",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 28
+  },
+  {
+    "id": 16943431,
+    "category_id": "CBT455862",
+    "attributes": 5,
+    "status": "pending",
+    "missing": [],
+    "removed_unsupported": [],
+    "usage_records": 10
+  }
+]

@@ -19,6 +19,12 @@ class PromotionResultsMock:
         self.submitted = False
         self.item_refresh_failed = False
         self.calls = []
+        self.enrollments = []
+        self.preview_submissions = []
+        self.job_requests = []
+        self.enrollment_response = None
+        self.running_job_polls = 0
+        self.on_job_complete = None
         self.errors = []
         self.campaign = {
             "id": 71, "promotion_id": "MLM-TEST-71", "name": "十月报名结果测试",
@@ -41,7 +47,7 @@ class PromotionResultsMock:
         page.on("pageerror", lambda error: self.errors.append(str(error)))
         page.route("**/*", self.route)
         page.goto("http://promotion.test/promotions?organization_key=results-enterprise")
-        page.locator("#campaignRows .result-counts").wait_for()
+        page.locator("#campaignRows button").wait_for()
 
     def job(self):
         return {"job_id": "submitted-job-2" if self.submitted else "saved-job-1",
@@ -104,7 +110,8 @@ class PromotionResultsMock:
                     data["latest_job"] = self.job()
                 self.json(route, data)
         elif path == "/api/promotions/preview":
-            self.json(route, {"preview_id": "results-preview", "ready_count": len(request.post_data_json["rows"]), "blocked_count": 0,
+            self.json(route, {"preview_id": "results-preview", "action": request.post_data_json["action"],
+                               "ready_count": len(request.post_data_json["rows"]), "blocked_count": 0,
                                "rows": [{"item_id": f"MLM{row['item_local_id'] * 100}", "status": "ready",
                                          "deal_price": float(row["deal_price"]), "currency_id": "MXN",
                                          "net_proceeds_before": {"amount": 370.5, "currency_id": "MXN", "applies_to_price": 500,
@@ -113,12 +120,39 @@ class PromotionResultsMock:
                                                                 "currency_id": "USD", "applies_to_price": float(row["deal_price"]),
                                                                 "price_currency_id": "MXN", "source": "promotion_api"}}
                                         for row in request.post_data_json["rows"]]})
-        elif path == "/api/promotions/jobs" and request.method == "POST":
+        elif path == "/api/promotions/enroll" and request.method == "POST":
+            payload = request.post_data_json
+            self.enrollments.append(payload)
             self.submitted = True
+            self.json(route, self.enrollment_response or {
+                "status": "running", "job_id": "submitted-job-2",
+                "submitted_count": len(payload["rows"]), "excluded_count": 0,
+                "excluded_reasons": [],
+            })
+        elif path == "/api/promotions/jobs" and request.method == "POST":
+            self.preview_submissions.append(request.post_data_json)
             self.json(route, self.job())
         elif path == "/api/promotions/jobs":
-            self.json(route, {"rows": [dict(self.job(), actor="离线测试", status="partial", total_count=3,
-                                             success_count=1, failed_count=1, unknown_count=1)]})
+            query = parse_qs(url.query)
+            if query.get("status") == ["running"] and query.get("action") in (["withdraw"], ["enroll"]):
+                self.json(route, {"rows": []})
+            else:
+                if query.get("job_id"):
+                    self.job_requests.append(query)
+                    job_id = query["job_id"][0]
+                    if self.running_job_polls:
+                        self.running_job_polls -= 1
+                        self.json(route, {"rows": [dict(self.job(), job_id=job_id, actor="离线测试",
+                                                         status="running", total_count=3, success_count=0,
+                                                         failed_count=0, unknown_count=0)]})
+                        return
+                    if self.on_job_complete:
+                        self.on_job_complete()
+                else:
+                    job_id = self.job()["job_id"]
+                self.json(route, {"rows": [dict(self.job(), job_id=job_id, actor="离线测试",
+                                                 status="partial", total_count=3, success_count=1,
+                                                 failed_count=1, unknown_count=1)]})
         else:
             route.abort()
 
@@ -139,10 +173,11 @@ def promotion_page(console_browser):
     page.close()
 
 
-def test_saved_results_have_separate_outcomes_reasons_and_before_after_net_prices(promotion_page):
+def test_outer_campaign_uses_current_counts_and_products_keep_saved_results(promotion_page):
     mock = PromotionResultsMock(promotion_page)
-    summary = promotion_page.locator("#campaignRows .result-counts").inner_text()
-    assert all(text in summary for text in ["成功 1", "失败 1", "待核实 1"])
+    summary = promotion_page.locator("#campaignRows").inner_text()
+    assert all(text in summary for text in ["候选 3", "参与 2", "当前共 5 条"])
+    assert promotion_page.locator("#campaignRows .result-counts").count() == 0
     mock.screenshot("01-activity-results.png")
     mock.open()
     headers = promotion_page.locator(".item-table thead").inner_text()
@@ -246,23 +281,25 @@ def test_zero_price_candidates_show_matching_net_quote_for_suggested_or_maximum_
     assert not mock.errors
 
 
-def test_preview_shows_net_prices_for_the_edited_quote_before_confirming(promotion_page):
+def test_direct_enrollment_submits_the_edited_quote_without_confirmation(promotion_page):
     mock = PromotionResultsMock(promotion_page)
     mock.open()
     promotion_page.locator('#itemRows input[value="2"]').check()
     promotion_page.locator("#price-2").fill("400")
     promotion_page.locator("#enrollBtn").click()
-    promotion_page.locator("#previewDialog").wait_for(state="visible")
-    preview = promotion_page.locator("#previewRows").inner_text()
-    assert "促销前净收益价" in preview and "MXN 370.50" in preview
-    assert "促销后净收益价" in preview and "USD 28.00" in preview
-    assert "对应售价 MXN 400.00" in preview
-    assert "32.20" not in preview
-    request = next(payload for method, path, payload in mock.calls if path == "/api/promotions/preview")
-    assert request["rows"][0]["deal_price"] == "400"
+    assert mock.enrollments == [{
+        "promotion_id": 71,
+        "rows": [{"item_local_id": 2, "deal_price": "400", "start_date": "", "finish_date": ""}],
+    }]
+    assert promotion_page.locator("#previewDialog").is_hidden()
+    assert not any(path == "/api/promotions/preview" for _, path, _ in mock.calls)
     assert not any(path == "/api/promotions/jobs" and method == "POST" for method, path, _ in mock.calls)
+    promotion_page.locator("#feedback").filter(has_text="提交完成").wait_for()
+    assert len(mock.job_requests) == 1
+    poll_query = mock.job_requests[0]
+    assert poll_query["summary"] == ["1"]
+    assert poll_query["job_id"] == ["submitted-job-2"]
     assert not mock.errors
-    mock.screenshot("06-preview-net-prices.png")
 
 
 def test_official_price_options_show_the_matching_net_quote_after_edit(promotion_page):
@@ -282,27 +319,39 @@ def test_official_price_options_show_the_matching_net_quote_after_edit(promotion
     assert not mock.errors
 
 
-@pytest.mark.parametrize("changed", ["price", "selection"])
-def test_late_preview_cannot_confirm_previous_price_or_selection(promotion_page, changed):
+def test_direct_enrollment_reports_automatically_excluded_products(promotion_page):
     mock = PromotionResultsMock(promotion_page)
     mock.open()
-    pending = []
-    promotion_page.route("**/api/promotions/preview*", lambda route: pending.append(route))
+    mock.enrollment_response = {
+        "status": "running", "job_id": "screened-job",
+        "submitted_count": 1, "excluded_count": 1,
+        "excluded_reasons": [{"reason": "活动价高于官方上限 450", "count": 1}],
+    }
     promotion_page.locator('#itemRows input[value="2"]').check()
-    with promotion_page.expect_request("**/api/promotions/preview*"):
-        promotion_page.locator("#enrollBtn").click()
-    if changed == "price":
-        promotion_page.locator("#price-2").fill("400")
-    else:
-        promotion_page.locator('#itemRows input[value="2"]').uncheck()
-    assert len(pending) == 1
-    mock.json(pending[0], {"preview_id": "stale-preview", "ready_count": 1, "blocked_count": 0,
-                          "rows": [{"item_id": "MLM200", "deal_price": 450, "currency_id": "MXN", "status": "ready"}]})
-    promotion_page.wait_for_function("document.getElementById('feedback').textContent.includes('价格或所选商品已变更')")
+    promotion_page.locator('#itemRows input[value="3"]').check()
+    promotion_page.locator("#enrollBtn").click()
+    promotion_page.locator("#feedback").filter(has_text="自动屏蔽 1 件").wait_for()
+    assert "活动价高于官方上限 450" in promotion_page.locator("#feedback").inner_text()
     assert promotion_page.locator("#previewDialog").is_hidden()
-    assert promotion_page.locator("#confirmBtn").is_disabled()
-    assert promotion_page.evaluate("state.preview === null")
+    assert len(mock.enrollments) == 1
+    assert not any(path == "/api/promotions/preview" for _, path, _ in mock.calls)
     assert not any(path == "/api/promotions/jobs" and method == "POST" for method, path, _ in mock.calls)
+    assert not mock.errors
+
+
+def test_withdrawal_still_uses_preview_and_confirmed_job_submission(promotion_page):
+    mock = PromotionResultsMock(promotion_page)
+    mock.open()
+    promotion_page.locator('#itemRows input[value="2"]').check()
+    promotion_page.locator("#withdrawBtn").click()
+    promotion_page.locator("#previewDialog").wait_for(state="visible")
+    preview = next(payload for method, path, payload in mock.calls
+                   if method == "POST" and path == "/api/promotions/preview")
+    assert preview["action"] == "withdraw"
+    assert not mock.enrollments
+    promotion_page.locator("#confirmBtn").click()
+    promotion_page.locator("#previewDialog").wait_for(state="hidden")
+    assert mock.preview_submissions == [{"preview_id": "results-preview", "confirmed": True}]
     assert not mock.errors
 
 
@@ -311,17 +360,18 @@ def test_submission_keeps_per_item_results_visible_even_if_refresh_is_incomplete
     mock = PromotionResultsMock(promotion_page, refresh_mode=refresh_mode)
     mock.open()
     for row_id in [1, 2, 3]:
-        promotion_page.locator(f'#itemRows input[value="{row_id}"]').check()
+        checkbox = promotion_page.locator(f'#itemRows input[value="{row_id}"]')
+        if checkbox.is_enabled():
+            checkbox.check()
     promotion_page.locator("#enrollBtn").click()
-    promotion_page.locator("#previewDialog").wait_for(state="visible")
-    promotion_page.locator("#confirmBtn").click()
-    promotion_page.locator("#previewDialog").wait_for(state="hidden")
     promotion_page.wait_for_function("document.getElementById('feedback').textContent.includes('提交完成')")
     assert promotion_page.locator("#enrollmentResults").count() == 0
     assert all(text in promotion_page.locator("#itemRows").inner_text() for text in ["已报名", "报名失败", "待核实", "MLM100", "MLM200", "MLM300", FAILURE])
     assert "提交完成：成功 1，待核实 1，失败 1" in promotion_page.locator("#feedback").inner_text()
     assert "info" in promotion_page.locator("#feedback").get_attribute("class")
-    assert promotion_page.locator("#confirmBtn").is_disabled()
+    assert promotion_page.locator("#previewDialog").is_hidden()
+    assert len(mock.enrollments) == 1
+    assert not mock.preview_submissions
     assert not mock.errors
     mock.screenshot(f"04-submitted-results-{refresh_mode}.png")
 
@@ -358,23 +408,18 @@ def test_current_enrollment_filter_clears_selection_and_prices_do_not_change_cur
 def test_background_enrollment_refreshes_product_state_without_duplicate_submission(promotion_page):
     mock = PromotionResultsMock(promotion_page)
     mock.open()
-    submitted = []
-    def jobs(route):
-        if route.request.method == 'POST':
-            submitted.append(route.request.post_data_json)
-            mock.json(route, {'job_id':'async-job','action':'enroll','status':'running','results':[]})
-        else:
-            mock.results[1]['status'] = 'succeeded'
-            mock.json(route, {'rows':[{'job_id':'async-job','action':'enroll','status':'succeeded',
-                'success_count':1,'failed_count':0,'unknown_count':0}]})
-    promotion_page.route('**/api/promotions/jobs*', jobs)
+    mock.running_job_polls = 1
+    def finish():
+        mock.results[1]['status'] = 'succeeded'
+    mock.on_job_complete = finish
     promotion_page.locator('#itemRows input[value="2"]').check()
     promotion_page.locator('#enrollBtn').click()
-    promotion_page.locator('#confirmBtn').click()
-    promotion_page.wait_for_function("state.pendingJob?.id === 'async-job'")
+    promotion_page.wait_for_function("state.pendingJob?.id === 'submitted-job-2'")
     assert promotion_page.locator('#enrollBtn').is_disabled()
     assert promotion_page.locator('#itemsView').is_visible()
     promotion_page.wait_for_function("!state.pendingJob && document.getElementById('feedback').textContent.includes('提交完成')")
     assert '已报名' in promotion_page.locator('#item-row-2').inner_text()
-    assert len(submitted) == 1
+    assert len(mock.enrollments) == 1
+    assert all(query['summary'] == ['1'] for query in mock.job_requests)
+    assert all(query['job_id'] == ['submitted-job-2'] for query in mock.job_requests)
     assert not mock.errors

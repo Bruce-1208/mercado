@@ -20,9 +20,12 @@ def test_all_console_workspaces_fit_viewport(console_page, width):
 def test_dark_navigation_contrast_search_and_toggle(console_page, width):
     page = console_page
     page.set_viewport_size({'width': width, 'height': 1000})
-    if width <= 760:
+    page.evaluate('setWorkbenchImmersive(false)')
+    if width <= 760 and not page.locator('.sidebar').is_visible():
+        page.wait_for_function("document.querySelector('.sidebar').getAttribute('aria-hidden') === 'true'")
         page.locator('.sidebar-toggle').click()
     sidebar = page.locator('.sidebar')
+    sidebar.wait_for(state='visible')
     assert sidebar.is_visible()
     contrast = sidebar.evaluate('''el => {
         const lum = color => {

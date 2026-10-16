@@ -63,3 +63,24 @@ def test_billing_navigation_is_rendered_only_for_super_admin():
     for role in ["member", "warehouse", "enterprise_admin", "admin", "super_admin"]:
         rendered = Template(fragment).render(current_user={"role_key": role})
         assert ('href="/ai-billing"' in rendered) == (role == "super_admin")
+
+
+@pytest.mark.parametrize('role', ['super_admin', 'enterprise_admin', 'operator', 'member', 'warehouse', 'viewer', None])
+def test_legacy_sku_failure_keeps_reason_but_hides_appended_usage(role):
+    app = Flask(__name__)
+    install_cost_visibility(app, lambda: {'role_key': role})
+    reason = '产品 16943431：24 个 SKU 缺少采集原图，请重新采集或补充图片链接'
+    message = reason + ' · 模型计费估算 ¥0.013195（含已记录尝试） · 累计 60,318 Token · 金额不限额 · 复用结果 1 次'
+    payload = {'data': {'results': [{'message': message}], 'ai_error': message,
+                        'logs': [message], 'total_tokens': 60318, 'prompt_tokens': 60300,
+                        'net_proceeds_usd': 12}}
+    app.add_url_rule('/api/ai-original-products/process/status', view_func=lambda: jsonify(payload))
+    result = app.test_client().get('/api/ai-original-products/process/status').json
+    if role == 'super_admin':
+        assert result == payload
+    else:
+        assert result['data']['results'][0]['message'] == reason
+        assert result['data']['ai_error'] == reason
+        assert result['data']['logs'] == [reason]
+        assert result['data']['net_proceeds_usd'] == 12
+        assert not any(value in json.dumps(result, ensure_ascii=False) for value in ['Token', '¥', '计费', '金额不限额', 'total_tokens', 'prompt_tokens'])

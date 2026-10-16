@@ -1,0 +1,29 @@
+{
+  "isolated_table_exact_matching": "passed: original/es/pt, whitespace, case, accents, organization, duplicate candidates, invalid JSON, absent title",
+  "product_indexes_ready": true,
+  "link_index_ready": true,
+  "production_candidate_count": 0,
+  "production_candidate_seconds": 0.0003,
+  "production_plan": [
+    {
+      "type": "ref",
+      "key": "idx_rights_title_hash",
+      "rows": 1,
+      "Extra": "Using where; Using index"
+    },
+    {
+      "type": "ref",
+      "key": "idx_rights_title_es_hash",
+      "rows": 1,
+      "Extra": "Using where; Using index"
+    },
+    {
+      "type": "ref",
+      "key": "idx_rights_title_pt_hash",
+      "rows": 1,
+      "Extra": "Using where; Using index"
+    }
+  ],
+  "production_link_seconds": 0.0048,
+  "production_link_count": 0
+}

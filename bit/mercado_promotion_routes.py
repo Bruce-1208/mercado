@@ -8,6 +8,8 @@ from bit.mercado_promotions import (
     create_preview,
     enrich_item_products,
     execute_preview,
+    recover_stale_running_jobs,
+    start_enrollment,
     sync_promotions,
     stop_campaign,
     visible_store_options,
@@ -63,6 +65,11 @@ def create_promotions_blueprint(
     def fail(exc, status=400):
         return jsonify({"status": "error", "message": str(exc)}), status
 
+    def positive_body_id(value, label="活动编号"):
+        if type(value) is not int or value <= 0:
+            raise ValueError(f"{label}无效")
+        return value
+
     @blueprint.route("/promotions")
     @login_required
     def page():
@@ -114,15 +121,14 @@ def create_promotions_blueprint(
                 salesperson="" if scope_pairs is not None else salesperson,
                 group_name="" if scope_pairs is not None else group_name,
                 site_id="" if scope_pairs is not None else site_id,
+                current_participation=True,
+                include_operation_summary=False,
             )
             summary = {
                 "total": len(rows),
                 "candidate_items": sum(int(row.get("candidate_count") or 0) for row in rows),
                 "active_items": sum(int(row.get("active_item_count") or 0) for row in rows),
                 "ending_soon": sum(1 for row in rows if row.get("deadline_date") and str(row.get("status_raw")) != "finished"),
-                "enrollment_succeeded": sum(int((row.get("enrollment_summary") or {}).get("succeeded") or 0) for row in rows),
-                "enrollment_failed": sum(int((row.get("enrollment_summary") or {}).get("failed") or 0) for row in rows),
-                "enrollment_unknown": sum(int((row.get("enrollment_summary") or {}).get("unknown") or 0) for row in rows),
             }
             return ok({"rows": rows, "summary": summary})
         except Exception as exc:
@@ -148,14 +154,26 @@ def create_promotions_blueprint(
     def items(promotion_id):
         try:
             store = PromotionStore()
-            promotion = store.get_promotion(promotion_id)
+            selection_only = request.args.get("selection") == "1"
+            promotion = store.get_promotion(promotion_id, include_summary=False)
             if not promotion:
                 return fail("活动不存在", 404)
             allowed = allowed_ids()
             if allowed is not None and int(promotion.get("token_id") or 0) not in allowed:
                 return fail("当前账号不能查看该店铺", 403)
+            if not selection_only:
+                # Deep links can load item details before the page-level running
+                # job restore. Heal orphaned jobs here so latest_job cannot keep
+                # the campaign disabled after its worker has disappeared.
+                recover_stale_running_jobs(
+                    store=store, token_ids=allowed, promotion_fks=[promotion_id],
+                    include_terminal=False,
+                )
+                promotion = store.get_promotion(promotion_id)
             page_data = store.list_items_page(
                 promotion_id,
+                selection_only=selection_only,
+                candidate_only=selection_only and request.args.get("candidate_only") == "1",
                 page=request.args.get("page", 1),
                 page_size=request.args.get("page_size", 50),
                 target_item_id=str(request.args.get("target_item_id") or "").strip(),
@@ -163,6 +181,10 @@ def create_promotions_blueprint(
                 product=str(request.args.get("product") or "").strip(),
                 item_id=str(request.args.get("item_id") or "").strip(),
             )
+            if selection_only:
+                # Full selection does not display media, net quotes or job history.
+                fields = {"id", "item_id", "offer_id", "status_raw", "price", "original_price", "min_price", "max_price", "currency_id"}
+                return ok({**page_data, "rows": [{k: v for k, v in row.items() if k in fields} for row in page_data["rows"]]})
             results = store.enrollment_results(promotion_id, limit=50)
             results_total = int((promotion.get("enrollment_summary") or {}).get("total") or 0)
             return ok({
@@ -240,9 +262,12 @@ def create_promotions_blueprint(
     @login_required
     def preview():
         try:
+            if has_permission and not has_permission(current_user(), "promotions.execute"):
+                return fail("当前账号没有活动操作权限", 403)
             body = request.get_json(silent=True) or {}
-            promotion_id = int(body.get("promotion_id") or 0)
-            promotion = PromotionStore().get_promotion(promotion_id)
+            promotion_id = positive_body_id(body.get("promotion_id"))
+            store = PromotionStore()
+            promotion = store.get_promotion(promotion_id, include_summary=False)
             if not promotion:
                 return fail("活动不存在", 404)
             allowed = allowed_ids()
@@ -253,8 +278,40 @@ def create_promotions_blueprint(
                 action=str(body.get("action") or "enroll"),
                 rows=list(body.get("rows") or []),
                 actor=actor(),
+                store=store,
+                promotion=promotion,
             )
             return ok(result)
+        except (TypeError, ValueError) as exc:
+            return fail(exc)
+        except Exception as exc:
+            return fail(exc, 500)
+
+    @blueprint.route("/api/promotions/enroll", methods=["POST"])
+    @login_required
+    def enroll():
+        try:
+            if has_permission and not has_permission(current_user(), "promotions.execute"):
+                return fail("当前账号没有活动报名权限", 403)
+            body = request.get_json(silent=True) or {}
+            promotion_id = positive_body_id(body.get("promotion_id"))
+            rows = body.get("rows") or []
+            if not isinstance(rows, list):
+                return fail("报名商品格式无效")
+            store = PromotionStore()
+            promotion = store.get_promotion(promotion_id, include_summary=False)
+            if not promotion:
+                return fail("活动不存在", 404)
+            allowed = allowed_ids()
+            if allowed is not None and int(promotion.get("token_id") or 0) not in allowed:
+                return fail("当前账号不能操作该店铺", 403)
+            return ok(start_enrollment(
+                promotion_fk=promotion_id,
+                rows=rows,
+                actor=actor(),
+                store=store,
+                promotion=promotion,
+            ))
         except (TypeError, ValueError) as exc:
             return fail(exc)
         except Exception as exc:
@@ -269,11 +326,20 @@ def create_promotions_blueprint(
                 job_ids = request.args.getlist("job_id") or None
                 if job_ids and (len(job_ids) > 50 or any(len(value) > 64 for value in job_ids)):
                     return fail("查询任务数量或编号无效")
-                response = ok({"rows": store.list_jobs(token_ids=allowed_ids(),
+                allowed = allowed_ids()
+                action = str(request.args.get("action") or "")
+                recover_stale_running_jobs(
+                    store=store, token_ids=allowed, job_ids=job_ids, action=action,
+                    include_terminal=str(request.args.get("status") or "") != "running",
+                )
+                response = ok({"rows": store.list_jobs(token_ids=allowed,
                     job_ids=job_ids, summary_only=request.args.get("summary") == "1",
-                    action=str(request.args.get("action") or ""), status=str(request.args.get("status") or ""))})
+                    result_limit=request.args.get("result_limit"),
+                    action=action, status=str(request.args.get("status") or ""))})
                 response.headers["Cache-Control"] = "no-store"
                 return response
+            if has_permission and not has_permission(current_user(), "promotions.execute"):
+                return fail("当前账号没有活动操作权限", 403)
             body = request.get_json(silent=True) or {}
             if body.get("confirmed") is not True:
                 return fail("请确认已核对活动、商品和价格后再提交")

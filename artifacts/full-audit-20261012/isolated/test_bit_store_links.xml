@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="7" skipped="0" tests="38" time="0.693" timestamp="2026-10-12T16:39:37.829001+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_bit_store_links" name="test_listing_record_extracts_link_weight_dimensions_and_sku" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_listing_record_extracts_package_values_from_variations" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_listing_record_uses_highest_actual_weight_complete_variation" time="0.000" /><testcase classname="tests.test_bit_store_links" name="test_remote_update_pushes_price_package_and_net_proceeds_then_updates_local" time="0.005"><failure message="AssertionError: assert 'error' == 'success'&#10;  &#10;  - success&#10;  + error">tests/test_bit_store_links.py:227: in test_remote_update_pushes_price_package_and_net_proceeds_then_updates_local
+    assert result["status"] == "success"
+E   AssertionError: assert 'error' == 'success'
+E     
+E     - success
+E     + error</failure></testcase><testcase classname="tests.test_bit_store_links" name="test_remote_update_pushes_link_status_and_updates_local" time="0.003" /><testcase classname="tests.test_bit_store_links" name="test_sync_run_records_three_day_clock_for_completed_store" time="0.004"><failure message="pymysql.err.OperationalError: (2003, &quot;Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)&quot;)">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/full-audit-20261012/run_regression.py:23: in isolated_connect
+    raise PermissionError("Functional regression blocks business-service networking")
+E   PermissionError: Functional regression blocks business-service networking
+
+During handling of the above exception, another exception occurred:
+tests/test_bit_store_links.py:318: in test_sync_run_records_three_day_clock_for_completed_store
+    state = bit_store_link_sync.run_store_link_sync([8])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/store_link_audit.py:203: in wrapped
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+bit/bit_store_link_sync.py:560: in run_store_link_sync
+    priority_ids = list_due_store_link_token_ids(priority_only=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/mercadolibre_store_link_store.py:583: in list_due_store_link_token_ids
+    connection = (connection_factory or _connect)()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/mercadolibre_store_link_store.py:67: in _connect
+    return pymysql.connect(**config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:50: in connect
+    return get_db_connection(kwargs, priority=priority)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:286: in get_db_connection
+    return pymysql.connect(**config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)")</failure></testcase><testcase classname="tests.test_bit_store_links" name="test_store_sync_processes_multiple_stores_in_parallel" time="0.004"><failure message="pymysql.err.OperationalError: (2003, &quot;Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)&quot;)">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+artifacts/full-audit-20261012/run_regression.py:23: in isolated_connect
+    raise PermissionError("Functional regression blocks business-service networking")
+E   PermissionError: Functional regression blocks business-service networking
+
+During handling of the above exception, another exception occurred:
+tests/test_bit_store_links.py:365: in test_store_sync_processes_multiple_stores_in_parallel
+    state = bit_store_link_sync.run_store_link_sync([])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/store_link_audit.py:203: in wrapped
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+bit/bit_store_link_sync.py:560: in run_store_link_sync
+    priority_ids = list_due_store_link_token_ids(priority_only=True)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/mercadolibre_store_link_store.py:583: in list_due_store_link_token_ids
+    connection = (connection_factory or _connect)()
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/mercadolibre_store_link_store.py:67: in _connect
+    return pymysql.connect(**config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:50: in connect
+    return get_db_connection(kwargs, priority=priority)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:286: in get_db_connection
+    return pymysql.connect(**config)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)")</failure></testcase><testcase classname="tests.test_bit_store_links" name="test_due_scheduler_starts_only_returned_store_ids" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_immediate_sync_request_is_persisted_for_new_store" time="0.004" /><testcase classname="tests.test_bit_store_links" name="test_full_sync_order_prioritizes_never_synced_then_oldest_completed" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_token_records_applies_priority_to_all_and_selected_stores" time="0.000" /><testcase classname="tests.test_bit_store_links" name="test_replace_store_snapshot_marks_missing_links_and_upserts_current_rows" time="0.003" /><testcase classname="tests.test_bit_store_links" name="test_bulk_update_store_links_updates_only_allowed_numeric_fields" time="0.004" /><testcase classname="tests.test_bit_store_links" name="test_mark_deleted_preserves_unique_selected_records" time="0.003" /><testcase classname="tests.test_bit_store_links" name="test_list_store_links_filters_site_and_defaults_to_sales_descending[Toys]" time="0.004"><failure message="AssertionError: assert '`remote_json`' not in '\n         ...            '&#10;  &#10;  '`remote_json`' is contained here:&#10;    ull_links.`remote_json`),&#10;                               full_links.`remote_json`, '{}'), '$.pictures') AS pictures,&#10;                           full_links.`status`, full_links.`price`, full_links.`currency_id`,&#10;                           full_links.`available_quantity`, full_links.`sold_quantity`,&#10;                           visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,...&#10;  &#10;  ...Full output truncated (27 lines hidden), use '-vv' to show">tests/test_bit_store_links.py:752: in test_list_store_links_filters_site_and_defaults_to_sales_descending
+    assert "`remote_json`" not in list_sql
+E   AssertionError: assert '`remote_json`' not in '\n         ...            '
+E     
+E     '`remote_json`' is contained here:
+E       ull_links.`remote_json`),
+E                                  full_links.`remote_json`, '{}'), '$.pictures') AS pictures,
+E                              full_links.`status`, full_links.`price`, full_links.`currency_id`,
+E                              full_links.`available_quantity`, full_links.`sold_quantity`,
+E                              visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,...
+E     
+E     ...Full output truncated (27 lines hidden), use '-vv' to show</failure></testcase><testcase classname="tests.test_bit_store_links" name="test_list_store_links_filters_site_and_defaults_to_sales_descending[MLA2,MLM2]" time="0.003"><failure message="AssertionError: assert '`remote_json`' not in '\n         ...            '&#10;  &#10;  '`remote_json`' is contained here:&#10;    ull_links.`remote_json`),&#10;                               full_links.`remote_json`, '{}'), '$.pictures') AS pictures,&#10;                           full_links.`status`, full_links.`price`, full_links.`currency_id`,&#10;                           full_links.`available_quantity`, full_links.`sold_quantity`,&#10;                           visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,...&#10;  &#10;  ...Full output truncated (27 lines hidden), use '-vv' to show">tests/test_bit_store_links.py:752: in test_list_store_links_filters_site_and_defaults_to_sales_descending
+    assert "`remote_json`" not in list_sql
+E   AssertionError: assert '`remote_json`' not in '\n         ...            '
+E     
+E     '`remote_json`' is contained here:
+E       ull_links.`remote_json`),
+E                                  full_links.`remote_json`, '{}'), '$.pictures') AS pictures,
+E                              full_links.`status`, full_links.`price`, full_links.`currency_id`,
+E                              full_links.`available_quantity`, full_links.`sold_quantity`,
+E                              visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,...
+E     
+E     ...Full output truncated (27 lines hidden), use '-vv' to show</failure></testcase><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters0-None]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters1-expected_tokens1]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters2-expected_tokens2]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters3-expected_tokens3]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters4-expected_tokens4]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters5-expected_tokens5]" time="0.000" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters6-expected_tokens6]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters7-expected_tokens7]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters8-expected_tokens8]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_recent_sales_sort_prunes_orders_before_json_aggregation[filters9-expected_tokens9]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_metadata_is_cached_and_returned_as_an_independent_copy" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_sync_store_writes_listing_batches_incrementally" time="0.008" /><testcase classname="tests.test_bit_store_links" name="test_workbench_store_link_ui_and_routes" time="0.152"><failure message="assert b'\xe6\xaf\x8f 3 \xe5\xa4\xa9\xe8\x87\xaa\xe5\x8a\xa8\xe5\x90\x8c\xe6\xad\xa5\xe9\x93\xbe\xe6\x8e\xa5\xe7\x8a\xb6\xe6\x80\x81' in b'&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\...re-link-salesperson&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;/static/store-link-metrics.js?v=20261012&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;'&#10; +  where b'\xe6\xaf\x8f 3 \xe5\xa4\xa9\xe8\x87\xaa\xe5\x8a\xa8\xe5\x90\x8c\xe6\xad\xa5\xe9\x93\xbe\xe6\x8e\xa5\xe7\x8a\xb6\xe6\x80\x81' = &lt;built-in method encode of str object at 0x1410268b0&gt;('utf-8')&#10; +    where &lt;built-in method encode of str object at 0x1410268b0&gt; = '每 3 天自动同步链接状态'.encode&#10; +  and   b'&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\...re-link-salesperson&quot;&gt;&lt;/script&gt;\n    &lt;script src=&quot;/static/store-link-metrics.js?v=20261012&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;' = &lt;WrapperTestResponse 2039149 bytes [200 OK]&gt;.data">tests/test_bit_store_links.py:1091: in test_workbench_store_link_ui_and_routes
+    assert "每 3 天自动同步链接状态".encode("utf-8") in response.data
+E   assert b'\xe6\xaf\x8f 3 \xe5\xa4\xa9\xe8\x87\xaa\xe5\x8a\xa8\xe5\x90\x8c\xe6\xad\xa5\xe9\x93\xbe\xe6\x8e\xa5\xe7\x8a\xb6\xe6\x80\x81' in b'&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\...re-link-salesperson"&gt;&lt;/script&gt;\n    &lt;script src="/static/store-link-metrics.js?v=20261012"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;'
+E    +  where b'\xe6\xaf\x8f 3 \xe5\xa4\xa9\xe8\x87\xaa\xe5\x8a\xa8\xe5\x90\x8c\xe6\xad\xa5\xe9\x93\xbe\xe6\x8e\xa5\xe7\x8a\xb6\xe6\x80\x81' = &lt;built-in method encode of str object at 0x1410268b0&gt;('utf-8')
+E    +    where &lt;built-in method encode of str object at 0x1410268b0&gt; = '每 3 天自动同步链接状态'.encode
+E    +  and   b'&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\...re-link-salesperson"&gt;&lt;/script&gt;\n    &lt;script src="/static/store-link-metrics.js?v=20261012"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;' = &lt;WrapperTestResponse 2039149 bytes [200 OK]&gt;.data</failure></testcase><testcase classname="tests.test_bit_store_links" name="test_start_store_link_sync_route_starts_background_task" time="0.008" /><testcase classname="tests.test_bit_store_links" name="test_start_all_store_link_sync_ignores_selected_store_ids" time="0.006" /><testcase classname="tests.test_bit_store_links" name="test_auto_sync_prioritizes_never_completed_before_explicit_requests" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_salesperson_filters_count_page_and_recent_sales[\u5f20\u4e09-None-expected_pairs0]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_salesperson_filters_count_page_and_recent_sales[\u5f20\u4e09-scope1-expected_pairs1]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_salesperson_filters_count_page_and_recent_sales[\u674e\u56db-scope2-expected_pairs2]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_salesperson_filters_count_page_and_recent_sales[\u5f20\u4e09-scope3-expected_pairs3]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_salesperson_filters_count_page_and_recent_sales[\u4e0d\u5b58\u5728-None-expected_pairs4]" time="0.001" /><testcase classname="tests.test_bit_store_links" name="test_store_link_salesperson_passes_through_public_route_and_database_modes" time="0.007"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_bit_store_links.py:1377: in test_store_link_salesperson_passes_through_public_route_and_database_modes
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase></testsuite></testsuites>

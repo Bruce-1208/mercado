@@ -1,0 +1,6 @@
+[
+  "8 chapters, 7 FAQs, progress save/reload/reset, search/empty state, anchors, print restore and all tab destinations passed",
+  "No horizontal overflow at 1440, 1024, 390 and 320 pixels",
+  "Guide entries work for fresh and cached templates without duplicate links",
+  "Readable without JavaScript; blocked browser storage degrades gracefully; no JavaScript errors"
+]

@@ -11,8 +11,8 @@ from bit.infringement_state import canonical_record, content_hash, knowledge_ver
 
 LIST_FILTERS = {
     "search", "task_id", "source_type", "review_status", "publish_status", "weight_status",
-    "weight_min", "weight_max", "price_min", "price_max", "net_proceeds_min", "net_proceeds_max",
-    "date_from", "date_to", "management_category_id", "mercado_category", "zying_category",
+    "weight_min", "weight_max", "price_min", "price_max", "sku_count_min", "sku_count_max", "net_proceeds_min", "net_proceeds_max",
+    "date_from", "date_to", "management_category_id", "mercado_category", "zying_category", "zying_status",
     "product_developer_id", "collector_salesperson", "generator_salesperson", "salesperson",
 }
 RISK_STATUSES = {"unchecked", "queued", "checking", "low", "suspected", "high", "stale", "failed"}
@@ -83,7 +83,7 @@ class MercadoInfringementService:
         params = {key: value for key, value in (filters or {}).items() if key in LIST_FILTERS and value not in (None, "")}
         params.update(limit=limit, offset=offset)
         if mode == "collection":
-            for key in ("source_type", "mercado_category", "zying_category", "product_developer_id", "collector_salesperson", "generator_salesperson"):
+            for key in ("source_type", "mercado_category", "zying_category", "zying_status", "product_developer_id", "collector_salesperson", "generator_salesperson"):
                 params.pop(key, None)
             params["exclude_added"] = True
         else:
@@ -136,8 +136,9 @@ class MercadoInfringementService:
             raise ValueError("侵权风险筛选值无效")
         knowledge = self.knowledge()
         rows, read_offset = [], 0
+        read_filters = dict(filters)
         while True:
-            data = self.read(mode, filters, limit=1000, offset=read_offset, allowed_tokens=allowed_tokens)
+            data = self.read(mode, read_filters, limit=1000, offset=read_offset, allowed_tokens=allowed_tokens)
             page = data.get("rows") or []
             rows.extend(page)
             read_offset += len(page)
@@ -170,6 +171,10 @@ class MercadoInfringementService:
                 rows = [row for row in rows if row["infringement"]["status"] in {"unchecked", "failed", "stale"}]
         if not rows:
             raise ValueError("当前范围没有需要检测的商品")
+        from bit import product_access
+        actor = product_access.actor()
+        if actor and any(not product_access.can_operate(row, actor) for row in rows):
+            raise PermissionError("只能操作自己的产品")
         needs_ai = bool(payload.get("recheck")) or any(not snapshot(row).get("content_hash") for row in rows)
         if not needs_ai:
             current_version = knowledge_version(self.knowledge())

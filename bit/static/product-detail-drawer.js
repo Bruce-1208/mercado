@@ -64,6 +64,7 @@ async function openMercadoCollectionDetail(rowId) {
         content.querySelector(".detail-header")?.remove();
         content.querySelector(".detail-title")?.remove();
         dialog.querySelector(".product-drawer-body").replaceChildren(content);
+        window.MercadoCollectionAttributes?.detail(content.querySelector('[data-collection-attribute-detail]'), controller.signal);
     } catch (error) {
         if (dialog.detailRequest !== controller || !dialog.open) return;
         loading.textContent = error.name === "AbortError" ? "读取超时，请重新加载" : error.message;
@@ -80,9 +81,47 @@ async function openMercadoCollectionDetail(rowId) {
     }
 }
 
-function openMercadoProductDetail(rowId) {
-    const card = document.querySelector(`.market-product-card-row[data-product-id="${Number(rowId)}"]`);
-    const template = card?.querySelector(".market-card-detail-content");
-    if (!template) return;
-    openProductDetailDrawer({title: card.querySelector("h4")?.textContent, subtitle: "产品列表 · 商品资料", content: template.content.cloneNode(true)});
+// The collection editor uses the same server-rendered details and SKU save path.
+async function loadMercadoCollectionEditorDetail(rowId) {
+    const dialog = document.getElementById('mercado-product-edit-dialog');
+    const host = document.getElementById('mercado-editor-collection-detail');
+    dialog.collectionDetailRequest?.abort();
+    const controller = new AbortController();
+    dialog.collectionDetailRequest = controller;
+    dialog.addEventListener('close', () => controller.abort(), {once: true});
+    const timer = setTimeout(() => controller.abort(), 30000);
+    host.textContent = '正在读取完整商品资料…';
+    try {
+        const response = await fetch(`/mercado-collection/items/${Number(rowId)}`, {signal: controller.signal, cache: 'no-store'});
+        const doc = new DOMParser().parseFromString(await response.text(), 'text/html');
+        if (dialog.collectionDetailRequest !== controller || !dialog.open) return;
+        const content = doc.querySelector('.detail-shell');
+        if (!response.ok || !content?.querySelector('.detail-title')) throw Error(doc.querySelector('.detail-error p')?.textContent || '商品资料读取失败');
+        content.querySelector('.detail-header')?.remove();
+        content.querySelector('#variants')?.remove();
+        host.replaceChildren(content);
+        content.addEventListener('click', event => {
+            const thumbnail = event.target.closest('.detail-thumbnail');
+            if (!thumbnail) return;
+            const img = content.querySelector('#collection-main-image');
+            img.src = thumbnail.dataset.imageUrl;
+            img.alt = `商品图片 ${thumbnail.dataset.position}`;
+            content.querySelector('#collection-main-image-link').href = thumbnail.dataset.imageUrl;
+            const buttons = content.querySelectorAll('.detail-thumbnail');
+            buttons.forEach(button => button.setAttribute('aria-pressed', String(button === thumbnail)));
+            content.querySelector('#collection-image-position').textContent = `第 ${thumbnail.dataset.position} / ${buttons.length} 张 · 点击大图查看原图`;
+        });
+        window.MercadoCollectionAttributes?.detail(content.querySelector('[data-collection-attribute-detail]'), controller.signal);
+    } catch (error) {
+        if (dialog.collectionDetailRequest !== controller || !dialog.open) return;
+        host.textContent = error.name === 'AbortError' ? '读取超时，请重试' : error.message;
+        const retry = document.createElement('button');
+        retry.type = 'button';
+        retry.className = 'secondary';
+        retry.textContent = '重新加载';
+        retry.addEventListener('click', () => loadMercadoCollectionEditorDetail(rowId));
+        host.append(retry);
+    } finally {
+        clearTimeout(timer);
+    }
 }

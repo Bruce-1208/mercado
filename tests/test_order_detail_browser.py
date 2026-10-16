@@ -194,9 +194,11 @@ def test_advanced_freight_difference_range_supports_negative_zero_and_reset(cons
     assert low.input_value()=='' and high.input_value()==''
 
 
+@pytest.mark.parametrize('width',[1440,390])
 @pytest.mark.parametrize('cost',[None,0])
-def test_missing_or_zero_cost_does_not_hide_numeric_profit_and_margin(console_page,cost):
+def test_missing_or_zero_cost_does_not_hide_numeric_profit_and_margin(console_page,cost,width):
     page=console_page
+    page.set_viewport_size({"width":width,"height":1000})
     open_detail(page,amount=7.54,fee=0.94,actual_freight_usd=None,quoted_freight_usd=2.60,
                 status='找货-没汇总',balance=4,balance_cny=26.77,income=50.46,cost=cost,profit=26.77)
     page.evaluate("renderOrderRows(orderRows);renderOrderMetrics({total:1,summary:{amount:7.54,income:50.46,balance_cny:26.77,cost:0,profit:26.77,cost_missing_count:orderRows[0].cost==null?1:0}})")
@@ -205,12 +207,43 @@ def test_missing_or_zero_cost_does_not_hide_numeric_profit_and_margin(console_pa
     assert '利润率 53.1%' in panel.inner_text()
     assert '待核算' not in panel.inner_text()
     cost_note=panel.get_by_text('成本未填，暂按0',exact=True)
-    assert cost_note.count()==(1 if cost is None else 0)
+    assert cost_note.count()==0
     cells=page.locator('#order-table-body tr td')
+    assert '成本未填' not in cells.nth(7).inner_text()
+    cny=cells.nth(6).locator('.order-balance-cny-accounting')
+    usd=cells.nth(6).locator('.order-money')
+    assert cny.bounding_box()['y'] >= usd.bounding_box()['y'] + usd.bounding_box()['height']
+    assert cny.evaluate('(e)=>getComputedStyle(e).fontSize')=='12px'
     assert cells.nth(8).inner_text()=='￥26.77'
     assert cells.nth(9).inner_text()=='53.1%'
     summary=page.locator('#order-metric-profit').inner_text()
-    assert '￥26.77 / 53.1%' in summary
+    assert summary=='￥26.77'
+    assert page.locator('#order-metric-rate').inner_text()=='53.1%'
     assert '待核算' not in summary
+    assert '成本未填' not in summary
     if cost is None:
         page.screenshot(path=str(Path(__file__).resolve().parents[1]/'artifacts/order-profit-display-20261011/profit-detail.png'))
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_order_summary_ungrouped_numbers_and_partial_settlement_rate(console_page, width):
+    page = console_page
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.evaluate('''() => renderOrderMetrics({total:12345, summary:{
+        amount:123456.78,income:800000,cost:600000,profit:200000,
+        settlement_missing_count:3}})''')
+    assert page.locator('#order-metric-total').inner_text() == '12345'
+    assert page.locator('#order-metric-amount').inner_text() == '$123456.78'
+    assert page.locator('#order-metric-profit').inner_text() == '￥200000.00'
+    assert page.locator('#order-metric-rate').inner_text() == '25.0%'
+    assert page.locator('#order-metric-settlement-note').inner_text() == '3 单待结算，未计入利润'
+    assert '待核' not in page.locator('.order-footer-metrics').inner_text()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    output = Path(__file__).resolve().parents[1] / 'artifacts/order-summary-20261012'
+    output.mkdir(exist_ok=True)
+    page.locator('.order-footer-metrics').screenshot(path=str(output / f'summary-{width}.png'))
+    page.evaluate('renderOrderMetrics({total:12345,summary_pending:true})')
+    assert page.locator('#order-metric-rate').inner_text() == '统计中…'
+    assert page.locator('#order-metric-settlement-note').is_hidden()
+    page.evaluate('renderOrderMetrics({total:1,summary:{income:0,profit:0}})')
+    assert page.locator('#order-metric-rate').inner_text() == '—'

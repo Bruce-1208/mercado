@@ -212,11 +212,11 @@ def generate_ai_appeal_copy(
     try:
         text = chat(
             build_deepseek_messages(appeal_type, product_contexts),
+            model="qwen-max",
             temperature=0.2,
             max_tokens=8192,
             api_key=api_key,
-            thinking=True,
-            thinking_budget=4096,
+            thinking=False,
             timeout=120,
             max_retries=0,
         )

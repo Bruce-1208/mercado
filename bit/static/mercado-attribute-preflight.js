@@ -64,7 +64,7 @@
     reset.addEventListener('click', () => { revisions = null; correctionGroups = {}; pendingFields = []; output.textContent = '已清除预检结果，正式上架仍会重新检查全部属性。'; });
     run.addEventListener('click', async () => {
         const state = selection();
-        if (!state.ids.length || state.ids.length > 50) { output.textContent = '每次请选择 1–50 件商品。'; return; }
+        if (!state.ids.length) { output.textContent = '请先选择商品。'; return; }
         if (!Number.isFinite(state.minimumNet) || state.minimumNet < 0 || mercadoPublishMinimumNet?.checkValidity() === false) { output.textContent = '最低净收益须为非负金额（USD），最多保留两位小数。'; mercadoPublishMinimumNet?.reportValidity(); return; }
         const targets = mercadoPublishTargetPreview(state.mode, state.tokens.map(Number), state.groups, state.sites);
         if (!targets.length) { output.textContent = '请选择兼容的目标账号和站点。'; return; }
@@ -92,7 +92,7 @@
                     method: 'POST', headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({product_item_ids:state.ids, token_id:Number(target.account.id), site_id:target.siteId, quantity:state.quantity, net_proceeds_ratio:state.ratio, minimum_net_proceeds_usd:state.minimumNet, corrections:correctionGroups[`${target.account.id}:${target.siteId}`] || {}}),
                 });
-                const body = await response.json();
+                const body = await readMercadoPublishResponse(response);
                 if (!response.ok || body.status !== 'success') throw new Error(body.message || '属性预检失败');
                 for (const row of body.data.results) {
                     revisions[`${row.product_id}:${target.account.id}:${target.siteId}`] = row.revision || '';

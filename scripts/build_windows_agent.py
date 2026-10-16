@@ -160,7 +160,7 @@ def verify_runtime():
 def build_fingerprint():
     from bit.local_agent_bundle import iter_business_source_files
     hasher = hashlib.sha256()
-    for path in [ROOT / "local_agent.py", ROOT / "MercadoLocalAgent.spec", REQUIREMENTS,
+    for path in [ROOT / "local_agent.py", ROOT / "agent_update.py", ROOT / "MercadoLocalAgent.spec", REQUIREMENTS,
                  Path(__file__), ROOT / "install-agent-forever.ps1",
                  ROOT / "bit/local_agent_distribution.py"]:
         hasher.update(path.read_bytes())
@@ -214,11 +214,14 @@ def smoke_test(executable):
         folder = Path(temporary)
         output = folder / "result.json"
         (folder / "local_agent_worker.py").write_text(
-            "import json, sys, tkinter, ssl, requests, pandas, openpyxl, cryptography\n"
+            "import json, sys, tkinter, ssl, requests, pandas, openpyxl, cryptography, agent_update\n"
+            "assert callable(agent_update.apply_update)\n"
             "from pathlib import Path\nfrom playwright.sync_api import sync_playwright\n"
+            "from selenium.webdriver.chrome.webdriver import WebDriver\n"
             "import win32gui, win32con\n"
             "assert sys.platform == 'win32'\n"
             "assert getattr(sys, 'frozen', False)\n"
+            "assert WebDriver.__module__ == 'selenium.webdriver.chrome.webdriver'\n"
             "ssl.create_default_context(cafile=requests.certs.where())\n"
             "root = tkinter.Tk(); root.withdraw(); root.destroy()\n"
             f"Path({winpath(output)!r}).write_text(json.dumps({{'ok': True, 'platform': 'win32'}}))\n",
@@ -285,7 +288,7 @@ def build(*, force=False):
                     shutil.copy2(path, path.with_name(path.stem + "-previous" + path.suffix))
             atomic_write(destination, executable.read_bytes())
             atomic_write(archive_path, content)
-            previous = {"fingerprint": wanted, "agent_version": agent_version(),
+            previous = {"fingerprint": wanted, "agent_version": agent_version(), "architecture": "x86_64",
                         "exe_sha256": digest(destination), "zip_sha256": digest(archive_path),
                         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
     bundle = build_business_bundle(ROOT)

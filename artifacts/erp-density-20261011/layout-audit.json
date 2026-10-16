@@ -1,0 +1,1322 @@
+[
+  {
+    "kind": "console",
+    "page": "tab-overview",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-orders",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      70
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-inventory",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      83
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-1688-products",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      167
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-original-products",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-collection",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      175
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-products",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-weight-dimensions-records",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-shipping-standards",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-publish-records",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      154
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-yandex",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-appeal",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-tasks",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      75
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-salesperson-stats",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      114
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-analysis",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      114
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-order-analysis",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      130,
+      130,
+      130
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-video",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-links",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      136
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-size-charts",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-automation-center",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-clearance-alerts",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-product-diagnosis",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-promotions",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-price-competition",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ad-analysis",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      175
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-prohibited-listings",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      154
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-tokens",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      75
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-pre-sale",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-customer-service",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-funds",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-weight-price",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-zying-collection",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-risk-check",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      75
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-infringement-knowledge",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-infractions",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ip-rights",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-reputation",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      101
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-api-reputation",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      136
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-appeals",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": [
+      114
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-access",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-overview",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-orders",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      102
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-inventory",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      152
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-1688-products",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      253
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-original-products",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-collection",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-products",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      228
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-weight-dimensions-records",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-shipping-standards",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-publish-records",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      175
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-yandex",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-appeal",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-tasks",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      75
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-salesperson-stats",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      114
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-analysis",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      175
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-order-analysis",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      130,
+      130,
+      130
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-video",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-links",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      176
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-size-charts",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-automation-center",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-clearance-alerts",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-product-diagnosis",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-promotions",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-price-competition",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ad-analysis",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      215
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-prohibited-listings",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      175
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-tokens",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      115
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-pre-sale",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-customer-service",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-funds",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-weight-price",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-zying-collection",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-risk-check",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      136
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-infringement-knowledge",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-infractions",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ip-rights",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-reputation",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      101
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-api-reputation",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      136
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-appeals",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": [
+      154
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-access",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-overview",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-orders",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      156
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-inventory",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      495
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-1688-products",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      540
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-original-products",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-collection",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-products",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      409
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-weight-dimensions-records",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-shipping-standards",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-mercado-publish-records",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      616
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-yandex",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-appeal",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-tasks",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      186
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-salesperson-stats",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      178
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-analysis",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      543
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-order-analysis",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      275,
+      275,
+      275
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-video",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-links",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      726
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-size-charts",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-automation-center",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-clearance-alerts",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-product-diagnosis",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-promotions",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-price-competition",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ad-analysis",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      689
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-prohibited-listings",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      652
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-store-tokens",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      160
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-pre-sale",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-customer-service",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-funds",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-weight-price",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-zying-collection",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-risk-check",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      455
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-infringement-knowledge",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-infractions",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-ip-rights",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "console",
+    "page": "tab-reputation",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      242
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-api-reputation",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      318
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-ai-appeals",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": [
+      397
+    ]
+  },
+  {
+    "kind": "console",
+    "page": "tab-access",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "filters": []
+  },
+  {
+    "kind": "standalone",
+    "page": "price_competition.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "price_competition.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "infraction_dashboard.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "infraction_dashboard.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "print_wallet.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "print_wallet.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "ai_billing.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "ai_billing.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "account_profile.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "account_profile.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "clearance_alerts.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "clearance_alerts.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "automation_center.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "automation_center.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "ai_weight_price.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "ai_weight_price.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "integration_settings.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "integration_settings.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "register.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "register.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "login.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "login.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "account_billing.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "account_billing.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "ai_video_details.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "ai_video_details.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "product_diagnosis.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "product_diagnosis.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "mercado_action_center.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "mercado_action_center.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "mercado_promotions.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "mercado_promotions.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "size_charts.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "size_charts.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "kind": "standalone",
+    "page": "employee_tasks.html",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "kind": "standalone",
+    "page": "employee_tasks.html",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  }
+]

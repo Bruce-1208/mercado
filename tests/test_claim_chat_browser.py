@@ -254,3 +254,29 @@ def test_translation_starts_second_batch_before_first_finishes(console_page):
     page.wait_for_function("document.querySelector('.customer-service-chat').textContent.includes('第二批已完成')")
     page.evaluate("batchResolvers[0]({translations:Array(10).fill('第一批已完成')})")
     page.wait_for_function("!customerServiceClaimBundle._translation_request")
+
+
+@pytest.mark.parametrize('width', [1440, 1024, 390])
+def test_claim_image_selection_remove_and_failed_send_preserves_images(console_page, width):
+    import base64
+    page = console_page
+    page.set_viewport_size({'width': width, 'height': 1000})
+    setup_claim(page)
+    image = {'name': 'test.png', 'mimeType': 'image/png', 'buffer': base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=')}
+    page.locator('#customer-service-claim-images').set_input_files([image, image])
+    assert page.locator('.claim-image-preview img').count() == 2
+    page.get_by_role('button', name='移除图片 2', exact=True).click()
+    assert page.locator('.claim-image-preview img').count() == 1
+    page.locator('#customer-service-claim-images').focus()
+    assert page.locator('#customer-service-claim-images').evaluate('(el) => el === document.activeElement')
+    page.evaluate("sendPromise = Promise.reject(new Error('模拟发送失败')); sendPromise.catch(() => {})")
+    page.locator('#customer-service-claim-send').click()
+    page.wait_for_function("claimCalls.some(call => call.action === 'claims-send') && !document.getElementById('customer-service-claim-send').disabled")
+    call = page.evaluate("claimCalls.find(call => call.action === 'claims-send').data")
+    assert call['message'] == '' and len(call['images']) == 1
+    assert page.locator('.claim-image-preview img').count() == 1
+    assert page.locator('#customer-service-claim-images').is_enabled()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    directory = Path(__file__).resolve().parents[1] / 'artifacts/claim-images-20261012'
+    directory.mkdir(parents=True, exist_ok=True)
+    page.locator('#customer-service-detail-dialog').screenshot(path=str(directory / f'images-{width}.png'))

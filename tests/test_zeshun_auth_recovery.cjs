@@ -13,13 +13,13 @@ const product = categoryId => ({
   management_category_id: categoryId
 });
 
-function setup({authMode = 'token'} = {}) {
+function setup({authMode = 'token', synced = {consoleUrl: 'https://console.test', consoleUrlDefaultMigration: 1}} = {}) {
   let listener;
   const stored = {
     local: authMode ? {browserExtensionAuth: {
       mode: authMode, token: 'test-token', user: {username: 'test'}
     }} : {},
-    sync: {consoleUrl: 'https://console.test', consoleUrlDefaultMigration: 1}, session: {}
+    sync: {...synced}, session: {}
   };
   const event = () => ({addListener() {}, removeListener() {}});
   const storage = area => ({
@@ -190,4 +190,42 @@ test('persistent data outage has at most two attempts; upload is never replayed'
   assert.equal(calls,2);
   await assert.rejects(run('apiRequest("/api/browser-extension/collect", {method:"POST",body:"{}"})'));
   assert.equal(calls,3);
+});
+
+for (const consoleUrl of ['https://wuhanzeshun.com', 'http://www.wuhanzeshun.com/', 'https://WUHANZESHUN.COM///']) {
+  test(`domain migration moves ${consoleUrl} once and clears old credentials`, async () => {
+    const {run, stored, requests} = setup({synced: {consoleUrl, consoleUrlDefaultMigration: 1}});
+    assert.equal((await run('settings()')).consoleUrl, 'https://wuhanzeshun.cn');
+    assert.equal(stored.sync.consoleUrlDefaultMigration, 2);
+    assert.equal(stored.local.browserExtensionAuth, undefined);
+    assert.equal(requests.length, 0);
+    // A deliberate choice of the legacy service after migration remains valid.
+    stored.sync.consoleUrl = consoleUrl;
+    assert.equal((await run('settings()')).consoleUrl, consoleUrl);
+  });
+}
+
+for (const consoleUrl of ['http://127.0.0.1:5000', 'https://custom.test', 'https://wuhanzeshun.com/custom', 'https://wuhanzeshun.com.evil.test']) {
+  test(`domain migration preserves explicit address ${consoleUrl}`, async () => {
+    const {run, stored} = setup({synced: {consoleUrl, consoleUrlDefaultMigration: 1}});
+    assert.equal((await run('settings()')).consoleUrl, consoleUrl);
+    assert.equal(stored.local.browserExtensionAuth.token, 'test-token');
+  });
+}
+
+test('fresh install and original local default use the new public domain', async () => {
+  for (const synced of [{}, {consoleUrl: 'http://127.0.0.1:5000'}]) {
+    const {run, stored} = setup({synced});
+    assert.equal((await run('settings()')).consoleUrl, 'https://wuhanzeshun.cn');
+    assert.equal(stored.sync.consoleUrlDefaultMigration, 2);
+  }
+});
+
+test('extension supports console bridge on both current and legacy public domains', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(extension, 'manifest.json'), 'utf8'));
+  const bridge = manifest.content_scripts.find(script => script.js.includes('console-recollect.js'));
+  for (const domain of ['wuhanzeshun.cn', 'www.wuhanzeshun.cn', 'wuhanzeshun.com', 'www.wuhanzeshun.com']) {
+    assert.ok(manifest.host_permissions.includes(`https://${domain}/*`));
+    assert.ok(bridge.matches.includes(`https://${domain}/*`));
+  }
 });

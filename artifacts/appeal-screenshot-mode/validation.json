@@ -1,0 +1,42 @@
+{
+  "scope": "Offline verification only; no real appeals, messages, uploads, deployments or live service restarts.",
+  "python": {
+    "passed": 231,
+    "skipped": 1,
+    "deselected": 5,
+    "excluded_test": "tests/test_bit_daily_task.py::test_shop_executor_sends_expected_form (five parameter cases): assertion omits the existing appeal_copy_mode kwarg"
+  },
+  "javascript": {
+    "passed": 43,
+    "file": "tests/test_zeshun_appeal_runner.cjs"
+  },
+  "playwright": {
+    "passed": 37,
+    "widths": [
+      390,
+      1024,
+      1440
+    ],
+    "checks": [
+      "keyboard focus and Space toggle",
+      "navigation and multi-selection",
+      "no horizontal overflow",
+      "screenshot switch persists while running",
+      "explicit package IDs exclude sale and shipping IDs"
+    ]
+  },
+  "final_cleanup_recheck": {
+    "passed": 63,
+    "skipped": 1
+  },
+  "broader_suite_failures": [
+    "test_bit_interface_appeal: older expectations for filter options, payload source text, worker limits and authenticated API access",
+    "test_zeshun_browser_extension: older expectations for 1688 search, module constant location and authenticated price route"
+  ],
+  "limitations": [
+    "Uses genuine chat viewport screenshots only; does not copy U8 page/status/identifier rewriting or upload fabricated evidence.",
+    "Original U8 files are unchanged. Zeshun screenshot mode introduces no activation check.",
+    "Missing verified package IDs stop order appeals. Product appeals continue to use product identifiers.",
+    "Packaged extension 1.8.92; application and Agent source changes remain local and require deployment/update to take effect."
+  ]
+}

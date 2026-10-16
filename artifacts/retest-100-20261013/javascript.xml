@@ -1,0 +1,1646 @@
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+	<testcase name="all collector options and shared categories remain independent of visible product rows" time="0.066945" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="bulk category assignment uses product IDs and clearing sends an explicit null" time="0.005062" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="single edits send only changed fields and display saved overrides including clear" time="0.002563" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="Expected values to be strictly equal:&#10;&#10;true !== false&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;true !== false">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+true !== false
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:105:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="saving source net closes immediately while AI products refresh in the background" time="0.002910" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="Expected values to be strictly equal:&#10;&#10;0 !== 1&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;0 !== 1">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+0 !== 1
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:121:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="invalid numeric typing cannot accidentally clear existing data and failed saves remain editable" time="0.000691" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="positive finite numeric validation rejects zero, negative and infinity without writes" time="0.002562" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="a saved authoritative row needs no source list refresh even when the read service is unavailable" time="0.001752" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="Expected values to be strictly equal:&#10;&#10;'' !== '商品资料已保存'&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;'' !== '商品资料已保存'">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+'' !== '商品资料已保存'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  '' !== '商品资料已保存'
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:166:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: '商品资料已保存',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="AI refresh failure cannot turn a committed save into an edit failure" time="0.020387" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="Expected values to be strictly equal:&#10;&#10;true !== false&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;true !== false">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+true !== false
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:179:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="a list started before persistence cannot overwrite the saved row" time="0.000985" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="Expected values to be strictly equal:&#10;&#10;true !== false&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;true !== false">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+true !== false
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  true !== false
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:198:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="a committed category change remains visible when the following list refresh fails" time="0.000942" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="The input did not match the regular expression /&amp;lt;新品&amp;gt;/. Input:&#10;&#10;''&#10;">
+		<failure type="testCodeFailure" message="The input did not match the regular expression /&amp;lt;新品&amp;gt;/. Input:&#10;&#10;''">
+[Error [ERR_TEST_FAILURE]: The input did not match the regular expression /&amp;lt;新品&amp;gt;/. Input:
+
+''
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /&amp;lt;新品&amp;gt;/. Input:
+  
+  ''
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:215:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '',
+    expected: /&amp;lt;新品&amp;gt;/,
+    operator: 'match',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="save busy state prevents duplicate PATCH calls and closing before completion" time="0.000595" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="row blank space opens edit while controls and text selection do not" time="0.001501" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="workflow transfer accepts valid items and leaves missing source fields selected" time="0.001297" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="all invalid transfers and single editor entry stay in the 1688 area" time="0.000908" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="positive source overrides allow transfer despite missing raw values" time="0.000344" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="slow filter metadata never blocks rows and concurrent loads share metadata" time="0.001214" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="The input did not match the regular expression /已加载 1 件/. Input:&#10;&#10;'读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'&#10;">
+		<failure type="testCodeFailure" message="The input did not match the regular expression /已加载 1 件/. Input:&#10;&#10;'读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'">
+[Error [ERR_TEST_FAILURE]: The input did not match the regular expression /已加载 1 件/. Input:
+
+'读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /已加载 1 件/. Input:
+  
+  '读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:309:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试',
+    expected: /已加载 1 件/,
+    operator: 'match',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="failed metadata can retry without discarding loaded products" time="0.003671" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs" failure="The input did not match the regular expression /已加载.*选项暂不可用/. Input:&#10;&#10;'读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'&#10;">
+		<failure type="testCodeFailure" message="The input did not match the regular expression /已加载.*选项暂不可用/. Input:&#10;&#10;'读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'">
+[Error [ERR_TEST_FAILURE]: The input did not match the regular expression /已加载.*选项暂不可用/. Input:
+
+'读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: The input did not match the regular expression /已加载.*选项暂不可用/. Input:
+  
+  '读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试'
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs:327:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '读取失败：window.catalogOperationMarkup is not a function；请刷新数据重试',
+    expected: /已加载.*选项暂不可用/,
+    operator: 'match',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="bulk measurement edits snapshot the selection and omit unchanged blank fields" time="0.002942" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="invalid or empty bulk edits do not write and failed writes retain user input" time="0.001723" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="weight range reaches the paginated query, validates bounds and resets" time="0.002426" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="sending to AI keeps source rows and collected details in the 1688 library" time="0.001039" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/1688_product_management.test.cjs"/>
+	<testcase name="member and store group selections survive reopening and scope the very first reads" time="0.023424" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_filter_memory.test.cjs"/>
+	<testcase name="unavailable remembered values stay selected without widening the next poll" time="0.003615" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_filter_memory.test.cjs"/>
+	<testcase name="bad or blocked browser storage does not break initial loading" time="0.004029" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_filter_memory.test.cjs"/>
+	<testcase name="home preloads immediately and force refreshes both APIs hourly even in background" time="0.018958" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_hourly.test.cjs"/>
+	<testcase name="navigation and cached reads do not postpone the hourly deadline" time="0.006708" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_hourly.test.cjs"/>
+	<testcase name="wake catches up once, early focus does not refresh, and reopening overdue preloads forces refresh" time="0.005555" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_hourly.test.cjs"/>
+	<testcase name="pending warmup continues while the workbench browser tab is hidden" time="0.001830" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_hourly.test.cjs"/>
+	<testcase name="claim refresh shares in-flight requests and retries after completion" time="0.003571" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_loading.test.cjs"/>
+	<testcase name="background claim polling preserves snapshots and does not report pending as empty" time="0.001412" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_loading.test.cjs"/>
+	<testcase name="preload starts both APIs and each response is consumed once" time="0.001621" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_loading.test.cjs"/>
+	<testcase name="a late task response cannot overwrite a newer filter selection" time="0.002396" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_loading.test.cjs"/>
+	<testcase name="large lists page without losing rights-holder reply identity or total counts" time="0.002799" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_loading.test.cjs"/>
+	<testcase name="workbench preloaded snapshots survive navigation, expire, and are account scoped" time="0.006125" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/action_center_loading.test.cjs"/>
+	<testcase name="mode selection queries the server and reset reloads all modes" time="0.020467" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_appeal_mode_filter.test.cjs"/>
+	<testcase name="Mercado enforces Flash official endpoint and excludes stale paid-image fields" time="0.018055" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="Mercado locks settings while other-platform values survive a platform round trip" time="0.001826" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="non-Mercado payload preserves custom model and paid image settings" time="0.001697" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="budget displays estimates and unresolved reserves separately without inventing legacy costs" time="0.005325" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1038
+      return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card" data-original-product-id="${Number(row.id)}">
+                    ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:2:5
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs:31:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs:88:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+}
+		</failure>
+	</testcase>
+	<testcase name="uncapped interrupted generation keeps accounting and allows resubmission" time="0.003870" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="off-peak waiting stays active, uses Beijing resume time and polls even when running is false" time="0.027827" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="failure log excludes budget estimates and unresolved reserves even for administrators" time="0.001783" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="overall cost remains separate from visible rows and shows recorded coverage" time="0.004863" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1038
+      return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card" data-original-product-id="${Number(row.id)}">
+                    ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:1:142
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs:31:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs:132:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+}
+		</failure>
+	</testcase>
+	<testcase name="generation costs stay hidden for member" time="0.000914" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="generation costs stay hidden for warehouse" time="0.001287" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="generation costs stay hidden for enterprise_admin" time="0.000975" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="generation costs stay hidden for admin" time="0.001475" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="generation costs stay hidden for undefined" time="0.000813" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for super_admin" time="0.002105" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for enterprise_admin" time="0.001594" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for operator" time="0.001662" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for member" time="0.009868" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for warehouse" time="0.003931" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for viewer" time="0.003529" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="legacy SKU error accounting is filtered for " time="0.000698" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_budget.test.cjs"/>
+	<testcase name="products display before cost statistics finish; stats do not rebuild editable cards" time="0.016137" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_loading.test.cjs"/>
+	<testcase name="new list request aborts old work and ignores stale cost responses" time="0.005310" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_loading.test.cjs"/>
+	<testcase name="a confirmed review save cannot be overwritten by an older list request" time="0.002403" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_loading.test.cjs"/>
+	<testcase name="first 50 products render while remaining products and generator directory are pending" time="0.003783" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_loading.test.cjs"/>
+	<testcase name="old remaining products cannot enter a new search result" time="0.002250" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_loading.test.cjs"/>
+	<testcase name="50 rows per page, final page and bounds after filtering" time="0.010419" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_pagination.test.cjs"/>
+	<testcase name="select all affects only the displayed page" time="0.004837" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_pagination.test.cjs"/>
+	<testcase name="manually failed overrides completed and pending generation" time="0.000804" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_pagination.test.cjs"/>
+	<testcase name="a completed Mercado listing is pending on Amazon, without Mercado copy or image fallback" time="0.007032" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:863
+    return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card ai-original-marketplace-card" data-original-product-id="${Number(row.id)}">
+                  ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at renderAiOriginalMarketplaceCard (evalmachine.&lt;anonymous>:863:17)
+      at evalmachine.&lt;anonymous>:1022:63
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:1:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:25:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:41:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+}
+		</failure>
+	</testcase>
+	<testcase name="explicitly cleared source net stays blank while a later manually saved AI net is shown" time="0.003404" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1038
+      return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card" data-original-product-id="${Number(row.id)}">
+                    ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:4:5
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:25:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:51:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+}
+		</failure>
+	</testcase>
+	<testcase name="platform status filtering and select all use independent draft statuses" time="0.003135" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:863
+    return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card ai-original-marketplace-card" data-original-product-id="${Number(row.id)}">
+                  ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at renderAiOriginalMarketplaceCard (evalmachine.&lt;anonymous>:863:17)
+      at evalmachine.&lt;anonymous>:1022:63
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at toggleAllAiOriginalProducts (evalmachine.&lt;anonymous>:1393:3)
+      at evalmachine.&lt;anonymous>:4:5
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:25:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:62:3)
+}
+		</failure>
+	</testcase>
+	<testcase name="generation sends chosen platform and template and excludes Mercado store token" time="0.002829" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs"/>
+	<testcase name="Mercado publishing, approval, translation and parameter mutations are guarded off-platform" time="0.003283" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs"/>
+	<testcase name="Amazon editor uses current limits and PATCH preserves target platform and Item Highlights" time="0.003098" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs"/>
+	<testcase name="switching platforms clears selection and includes platform in backend businessperson filter" time="0.001619" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: window.catalogOperationMarkup is not a function
+      at renderAiOriginalMarketplaceCard (evalmachine.&lt;anonymous>:863:17)
+      at evalmachine.&lt;anonymous>:1022:63
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at changeAiOriginalPlatform (evalmachine.&lt;anonymous>:257:3)
+      at evalmachine.&lt;anonymous>:1:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:25:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:108:9)
+}
+		</failure>
+	</testcase>
+	<testcase name="platform rules show readable language and safely escape validation content" time="0.002022" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:863
+    return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card ai-original-marketplace-card" data-original-product-id="${Number(row.id)}">
+                  ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at renderAiOriginalMarketplaceCard (evalmachine.&lt;anonymous>:863:17)
+      at evalmachine.&lt;anonymous>:1022:63
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:4:41
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:25:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs:116:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+}
+		</failure>
+	</testcase>
+	<testcase name="manual checklist distinguishes suggested or edited net from persisted net and updates on input" time="0.014881" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs"/>
+	<testcase name="parameter save rejects stale net or incomplete approval in the server readback" time="0.006999" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_platforms.test.cjs"/>
+	<testcase name="reject unrelated origin before fetching or collecting" time="0.001236" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recollect_bridge.test.cjs"/>
+	<testcase name="coalesce duplicate clicks and use authorized server source" time="0.004314" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recollect_bridge.test.cjs"/>
+	<testcase name="existing imported CBT category opens unlocked and payload sends an explicit boolean" time="0.011023" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs"/>
+	<testcase name="manual search selection locks category and reopening reflects saved lock" time="0.002286" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs"/>
+	<testcase name="failure cards explain required recovery and saved partial steps without dropping failed status" time="0.002937" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1038
+      return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card" data-original-product-id="${Number(row.id)}">
+                    ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:1:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs:21:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs:54:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+}
+		</failure>
+	</testcase>
+	<testcase name="recovery text distinguishes category and required attribute work" time="0.001302" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs"/>
+	<testcase name="partial category checkpoint populates editor and loads its schema ahead of imported category" time="0.000708" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_recovery.test.cjs"/>
+	<testcase name="invalid product and server failure do not block other approvals" time="0.004410" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_review_partial.test.cjs"/>
+	<testcase name="other statuses do not require generation or numeric parameters" time="0.001725" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_review_partial.test.cjs"/>
+	<testcase name="all invalid items remain selected and send no writes" time="0.001588" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_review_partial.test.cjs"/>
+	<testcase name="stale success readback fails only that product and never fabricates its review status" time="0.003075" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_review_partial.test.cjs"/>
+	<testcase name="review requests really overlap and keep draining after an HTTP failure" time="0.001759" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_original_review_partial.test.cjs"/>
+	<testcase name="dimension readback compares all three numeric sides" time="0.000478" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_dimensions.test.cjs"/>
+	<testcase name="named dimensions keep length width height order and reject missing controls" time="0.000273" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_dimensions.test.cjs"/>
+	<testcase name="login confirmation and next task unlock after a completed login job" time="0.004223" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="refresh keeps the signed-in computer and never switches to another online Agent" time="0.006226" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="opening the page restores the login Agent before loading the computer list" time="0.003284" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="terminating a stale batch unlocks browser launch and a new batch" time="0.001497" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="Agent login jobs can be terminated before a batch exists" time="0.005523" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="owner filter resets pagination and log cursor without changing execution account" time="0.000892" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="owner query is added only to record reads, never browser actions" time="0.001433" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_login.test.cjs"/>
+	<testcase name="one real drag is not approval; readable target must be confirmed separately" time="0.004846" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="unchanged challenge pauses and manual Continue cannot repeat the drag" time="0.005427" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="unsupported challenge and occupied debugger pause without input or stealing another session" time="0.002501" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="stop during drag releases mouse and detaches without approval" time="0.001293" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="verification appearing during an in-flight read cancels the supplier action on failure" time="0.001435" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="unavailable observation is a manual pause, even when the read returned data" time="0.000682" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="pause cancels every frame and a failed ledger write cannot start a drag" time="0.003202" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="a later ordinary item error after confirmed recovery keeps its original classification" time="0.001547" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/ai_weight_price_verification.test.cjs"/>
+	<testcase name="unknown evidence stays unknown while confirmed zero remains zero" time="0.015500" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="evidence requires deliberate warehouse confirmation and current SKU visits" time="0.002982" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="date boundaries use Beijing time and listing visits remain labeled as reference" time="0.005249" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="hidden parent iframe cancels scan polling and duplicate boot keeps its initial data" time="0.006937" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="renders per-variation evidence with DOM text, without treating missing metrics as zero" time="0.002684" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="a late previous request cannot replace newer filter results or their loading state" time="0.003830" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="failed load and failed remote scan release controls and display actionable errors" time="0.002757" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="background scan polls only while this page is visible and stops after completion" time="0.005229" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="read-only accounts cannot submit facts or request a scan" time="0.003750" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="facts save sends the exact SKU key and preserves unknown stockout at variation grain" time="0.004613" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="manual scan sends JSON with the selected store and site scope" time="0.002589" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="product main images load lazily and failed or unsafe images keep a placeholder" time="0.002528" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/clearance_alerts.test.cjs"/>
+	<testcase name="pre-sale restores previous results and separates users" time="0.005837" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="customer-service restores previous results and separates users" time="0.003921" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="corrupt storage safely falls back" time="0.003505" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="pre-sale rejects snapshots from a different date range" time="0.001682" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="pre-sale rejects legacy snapshots that omit the recent-week dates" time="0.002873" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="pre-sale restores a successful empty result for the same week" time="0.003024" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="customer-service rejects snapshots from a different date range" time="0.003142" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="customer-service rejects legacy snapshots that omit the recent-week dates" time="0.003479" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="customer-service restores a successful empty result for the same week" time="0.003773" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="startup keeps the default all-status view instead of restoring an old pre-sale filter" time="0.002103" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="startup keeps the default claims view instead of restoring post-sale" time="0.002777" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="old unread-only after-sales snapshots do not hide read conversations for another hour" time="0.002289" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_snapshot.test.cjs"/>
+	<testcase name="both communication modules wait for one shared authorization request" time="0.019867" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="already initialized modules wait for an ongoing background authorization refresh" time="0.001211" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="authorization failure preserves the reason and both modules can retry" time="0.001508" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="authorization loads without a store table and returns a shared success result" time="0.000465" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="query and update buttons wait for authorization before choosing stores" time="0.000936" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="query and update buttons retain authorization errors and retry on the next click" time="0.001145" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="an automatic update and a click waiting for authorization share the data request" time="0.003381" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="a pre-sale preload and a click waiting for authorization share the data request" time="0.000949" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_stores.test.cjs"/>
+	<testcase name="both modules automatically request all statuses in the inclusive recent seven days" time="0.040902" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="claims and post-sale send the same recent-week date boundaries" time="0.025227" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="CBT replies use the marketplace seller in both summary and detail" time="0.032846" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs" failure="customerServiceAttachments is not defined">
+		<failure type="testCodeFailure" message="customerServiceAttachments is not defined">
+[Error [ERR_TEST_FAILURE]: customerServiceAttachments is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:47
+                          return `&lt;div class="customer-service-bubble${outgoing ? " outgoing" : ""}">${customerServiceText(message.text, message.text_translated || message.translated_message)}${customerServiceAttachments(message, tokenId, {packId, siteId: message.site_id || store.site_id})}&lt;small>${escapeHtml(customerServiceDate(when))} · ${escapeHtml(message.status || "-")}&lt;/small>&lt;/div>`;
+                                                                                                       ^
+  
+  ReferenceError: customerServiceAttachments is not defined
+      at evalmachine.&lt;anonymous>:47:102
+      at Array.map (&lt;anonymous>)
+      at renderPostSaleDetail (evalmachine.&lt;anonymous>:44:42)
+      at evalmachine.&lt;anonymous>:7:9
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at Object.value (/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs:81:33)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs:120:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+}
+		</failure>
+	</testcase>
+	<testcase name="post-sale includes Shanghai week boundaries and excludes the adjacent instants" time="0.034394" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="claims filter by Shanghai creation dates even when updates fall in a different week" time="0.039824" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="a successful empty preload is reused when opening either module" time="0.023977" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="after-sales cache expires hourly while pre-sale keeps its twelve-hour interval" time="0.045258" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="a new day rolls the default week and reloads both modules" time="0.030527" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="custom date ranges survive default initialization and a day rollover" time="0.044917" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="pre-sale authorization-only initialization does not recursively query" time="0.025928" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="startup defers both data preloads until the browser is idle" time="0.002521" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="startup falls back to a deferred timer when idle callbacks are unavailable" time="0.001433" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="users without customer service access do not preload communication data" time="0.001327" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/communication_weekly.test.cjs"/>
+	<testcase name="warm response is reused once; explicit second refresh reaches the server" time="0.058800" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="foreground request joins an in-flight warm request without leaving a stale cache" time="0.002332" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="aborting one subscriber leaves the other request usable" time="0.002131" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="aborting all foreground subscribers cancels their transport" time="0.008308" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="caller abort still cancels body reads after response headers arrive" time="0.001020" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="a body abort after shared headers cannot cancel another subscriber body" time="0.002082" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="mutations clear completed and pending warm snapshots" time="0.002895" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="scope and filters have independent identities" time="0.002078" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="API errors and non-JSON/login replies are never retained" time="0.002037" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="failed warming releases pending state and permits a retry" time="0.001336" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="forced reads and custom credentials bypass warm response reuse" time="0.000935" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="large warm bodies are discarded under the memory limit" time="0.009854" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="queue checks permissions, prioritizes intent, and limits simultaneous reads" time="0.005097" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="hidden browser pauses scheduled preloading until visible" time="0.001349" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="background queue waits until foreground body downloads finish" time="0.003207" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="discarding a foreground HTTP error does not starve background reads" time="0.002215" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="task status snapshots expire much sooner than list data" time="0.002527" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/console_preload.test.cjs"/>
+	<testcase name="refresh is scheduled hourly and runs while the after-sales page is hidden" time="0.007107" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_background.test.cjs"/>
+	<testcase name="failed preload still schedules a retry" time="0.001790" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_background.test.cjs"/>
+	<testcase name="restoring a recent snapshot keeps the next refresh one hour after its update" time="0.001930" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_background.test.cjs"/>
+	<testcase name="resuming after a cached preload refreshes once its snapshot is an hour old" time="0.003180" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_background.test.cjs"/>
+	<testcase name="resume catches up stale data without duplicating a running request" time="0.002203" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_background.test.cjs"/>
+	<testcase name="background preload respects view permission" time="0.002070" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_background.test.cjs"/>
+	<testcase name="completed stores display while pending stores poll without restarting work" time="0.002067" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_preload.test.cjs"/>
+	<testcase name="a response from a previous filter cannot replace the current view" time="0.000834" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_preload.test.cjs"/>
+	<testcase name="claims render completed stores before a slow store finishes" time="0.002595" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/customer_service_preload.test.cjs"/>
+	<testcase name="order inbound defaults owner to salesperson and records current user" time="0.003388" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/inventory_people.test.cjs"/>
+	<testcase name="multiple order products default owner when a product is chosen" time="0.001148" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/inventory_people.test.cjs"/>
+	<testcase name="append keeps owner while outbound displays the original inbound person" time="0.001585" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/inventory_people.test.cjs"/>
+	<testcase name="inbound requires owner and submits a changed owner" time="0.001252" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/inventory_people.test.cjs"/>
+	<testcase name="stock and log filters are sent to API and reset independently" time="0.001843" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/inventory_people.test.cjs"/>
+	<testcase name="zying: approved selection reaches publishing despite missing collection metadata" time="0.000909" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/manual_product_publish.test.cjs"/>
+	<testcase name="collected: approved selection reaches publishing despite missing collection metadata" time="0.000208" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/manual_product_publish.test.cjs"/>
+	<testcase name="pulled: approved selection reaches publishing despite missing collection metadata" time="0.000133" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/manual_product_publish.test.cjs"/>
+	<testcase name="other sources keep existing preparation checks" time="0.000278" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/manual_product_publish.test.cjs"/>
+	<testcase name="listing IDs prefer selected seller and reject catalog IDs" time="0.000623" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_product_data.test.cjs"/>
+	<testcase name="server measurements allow collection without a third party DOM snapshot" time="0.000601" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_product_data.test.cjs"/>
+	<testcase name="card shows zero sales and unavailable fields distinctly" time="0.000322" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_product_data.test.cjs"/>
+	<testcase name="shows the destination listing instead of the reusable global product ID" time="0.001800" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_publish_record_items.test.cjs"/>
+	<testcase name="deduplicates variants and excludes failed and other-site listings" time="0.000268" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_publish_record_items.test.cjs"/>
+	<testcase name="legacy local IDs link to the correct marketplace even with malformed results" time="0.000329" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_publish_record_items.test.cjs"/>
+	<testcase name="global IDs remain copyable without inventing a storefront URL" time="0.000239" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_publish_record_items.test.cjs"/>
+	<testcase name="right click copies only the product ID and prevents navigation" time="0.000145" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_publish_record_items.test.cjs"/>
+	<testcase name="rotation is private, atomic, and preserves session settings" time="0.003641" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_session_renewal.test.cjs"/>
+	<testcase name="late refresh cannot overwrite administrator replacement" time="0.001046" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_session_renewal.test.cjs"/>
+	<testcase name="normal successful API response rotates refresh_token without exposing it" time="0.024486" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/mercado_session_renewal.test.cjs"/>
+	<testcase name="alerts appear, recharge clears warning, and refresh button works" time="0.005333" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="integrations display a configured non-DeepSeek provider without implying a zero or healthy balance" time="0.002493" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="all five configured services have individual cards, safe text, balances and official consoles" time="0.022841" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="empty account keeps credentials guidance visible" time="0.001438" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="failed overview refresh clears previous amounts and queried timestamps" time="0.002862" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="saving credentials, visibility and refresh query the complete overview" time="0.001459" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="saving while a query is running queues a refresh for the newly saved credentials" time="0.001949" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/model_balance.test.cjs"/>
+	<testcase name="automatic print errors remain visible after sync completes" time="0.014316" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_autoprint_status.test.cjs"/>
+	<testcase name="successful round restores normal schedule" time="0.000809" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_autoprint_status.test.cjs"/>
+	<testcase name="actual freight stays empty before shipment and never falls back to a quote or legacy freight" time="0.001380" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_freight.test.cjs"/>
+	<testcase name="merged orders add official actual charges without requiring the legacy freight alias" time="0.002485" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_freight.test.cjs"/>
+	<testcase name="one unshipped child keeps merged actual freight and variance empty" time="0.002168" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_freight.test.cjs"/>
+	<testcase name="balance uses the API quote initially and updates when actual freight returns" time="0.000397" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_freight.test.cjs"/>
+	<testcase name="merged balances preserve actual and quoted deductions for each child" time="0.000467" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_freight.test.cjs"/>
+	<testcase name="timeout releases loading state and allows retry" time="0.001311" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_loading.test.cjs"/>
+	<testcase name="superseded request cannot overwrite current loading state" time="0.000415" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_loading.test.cjs"/>
+	<testcase name="summary arriving after a new filter cannot overwrite current metrics" time="0.000462" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_loading.test.cjs"/>
+	<testcase name="summary failure displays unavailable state instead of a fabricated zero" time="0.000932" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_loading.test.cjs"/>
+	<testcase name="concurrent clicks cannot start a second request even after the selection changes" time="0.002873" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="network failure then reserved conflict keeps the same request key through retries and reload" time="0.001369" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="network failure then settled conflict keeps the same request key through retries and reload" time="0.004361" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="only explicit settled reprint confirmation creates a new key and its two buttons cannot duplicate the print" time="0.002460" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="cancelled conflict clears its key so the next print starts a new request" time="0.000434" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="insufficient balance clears the uncharged request before a post-recharge retry" time="0.000988" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="persisted pending print keys belong to the logged-in user" time="0.001680" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_print_wallet.test.cjs"/>
+	<testcase name="shows product before translation and adds Chinese without rebuilding content or resetting scroll" time="0.006319" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="product timeout aborts and retry preserves the original order authorization context" time="0.003686" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="switching products cancels the old request and its late response cannot replace the current product" time="0.001937" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="close cancels loading and reopening before the queued close event keeps the new request alive" time="0.003052" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="translation error keeps original content and retry requests only translation with safe text insertion" time="0.002403" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="translation timeout aborts its request without hiding the product" time="0.003520" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="Escape cancels an in-progress translation and prevents a late translation changing the product" time="0.001388" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="login redirect HTML gives an actionable message and releases the request timeout" time="0.001114" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="non-JSON error responses retain HTTP diagnostics and never start translation" time="0.010395" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="structured API errors preserve their specific backend explanation" time="0.001902" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="fast stage displays SKU content while description loads and patches only description later" time="0.003257" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="cached translated detail does not issue another translation request" time="0.001180" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/order_product_detail_loading.test.cjs"/>
+	<testcase name="1 stores are queried in sequential batches of at most 100 and merged" time="0.002268" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="100 stores are queried in sequential batches of at most 100 and merged" time="0.003251" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="101 stores are queried in sequential batches of at most 100 and merged" time="0.000879" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="250 stores are queried in sequential batches of at most 100 and merged" time="0.000495" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="batch HTTP failures preserve successful stores and subsequent batches still run" time="0.000536" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="network failures are reported for every affected store" time="0.001143" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="all batches keep the original status and omit worker settings for restricted users" time="0.000886" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/pre_sale_batches.test.cjs"/>
+	<testcase name="timeout exits loading without duplicating the slow server query" time="0.003443" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="transient server error retries and succeeds" time="0.016666" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="authorization failures do not retry" time="0.002610" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="new request cancels old response body and prevents stale results" time="0.001721" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="superseding a request cancels its retry delay" time="0.002201" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="infringement status adds an independent query filter and clears cleanly" time="0.001541" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="product rows load before delayed menus and late menus preserve filters without another list render" time="0.017012" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="rapid list switching shares menu requests and late menu completion adds no product query" time="0.019371" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="saved product category is displayed even before its menu has loaded" time="0.012251" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="loadMercadoManagementCategories shares pending reads and queues one fresh forced refresh" time="0.013917" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="loadZyingCollectionCategories shares pending reads and queues one fresh forced refresh" time="0.015834" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="loadMercadoPublishStores shares pending reads and queues one fresh forced refresh" time="0.011558" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="product developer reads share one request and a failed read can retry" time="0.026123" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="saved product developer reads share a bounded request and retry without a ZYing selector" time="0.022565" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="refreshing saved product developers preserves an active choice even when the directory changes" time="0.016918" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="two connection interruptions recover on the final bounded retry" time="0.005904" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="persistent network failure stops retrying and exposes a readable reload action" time="0.003605" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="database timeout is explained without repeating an expensive query" time="0.004739" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="server non-retryable failures preserve their cause" time="0.004350" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="product queries show the full filtered total across pages" time="0.009593" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="collection and product queries show an exact zero for empty filters" time="0.027360" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="unknown total keeps next-page navigation and disables misleading last-page jump" time="0.025956" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/product_list_loading.test.cjs"/>
+	<testcase name="type options show Chinese while retaining official API values" time="0.000419" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="batch stop selects eligible campaigns and sends whole campaign IDs once" time="0.001593" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="cancelled confirmation does not submit any stop request" time="0.001339" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="long running stop shows live counts and continues beyond ten minutes" time="0.000488" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="temporary status failure keeps polling without sending another cancellation" time="0.000385" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="page reload resumes tracking running stop tasks without resubmission" time="0.000340" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="one active batch leaves other campaign types selectable and tracks both batches" time="0.000472" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_bulk_stop.test.cjs"/>
+	<testcase name="minimum discount uses official maximum price and preserves unknown" time="0.002100" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_discount.test.cjs"/>
+	<testcase name="bulk discount updates eligible selected rows and skips out-of-range prices" time="0.001663" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_discount.test.cjs"/>
+	<testcase name="invalid discounts leave prices unchanged" time="0.004726" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_discount.test.cjs"/>
+	<testcase name="campaign participation composes with existing filters and clears for all activities" time="0.001939" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_participation.test.cjs"/>
+	<testcase name="activity enrollment summary separates latest successes, failures and unresolved results" time="0.001394" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="failed unenrolled products show safely escaped reasons" time="0.000554" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="official participation is distinguished from local enrollment and unresolved submissions remain unresolved" time="0.000794" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="current participation wins over old results and cancelled items do not retain success" time="0.001899" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="net proceeds show amount, its own currency, quote price currency and source without converting currencies" time="0.001286" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="changed activity prices hide a stale after-promotion net quote and invalidate confirmation" time="0.001134" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="zero-price candidates use the official suggested discount price before falling back to the maximum" time="0.000846" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="matching official net options are used for edited prices only in the same sale currency" time="0.000908" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="anomalous net quotes show a warning without presenting the reported amount as earnings" time="0.000659" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_results.test.cjs"/>
+	<testcase name="shop entry opens the requested activity independently of store/list loading and filters" time="0.009592" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="target selects one candidate only, renders its checked state, and focuses the row" time="0.001811" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="missing or no-longer-candidate target never selects another available product" time="0.002181" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="ended, expired, and unsupported activities leave the target unselected with a clear reason" time="0.004157" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="opening clears old selection, prices, preview, and controls immediately; failure stays empty" time="0.001422" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="late activity response cannot override the most recently opened target" time="0.000525" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="ordinary activity browsing stays unselected and multi-product selection still works" time="0.000601" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="invalid target parameters show feedback without requesting an unintended activity" time="0.001359" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="explicit preview sends only the selected target and edited price, without a job submission" time="0.001309" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="a preview that arrives after opening another activity cannot restore a stale submission" time="0.001536" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="submission results remain visible after refreshing the activity (mocked job API)" time="0.003482" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="failed submissions use an error or partial-result style instead of success styling" time="0.003914" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="paging invalidates an in-flight preview and retains the selected offscreen price" time="0.002498" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="platform-priced selections keep null deal prices on every page" time="0.000694" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="select all pages includes offscreen candidates and preserves their edited prices in preview" time="0.001494" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="all pages read failure keeps existing selection without partially selecting pages" time="0.000515" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="late all-pages response cannot select products in another campaign" time="0.001691" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="product and item filters reset selection, persist across pages, and reset for another campaign" time="0.001036" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="batch discount excludes products below official minimum from enrollment, including offscreen products" time="0.000530" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="all products below minimum leave no selection and never request enrollment preview" time="0.000393" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="running enrollment refreshes store links as each new success arrives" time="0.001012" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="withdrawn products can be selected across pages and receive a new batch price" time="0.000805" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="full selection reads six pages concurrently and slow page does not block remaining pages" time="0.000836" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="cancel full selection exits immediately even when a page never responds" time="0.001574" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="page timeout releases all selection controls and preserves prior choices" time="0.000522" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/promotion_target.test.cjs"/>
+	<testcase name="salesperson statistics reuse concurrent activation and recent scoped results; submit refreshes" time="0.045300" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/salesperson_ai_loading.test.cjs"/>
+	<testcase name="salesperson statistics ignore older filter responses and retry failed requests" time="0.002297" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/salesperson_ai_loading.test.cjs"/>
+	<testcase name="AI original profiles and store metadata share in-flight requests and completed loads" time="0.005134" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/salesperson_ai_loading.test.cjs"/>
+	<testcase name="AI original polling stops when its module becomes inactive" time="0.002392" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/salesperson_ai_loading.test.cjs"/>
+	<testcase name="AI original workbench processes large lists with one row lookup and status check per product" time="0.003599" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/salesperson_ai_loading.test.cjs"/>
+	<testcase name="infringement task polling pauses for hidden lists and resumes on module visibility" time="0.002901" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/salesperson_ai_loading.test.cjs"/>
+	<testcase name="all built-in charts contain complete, finite ranges and portable platform content" time="0.010191" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_builtins.test.cjs"/>
+	<testcase name="reference profiles stay immutable across import and editing" time="0.000298" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_builtins.test.cjs"/>
+	<testcase name="server batch catalog exactly matches the browser reference templates" time="0.005225" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_builtins.test.cjs"/>
+	<testcase name="shared library covers clothing, children, footwear, accessories and custom specifications" time="0.001674" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_presets.test.cjs"/>
+	<testcase name="all catalog IDs and labels are unique, finite, and usable as editable suggestions" time="0.001091" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_presets.test.cjs"/>
+	<testcase name="regional and specialized labels remain separate rather than paired conversions" time="0.001106" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_presets.test.cjs"/>
+	<testcase name="catalog does not fabricate official fields, seller/domain IDs or real measurements" time="0.002178" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_presets.test.cjs"/>
+	<testcase name="retrieved nested data cannot be mutated by an editor or another shop" time="0.000468" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_presets.test.cjs"/>
+	<testcase name="browser global and CommonJS expose the same serializable library" time="0.001771" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_chart_presets.test.cjs"/>
+	<testcase name="real measurement values retain official units without generated shoe conversions" time="0.003287" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="standard rows use official size IDs, leave measurements blank, and preserve existing measurements" time="0.001200" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="shoe main sizes support official numerical units without filling foot measurements or converting sizes" time="0.000651" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="full catalog download is a reference pack and cannot replace an individual chart draft" time="0.000320" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="imports preserve measure type, multi-values and official main structure, while discarding remote IDs" time="0.000481" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="batch filters salesperson and store and submits all categories without site selection" time="0.008309" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="read-only account cannot start a batch even with injected selections" time="0.000656" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="read-only accounts cannot create, save, preview, upload or change rows" time="0.002467" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="official metadata and failed reads preserve existing real measurements and custom brand input" time="0.002319" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="saved preview invalidates on edits and target changes, and includes explicit CBT names" time="0.021807" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="save sends optimistic revision and measure type; failures leave draft editable" time="0.003298" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="import cannot replace current template identity and does not upload" time="0.000819" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="standard templates create reusable drafts and generate official rows without overwriting existing data" time="0.002107" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="read-only users can inspect standard templates but cannot use them or generate sizes" time="0.001772" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="changing template filters or source store blocks stale schema generation while preserving measured rows" time="0.003544" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="upload requires reviewed preview, sends only preview_id, and exposes returned row IDs safely" time="0.002331" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="saved measurements upload to all store sites without reopening the editor" time="0.002213" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="using a built-in saves all values without requiring an official schema or manual input" time="0.004797" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="built-in creation failure keeps filled draft, and read-only users only inspect references" time="0.003218" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="direct upload automatically validates selected stores and confirms destinations before submitting" time="0.003558" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="direct upload stops on validation failure, duplicate records, and read-only access" time="0.005226" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="direct upload refreshes expired previews and rejects changed targets at confirmation" time="0.000752" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/size_charts.test.cjs"/>
+	<testcase name="employee tasks: duplicate reads share a request, writes remain separate and invalidate pending reads" time="0.002355" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="employee tasks: a failed read can be retried" time="0.000586" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="billing: duplicate reads share a request, writes remain separate and invalidate pending reads" time="0.000617" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="billing: a failed read can be retried" time="0.000318" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="print wallet: duplicate reads share a request, writes remain separate and invalidate pending reads" time="0.000818" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="print wallet: a failed read can be retried" time="0.000938" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="size charts: duplicate reads share a request, writes remain separate and invalidate pending reads" time="0.000555" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="size charts: a failed read can be retried" time="0.000389" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="promotions: duplicate reads share a request, writes remain separate and invalidate pending reads" time="0.001532" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="promotions: a failed read can be retried" time="0.001233" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="AI weight and price: duplicate reads share a request, writes remain separate and invalidate pending reads" time="0.001238" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="AI weight and price: a failed read can be retried" time="0.000936" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="AI polling respects the parent module visibility and pause control" time="0.000772" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="AI agent discovery shares slow in-flight reads and can be refreshed again" time="0.000725" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="infraction preloading reads once and suppresses all hidden iframe polls" time="0.001830" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="infraction identical dashboard and sync reads are coalesced while filter changes remain independent" time="0.001741" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/standalone_preload_performance.test.cjs"/>
+	<testcase name="button imports all images, prefers secure URL, deduplicates on repeat" time="0.002040" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_ai_video_images.test.cjs"/>
+	<testcase name="switching listing replaces imported images and retains manual assets" time="0.001065" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_ai_video_images.test.cjs"/>
+	<testcase name="all images remain visible beyond model limit; invalid URLs are ignored" time="0.002191" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_ai_video_images.test.cjs"/>
+	<testcase name="missing and malformed image data falls back safely" time="0.002065" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_ai_video_images.test.cjs"/>
+	<testcase name="authorization immediately adds shop name and invalidates loaded store links" time="0.002304" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_authorization.test.cjs"/>
+	<testcase name="tests/store_link_clearance.test.cjs" time="0.049063" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_clearance.test.cjs" failure="test failed">
+		<failure type="testCodeFailure" message="test failed">
+[Error: test failed] { code: 'ERR_TEST_FAILURE', failureType: 'testCodeFailure', cause: 'test failed', exitCode: 1, signal: null }
+		</failure>
+	</testcase>
+	<testcase name="each eligible activity has its own entry and enrolled records have none" time="0.002523" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_enrollment.test.cjs"/>
+	<testcase name="entry uses local campaign identity and the current product, even when frame is already loaded" time="0.001141" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_enrollment.test.cjs"/>
+	<testcase name="read-only types, missing metadata, stale candidates and missing permissions cannot open enrollment" time="0.004417" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_enrollment.test.cjs"/>
+	<testcase name="an entry for an activity removed from current rows cannot redirect to another campaign" time="0.000325" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_enrollment.test.cjs"/>
+	<testcase name="opening twice during sync keeps one uninterrupted first-page request" time="0.023509" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="manual filter changes still cancel old requests and discard late responses" time="0.001068" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="both status endpoints deduplicate overlapping calls and keep one timer each" time="0.000480" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="switching away cancels polling; reactivation refreshes stale rows only once" time="0.001080" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="status responses received after switching away cannot refresh or resume polling" time="0.001209" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="automatic refresh preserves existing rows through loading and a transient failure" time="0.001402" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="automatic refresh clears stale data when access is denied" time="0.000799" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="sync completion during a list request queues one refresh without cancelling filters" time="0.001746" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="update completion during a list request queues one refresh without cancelling filters" time="0.000765" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="failed status requests release their lock and cannot restart hidden-page retries" time="0.000435" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="changing salesperson scopes pagination and clears the previous selection" time="0.000474" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="transient gateway failure retries the same list then renders recovered data" time="0.001013" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="persistent gateway failure stops after three attempts with actionable feedback" time="0.001055" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="changing filters cancels the gateway retry delay" time="0.001378" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_loading.test.cjs"/>
+	<testcase name="tests/store_link_quality.test.cjs" time="0.045837" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_link_quality.test.cjs" failure="test failed">
+		<failure type="testCodeFailure" message="test failed">
+[Error: test failed] { code: 'ERR_TEST_FAILURE', failureType: 'testCodeFailure', cause: 'test failed', exitCode: 1, signal: null }
+		</failure>
+	</testcase>
+	<testcase name="dedicated policy filters render readable actions and correct categories" time="0.000842" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_operation_policy.test.cjs" failure="DataFreshness is not defined">
+		<failure type="testCodeFailure" message="DataFreshness is not defined">
+[Error [ERR_TEST_FAILURE]: DataFreshness is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: ReferenceError: DataFreshness is not defined
+      at storeLinkAuditSummary (evalmachine.&lt;anonymous>:22:33)
+      at Object.storeLinkAuditRenderRow (evalmachine.&lt;anonymous>:54:29)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/store_operation_policy.test.cjs:31:34)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+}
+		</failure>
+	</testcase>
+	<testcase name="platform-confirmed deletion has a distinct readable result" time="0.000064" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_operation_policy.test.cjs" failure="DataFreshness is not defined">
+		<failure type="testCodeFailure" message="DataFreshness is not defined">
+[Error [ERR_TEST_FAILURE]: DataFreshness is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: ReferenceError: DataFreshness is not defined
+      at Object.storeLinkAuditSummary (evalmachine.&lt;anonymous>:22:33)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/store_operation_policy.test.cjs:39:29)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+}
+		</failure>
+	</testcase>
+	<testcase name="store owner can load configuration personnel without account administration permission" time="0.015654" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_settings_permissions.test.cjs"/>
+	<testcase name="authorized administrators still load active personnel from account management" time="0.001348" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/store_settings_permissions.test.cjs"/>
+	<testcase name="48h, 168h and 30d alerts render in procurement cards and contribute to open metrics" time="0.016422" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_action_center_alerts_ui.cjs"/>
+	<testcase name="all-status, overdue and urgent filters keep 30d alerts in procurement with correct counts" time="0.002432" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_action_center_alerts_ui.cjs"/>
+	<testcase name="loading scoped all-status results sends filters and renders the 30d procurement alert" time="0.003770" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_action_center_alerts_ui.cjs"/>
+	<testcase name="deadlines and editor stay in Beijing time with browser timezone UTC" time="0.016913" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_action_center_timezone.cjs"/>
+	<testcase name="deadlines and editor stay in Beijing time with browser timezone America/Mexico_City" time="0.002101" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_action_center_timezone.cjs"/>
+	<testcase name="deadlines and editor stay in Beijing time with browser timezone Asia/Shanghai" time="0.001912" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_action_center_timezone.cjs"/>
+	<testcase name="unattempted categories are not errors and invalid completed categories can retry" time="0.004337" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="mixed selection enables publishing and sends only products with unified passed status" time="0.003383" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="all unapproved products keep button enabled and are ignored" time="0.001644" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="empty selection disables publishing" time="0.000848" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="a pending publish cannot be submitted twice or unlocked by presentation updates" time="0.001602" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="status filtering removes hidden selections, including after switching back" time="0.003025" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1038
+      return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card" data-original-product-id="${Number(row.id)}">
+                    ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at evalmachine.&lt;anonymous>:3:5
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:27:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:108:3)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+}
+		</failure>
+	</testcase>
+	<testcase name="bulk approval saves current inputs and review status atomically" time="0.005712" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at updateSelectedAiOriginalReviewStatus (evalmachine.&lt;anonymous>:1460:5)
+      at async TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:126:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="cleared input prevents approval even when saved data is valid" time="0.001948" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at updateSelectedAiOriginalReviewStatus (evalmachine.&lt;anonymous>:1460:5)
+      at async TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:138:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="parameter save failure prevents bulk approval" time="0.002678" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at updateSelectedAiOriginalReviewStatus (evalmachine.&lt;anonymous>:1460:5)
+      at async TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:149:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+}
+		</failure>
+	</testcase>
+	<testcase name="five page states do not alter the AI generation result" time="0.003656" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs" failure="Expected values to be strictly equal:&#10;+ actual - expected&#10;&#10;+ 'incomplete'&#10;- 'failed'&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;+ actual - expected&#10;&#10;+ 'incomplete'&#10;- 'failed'">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
++ actual - expected
+
++ 'incomplete'
+- 'failed'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'incomplete'
+  - 'failed'
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:159:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'incomplete',
+    expected: 'failed',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="counts, filter and selection agree on the same five statuses" time="0.002597" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs" failure="window.catalogOperationMarkup is not a function">
+		<failure type="testCodeFailure" message="window.catalogOperationMarkup is not a function">
+[Error [ERR_TEST_FAILURE]: window.catalogOperationMarkup is not a function] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1038
+      return window.catalogOperationMarkup(row, `&lt;article class="ai-original-card" data-original-product-id="${Number(row.id)}">
+                    ^
+  
+  TypeError: window.catalogOperationMarkup is not a function
+      at evalmachine.&lt;anonymous>:1038:19
+      at Array.map (&lt;anonymous>)
+      at renderAiOriginalProducts (evalmachine.&lt;anonymous>:1021:39)
+      at toggleAllAiOriginalProducts (evalmachine.&lt;anonymous>:1393:3)
+      at evalmachine.&lt;anonymous>:2:35
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at run (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:27:26)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs:182:5)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+}
+		</failure>
+	</testcase>
+	<testcase name="generated content omissions are failures even after approval and with missing manual values" time="0.001749" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="unfinished or missing SKU mappings cannot be pending manual fields" time="0.002420" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_original_publish_selection.cjs"/>
+	<testcase name="manual start and continue launch the returned browser action" time="0.008307" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_weight_price_client_background.test.cjs"/>
+	<testcase name="double start is rejected before reading or navigating another product" time="0.002027" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_weight_price_client_background.test.cjs"/>
+	<testcase name="pause mail is due after five minutes and webhook success does not stop retries" time="0.001629" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_weight_price_client_background.test.cjs"/>
+	<testcase name="ordinary item failure consumes the next server step without stopping the browser loop" time="0.003225" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_ai_weight_price_client_background.test.cjs"/>
+	<testcase name="collection polling launches direct search and prevents overlapping claims" time="0.011233" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_client.cjs"/>
+	<testcase name="collection polling does not run without authentication" time="0.002136" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_client.cjs"/>
+	<testcase name="chooses an online Agent and sends explicit target with selected collection ids" time="0.001524" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_ui.cjs"/>
+	<testcase name="no online Agent disables start; server choice enables it without an Agent" time="0.001717" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_ui.cjs"/>
+	<testcase name="running batch prevents resubmission and completion refreshes collection list" time="0.001283" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_ui.cjs"/>
+	<testcase name="product list sends product ids, never collection ids" time="0.000941" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_ui.cjs"/>
+	<testcase name="both list renderers display escaped successful and unsuccessful audit labels" time="0.008091" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_collection_ai_ui.cjs"/>
+	<testcase name="fund filters combine salesperson and group, including unassigned groups" time="0.002815" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_funds_ui.cjs"/>
+	<testcase name="deleteSelectedAiOriginalProducts() deletes selection and synchronizes both areas" time="0.008039" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs"/>
+	<testcase name="products1688DeleteSelected() deletes selection and synchronizes both areas" time="0.001520" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs"/>
+	<testcase name="cancellation and empty selection never send deletion" time="0.004654" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs"/>
+	<testcase name="failed deletion preserves rows and selection and allows retry" time="0.001807" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs"/>
+	<testcase name="pending request disables both delete buttons and prevents duplicates" time="0.004092" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs"/>
+	<testcase name="AI select-all reflects only visible filtered rows" time="0.002143" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs" failure="Expected values to be strictly equal:&#10;+ actual - expected&#10;&#10;+ 'failed'&#10;- 'incomplete'&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;+ actual - expected&#10;&#10;+ 'failed'&#10;- 'incomplete'">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
++ actual - expected
+
++ 'failed'
+- 'incomplete'
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'failed'
+  - 'incomplete'
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs:95:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'failed',
+    expected: 'incomplete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="deleting last page returns to the last remaining page" time="0.024798" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_delete.cjs"/>
+	<testcase name="default delay and validation" time="0.004360" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="a hung detail does not block later products, and times out" time="0.410743" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="each lane rests after success, while another lane continues" time="0.485890" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="429 stops all lanes without retry, preserving successes" time="0.001217" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="upload rate limit also stops the batch" time="0.000909" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="hung upload times out without blocking other lanes or counting late success" time="0.208627" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="stop interrupts a long cooldown" time="0.101336" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="rate limit interrupts another lane with a nonresponsive page" time="0.102319" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="one verification page cannot pause other lanes or retry indefinitely" time="0.001401" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="a detail redirect is isolated even in single-lane mode" time="0.001543" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="blocked search page stops with an actionable message" time="0.000594" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="data source rate limit is not mislabeled as Mercado page blocking" time="0.001160" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="true plugin authentication failure stops without failing every product" time="0.000716" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="a rejected progress write does not poison all subsequent saves" time="0.001655" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="a hung last detail on page 1 does not hold up page 2" time="0.007792" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="missing receiver is repaired in the committed main frame" time="0.808300" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="all disconnected lanes release slots before the detail data deadline" time="0.205192" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="pending navigation never injects collector into about:blank" time="0.202811" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="failed reserved uploads allow waiting lanes to finish the target" time="0.133890" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_product_batch_scheduling.cjs"/>
+	<testcase name="PDD visits each selected order detail before reading and writes all tracking numbers" time="0.003290" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="follows bound same-platform logistics link and rejects foreign links" time="0.002756" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="query failure stops batch without generating false skipped results" time="0.001246" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="partial multi-order results never overwrite row tracking" time="0.005086" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="old task containing another platform number is not sent to PDD" time="0.002971" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="mixed platform record never partially overwrites logistics" time="0.000310" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="duplicate starts share a single running loop" time="0.000390" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="popup filter values reach the purchase task API through the real message handler" time="0.008648" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_purchase_tracking_runner.cjs"/>
+	<testcase name="site warning displays one complete API record without store-wide notices" time="0.001988" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_reputation_browser_sync.cjs"/>
+	<testcase name="warning text escapes HTML and preserves the entire detail" time="0.000752" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_reputation_browser_sync.cjs"/>
+	<testcase name="the reputation update UI has no browser dispatch controls or requests" time="0.001178" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_reputation_browser_sync.cjs"/>
+	<testcase name="API success submits text, removes sent case and does not open Agent" time="0.025095" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_rights_holder_reply_ui.cjs"/>
+	<testcase name="API rejection falls back to selected Agent and reports opened, not sent" time="0.002380" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_rights_holder_reply_ui.cjs"/>
+	<testcase name="uncertain submission removes inbox item without opening Agent or warning" time="0.001672" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_rights_holder_reply_ui.cjs"/>
+	<testcase name="no Agent keeps draft and gives an actionable message" time="0.000959" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_rights_holder_reply_ui.cjs"/>
+	<testcase name="manual browser button dispatches after choosing an Agent inside the dialog" time="0.001412" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_rights_holder_reply_ui.cjs"/>
+	<testcase name="defaults to seven Beijing days and loads analysis before filters; deduplicates and reuses results" time="0.028628" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs" failure="Expected values to be strictly equal:&#10;&#10;1 !== 2&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;1 !== 2">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+1 !== 2
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs:38:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="preload descriptors match default and restored analysis without starting requests" time="0.001139" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs" failure="Expected values to be strictly deep-equal:&#10;+ actual - expected&#10;&#10;  [&#10;    '/api/mercado-tokens',&#10;-   '/api/store-analysis?start_date=2026-10-07&amp;end_date=2026-10-13&amp;metric=orders&amp;category_level=2&amp;salesperson=&amp;group_name=&amp;token_id='&#10;  ]&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly deep-equal:&#10;+ actual - expected&#10;&#10;  [&#10;    '/api/mercado-tokens',&#10;-   '/api/store-analysis?start_date=2026-10-07&amp;end_date=2026-10-13&amp;metric=orders&amp;category_level=2&amp;salesperson=&amp;group_name=&amp;token_id='&#10;  ]">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  [
+    '/api/mercado-tokens',
+-   '/api/store-analysis?start_date=2026-10-07&amp;end_date=2026-10-13&amp;metric=orders&amp;category_level=2&amp;salesperson=&amp;group_name=&amp;token_id='
+  ]
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+      '/api/mercado-tokens',
+  -   '/api/store-analysis?start_date=2026-10-07&amp;end_date=2026-10-13&amp;metric=orders&amp;category_level=2&amp;salesperson=&amp;group_name=&amp;token_id='
+    ]
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs:64:16)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ '/api/mercado-tokens' ],
+    expected: [ '/api/mercado-tokens', '/api/store-analysis?start_date=2026-10-07&amp;end_date=2026-10-13&amp;metric=orders&amp;category_level=2&amp;salesperson=&amp;group_name=&amp;token_id=' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="older responses cannot overwrite a newer filter selection; failed filters do not block results" time="0.001575" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs" failure="Expected &amp;quot;actual&amp;quot; to be strictly unequal to: -1">
+		<failure type="testCodeFailure" message="Expected &amp;quot;actual&amp;quot; to be strictly unequal to: -1">
+[Error [ERR_TEST_FAILURE]: Expected "actual" to be strictly unequal to: -1] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to: -1
+      at Object.respond (/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs:28:16)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs:77:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="forced refresh failures can be retried" time="0.001611" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs" failure="Expected &amp;quot;actual&amp;quot; to be strictly unequal to: -1">
+		<failure type="testCodeFailure" message="Expected &amp;quot;actual&amp;quot; to be strictly unequal to: -1">
+[Error [ERR_TEST_FAILURE]: Expected "actual" to be strictly unequal to: -1] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected "actual" to be strictly unequal to: -1
+      at Object.respond (/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs:28:16)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs:89:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: -1,
+    expected: -1,
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="order trend remains visible alongside pie and with no valid sales" time="0.013959" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_analysis_frontend.cjs"/>
+	<testcase name="reopening retries failed loading, cached Chinese paths avoid duplicate requests" time="0.001391" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="partial and newly added categories fetch only missing paths" time="0.001148" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="initial catalog and concurrent opens share one request" time="0.000367" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="one failed site preserves another site and retries only the failed site" time="0.000392" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="missing hierarchy and untranslated names never become bogus first-level options" time="0.000601" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs" failure="Expected values to be strictly equal:&#10;&#10;1 !== 0&#10;">
+		<failure type="testCodeFailure" message="Expected values to be strictly equal:&#10;&#10;1 !== 0">
+[Error [ERR_TEST_FAILURE]: Expected values to be strictly equal:
+
+1 !== 0
+] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 0
+  
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs:46:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+}
+		</failure>
+	</testcase>
+	<testcase name="same Chinese paths merge across sites and retain all parent and leaf filter IDs" time="0.002221" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="untranslated paths refresh after background translation" time="0.000482" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="tree retains more than five levels" time="0.000647" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_store_link_category_picker.cjs"/>
+	<testcase name="Outlook dates preserve absolute timestamps and Chinese AM/PM" time="0.003166" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="only current request, last-hour exact report subjects qualify" time="0.001089" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="minute-only Outlook dates need the official report generation timestamp in the overlapping minute" time="0.000756" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="trusted links unwrap Outlook SafeLinks but reject spoofed or credential URLs" time="0.000253" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="report site and explicit seller identity must match current bound store" time="0.001216" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="same-window Outlook Inbox returns current fresh CSV and cleans only owned tabs" time="0.001910" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="Junk report is automatically read after checking Inbox" time="0.002504" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="previous-request mail does not get opened or reused and polling is capped at three" time="0.000921" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="a report for another site stops before returning its CSV" time="0.000325" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="seller mismatch in email report URL is skipped before navigating it" time="0.000438" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="identity change stops mail polling and cleans the temporary mailbox" time="0.000139" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="stop is observed during the minute wait within 250 ms" time="0.000118" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="CSV direct link is read with the report filename as site evidence" time="0.018246" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="response-stage interception reads CSV then aborts native download and detaches" time="0.000534" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="same-minute email succeeds only when filename proves this request generated the report" time="0.000521" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="same-minute email without exact report generation proof is rejected" time="0.001000" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="missing identity snapshot never opens a mailbox" time="0.001455" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_mail.cjs"/>
+	<testcase name="start without an open backend tab creates one and executes without preflight" time="0.015755" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="closed selected tab is replaced with a new backend tab" time="0.004319" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="login redirect stops before script injection or planning and persists reminder" time="0.001891" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="slow preparation returns a visible running state and polls without recreating a plan" time="0.035656" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="lost preparation receipt recovers by request id and never resubmits start" time="0.006951" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="stop during reputation preparation prevents planning and sending" time="0.001310" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="sellers orders page reads shop context and starts through the global-selling help page" time="0.004192" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="start opens reputation before reading identity and does not require a preflight seller" time="0.002396" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="stale popup identity no longer blocks start" time="0.003281" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="reputation navigation timeout never creates a plan or sends" time="0.041260" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="logged out reputation page stops before planning" time="0.002379" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="logout after acknowledged send stops even on the last group and preserves sent result" time="0.006405" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="uncertain send is persisted once and never retried" time="0.003599" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="retrying a proven pre-send fill failure sends exactly once" time="0.005077" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="all-frame probing excludes third-party widgets before injection" time="0.005592" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="login seller changed after filling is rejected before clicking Send" time="0.002965" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="console account changed after filling stops without sending or posting another account results" time="0.003027" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="confirmed click remains sent after reply timeout; reset required before next group" time="0.100232" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="human mode submits once, skips AI reply polling, preserves same-window conversation tab" time="0.003031" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="backend permanent loop_count 0 continues rounds until stopped" time="0.002788" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="worker restart exposes interruption and never resumes an in-flight group" time="0.000823" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="stable message identity distinguishes repeated replies and rejects changed sessions" time="0.001110" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="delay report keeps exactly fresh dispatched orders and handles agent date format/quoted CSV" time="0.001884" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="page identity reads only logged-in Nordic fields and detects explicit guest Help" time="0.002671" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="reputation collection continues automatically into appeal sending" time="0.002961" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="new starts bind browser site accounts without an ERP token" time="0.002900" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="browser infringement pagination submits collected facts and proceeds to sending" time="0.003671" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="incomplete or changing product pagination never starts customer chat" time="0.001679" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="browser prohibited collection opens inactive listings and automatically continues" time="0.002152" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="usable reputation and help pages continue while the tab remains loading" time="0.002237" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="existing reputation is reused without forcing another load" time="0.002257" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="new reputation tab is not immediately navigated a second time" time="0.002592" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="account hydration is retried before planning without requiring complete" time="0.001634" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="unresponsive navigation fails with a specific error instead of remaining preparing" time="0.001762" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="unresponsive tab inspection has a bounded wait" time="0.001265" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="stopping an unresponsive context probe prevents late planning" time="0.000716" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="pending reputation navigation never binds the previous document" time="0.001762" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="same-url pending reload waits for commit before reading the old document" time="0.002880" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_appeal_runner.cjs"/>
+	<testcase name="request timeout identifies the endpoint and preserves the login" time="0.006848" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="console login restores missing plugin auth and concurrent callers share the request" time="0.001867" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="expired local token is replaced using the console session" time="0.001784" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="401 restores the token and retries the rejected request once" time="0.001717" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="a late old-token 401 preserves a newer manual login" time="0.000645" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="explicit logout stays logged out even with a console session" time="0.000535" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="pending console recovery cannot undo an explicit logout" time="0.002725" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="unauthenticated, offline and old servers do not produce a false login" time="0.001231" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="repeated 401 is bounded and clears the invalid token" time="0.000539" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="503 during token validation preserves the valid session without login recovery" time="0.000480" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="API defaults to a network deadline and rejects unreadable response bodies" time="0.000953" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="read-only product query retries 503 once within the original deadline" time="1.500839" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="persistent data outage has at most two attempts; upload is never replayed" time="1.501291" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_auth_recovery.cjs"/>
+	<testcase name="concurrent tabs share one read and distinct products form one upstream batch" time="0.058899" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="cached reads expire after sixty seconds" time="0.047880" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="one missing product does not reject other cards in the same query" time="0.021307" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="price and login changes cannot reuse a stale calculated result" time="0.067758" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="failed reads are evicted and retry succeeds" time="0.046102" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="combined requests obey the 50 item limit" time="0.025038" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="prefetch excludes catalog identifiers and preserves explicit seller selections" time="0.070828" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="invalid input does not schedule partially valid work" time="0.031757" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="navigation and data read overlap: 4s page + 4s data + 0.5s upload stays below 10s" time="4.546922" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="popup displays measured per-item latency and over-target count" time="0.001794" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_collection_speed.cjs"/>
+	<testcase name="open pages share a fresh rate read; expired and failed reads can be retried" time="0.002019" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_exchange_rates.cjs"/>
+	<testcase name="management category values normalize and invalid selections fail before collection" time="0.005676" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="category message uses plugin authentication and maps rows for the popup" time="0.002596" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="category loading requires login and gives an explicit legacy upgrade error" time="0.001794" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="single Mercado product carries the chosen category to the collect API" time="0.000661" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="offline products retain separate category selections across queue retry" time="0.002280" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="server rejection of a chosen category is visible and does not create an infinite retry" time="0.000521" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="legacy selected collection fails before writing and unselected collection remains compatible" time="0.000616" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="Mercado batch snapshots the category and applies it to every eligible upload" time="0.001771" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="legacy category batch is rejected before opening collection windows" time="0.001997" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="Zying starts preserve source filters and forward the target category" time="0.000812" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="1688 page collection uses saved category and freezes it for offline retry" time="0.000728" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_management_category_background.cjs"/>
+	<testcase name="the two target selectors restore independent choices and keep source filtering separate" time="0.003608" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:101:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.start (node:internal/test_runner/test:1242:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+}
+		</failure>
+	</testcase>
+	<testcase name="Mercado batch and detail collection send the selected target category" time="0.001065" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:117:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="single collection uses the category chosen when collection starts" time="0.001319" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:128:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="Zying collection sends a target category independently of its source category" time="0.000710" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:140:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="an unspecified category sends null and 1688 collection keeps its own destination" time="0.000587" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:152:25)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="logged-out users cannot load or choose Zeshun categories" time="0.000517" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:162:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="failed refresh preserves the choice and deleted categories require a new selection" time="0.000659" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:173:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="category refresh keeps both destinations and collection starts locked until the list returns" time="0.002006" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:191:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="malformed IDs cannot silently lose a saved classification" time="0.001432" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:214:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="a failed initial request retains the saved category until the user chooses a valid destination" time="0.001787" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:222:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="Zying can retry after an unavailable category or a rejected start" time="0.000853" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:233:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="1688 restores its own category, submits it and remembers clearing" time="0.002357" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs" failure="setInterval is not defined">
+		<failure type="testCodeFailure" message="setInterval is not defined">
+[Error [ERR_TEST_FAILURE]: setInterval is not defined] {
+  code: 'ERR_TEST_FAILURE',
+  failureType: 'testCodeFailure',
+  cause: evalmachine.&lt;anonymous>:1700
+  setInterval(checkExtensionUpdate, 5 * 60 * 1000);
+  ^
+  
+  ReferenceError: setInterval is not defined
+      at evalmachine.&lt;anonymous>:1700:1
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at createPopup (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:88:6)
+      at TestContext.&lt;anonymous> (/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_popup_categories.test.cjs:249:23)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+}
+		</failure>
+	</testcase>
+	<testcase name="tests/test_zeshun_product_pause.cjs" time="0.039819" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_product_pause.cjs" failure="test failed">
+		<failure type="testCodeFailure" message="test failed">
+[Error: test failed] { code: 'ERR_TEST_FAILURE', failureType: 'testCodeFailure', cause: 'test failed', exitCode: 1, signal: null }
+		</failure>
+	</testcase>
+	<testcase name="one click waits for detail readiness, submits once and closes its background tab" time="0.209579" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="failed or ineligible detail is never uploaded and its tab is closed: {&amp;quot;ok&amp;quot;:false,&amp;quot;blocked&amp;quot;:true,&amp;quot;error&amp;quot;:&amp;quot;请完成验证&amp;quot;}" time="0.000922" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="failed or ineligible detail is never uploaded and its tab is closed: {&amp;quot;ok&amp;quot;:false,&amp;quot;authRequired&amp;quot;:true,&amp;quot;error&amp;quot;:&amp;quot;登录失效&amp;quot;}" time="0.000508" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="failed or ineligible detail is never uploaded and its tab is closed: {&amp;quot;ok&amp;quot;:false,&amp;quot;retryable&amp;quot;:false,&amp;quot;error&amp;quot;:&amp;quot;数据源不可用&amp;quot;}" time="0.000635" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="failed or ineligible detail is never uploaded and its tab is closed: {&amp;quot;ok&amp;quot;:true,&amp;quot;product&amp;quot;:{&amp;quot;source_item_id&amp;quot;:&amp;quot;MLM123456&amp;quot;,&amp;quot;plugin_snapshot&amp;quot;:{&amp;quot;fulfillment_eligible&amp;quot;:false,&amp;quot;fulfillment_label&amp;quot;:&amp;quot;Full&amp;quot;}}}" time="0.000645" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="queued upload is reported to the listing" time="0.000541" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="invalid destination is rejected before creating a tab" time="0.000396" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="closed detail tab surfaces a failure without upload" time="0.000543" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="redirect to a different seller listing is not uploaded" time="0.000594" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 list click automatically submits detail and closes inactive tab" time="0.000850" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 retries a not-yet-ready detail without a second click" time="0.502626" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 verification failure closes temporary tab without switching focus" time="0.000806" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 redirect failure closes temporary tab without switching focus" time="0.000399" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 upload failure closes temporary tab without switching focus" time="0.000349" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 preserves the working listing URL: https://detail.1688.com/offer/123456.html?sk=access-token&amp;from=search" time="0.000315" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 preserves the working listing URL: https://s.1688.com/redirect.html?offerId=123456&amp;key=abc" time="0.000447" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 rejects mismatched or invalid destinations: https://detail.1688.com/offer/999999.html" time="0.000411" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 rejects mismatched or invalid destinations: https://1688.com.evil.test/offer/123456.html" time="0.000391" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 rejects mismatched or invalid destinations: javascript:alert(1)" time="0.000310" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="1688 rejects mismatched or invalid destinations: https://user:pass@detail.1688.com/offer/123456.html" time="0.000283" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_single_collect.cjs"/>
+	<testcase name="Zying collection input accepts counts above 10000 without a fixed HTML maximum" time="0.000952" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_zying_collection_limit.cjs"/>
+	<testcase name="Zying collection sends the chosen count above 10000 without clipping it" time="0.002380" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_zying_collection_limit.cjs"/>
+	<testcase name="Zying collection rejects blank, nonpositive, fractional and unsafe counts before starting" time="0.002703" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_zying_collection_limit.cjs"/>
+	<testcase name="Zying infringement review keeps its existing maximum" time="0.001104" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zeshun_zying_collection_limit.cjs"/>
+	<testcase name="collection start carries the resolved personnel directory to the task worker" time="0.005113" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="complete page filters return immediately even when optional server persistence hangs" time="0.002567" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="missing developers wait at most 2500 ms and preserve page categories on a hung server" time="0.001451" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="service failure preserves incomplete page filters but cannot fabricate missing categories" time="0.001373" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="HTTP 401 is not disguised as usable fallback filters" time="0.001128" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="HTTP 401 with authRequired is not disguised as usable fallback filters" time="0.002113" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="HTTP 403 is not disguised as usable fallback filters" time="0.000500" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="live page categories take precedence over historical server categories" time="0.001297" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="live page developers take precedence when the server supplements categories" time="0.001867" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="reading categories and developers scans page categories only once" time="0.001382" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="developer page script timeout retains the categories without rescanning them" time="0.001476" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="popup immediately renders page filters, preserves them on sync failure and blocks duplicate reads during polling" time="0.001083" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="empty developer preview updates categories and preserves selected developer 17 through supplementation" time="0.001157" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="popup renders optional server supplementation after displaying the page categories" time="0.000594" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="popup clears an old context when the current page cannot be read" time="0.000364" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_filter_loading.cjs"/>
+	<testcase name="tests/test_zying_order_sync.cjs" time="0.071571" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_order_sync.cjs"/>
+	<testcase name="rendered native developer options return immediately without touching IndexedDB" time="0.003830" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="rendered React options respect custom fields and skip placeholder entries" time="0.000894" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="enumeration opens only existing databases and prefers localforage" time="0.003487" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="cached login wrappers and identifier aliases remain compatible" time="0.006121" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="blocked and stalled databases share one budget and close pending transactions" time="0.001417" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="database enumeration also has a deadline" time="0.001042" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="an open connection arriving after timeout is closed without reading stores" time="0.000828" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="older browsers abort a missing localforage creation instead of leaving an empty database" time="0.001289" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="older browsers can still read an existing localforage cache" time="0.000698" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="webpack fallback requests share a bounded deadline" time="0.000712" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="webpack fallback still returns valid logins and clears its timer" time="0.001042" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_page_filters.cjs"/>
+	<testcase name="six official API reads overlap and retain input order" time="0.004466" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_parallel_reads.cjs"/>
+	<testcase name="failed request keeps its position and error status" time="0.000999" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_parallel_reads.cjs"/>
+	<testcase name="write commands and batches larger than six never reach upstream" time="0.000403" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/test_zying_parallel_reads.cjs"/>
+	<testcase name="opening reads saved data and manual full sync replaces stale polls" time="0.009766" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/weight_dimensions_refresh.test.cjs"/>
+	<testcase name="recent week, pagination and selection without periodic refresh" time="0.009027" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/weight_dimensions_refresh.test.cjs"/>
+	<testcase name="history table preserves snapshots, filters results and paginates legacy logs safely" time="0.002856" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/weight_dimensions_refresh.test.cjs"/>
+	<testcase name="task termination sends stop and unlocks actions only after stopped status" time="0.002411" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/weight_dimensions_refresh.test.cjs"/>
+	<testcase name="history closes interrupted stages only from a terminal result in the same execution" time="0.001710" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/weight_dimensions_refresh.test.cjs"/>
+	<testcase name="settings validate source, URL, calendar date, and update interval" time="0.015283" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="Beijing dates and timestamps do not use the host timezone" time="0.001389" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="sync panel loads lazily and view-only accounts cannot mutate" time="0.003535" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="logs, history, errors, and messages render as text with no HTML execution" time="0.005707" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="blacklist import displays persisted progress and historical promotions" time="0.000480" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="paused download shows cached bytes and continuation status" time="0.001058" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="save-and-sync saves feed config once, clears token, and refreshes the knowledge list once on completion" time="0.002004" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="polling stops on hidden tab or document, and completion is detected on return" time="0.001428" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="failed configuration save retains entered token and never starts a sync" time="0.000850" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/wipo_sync.test.cjs"/>
+	<testcase name="runs after manual login, and resumes a lost committed response without replaying" time="0.002874" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="opens login while server preparation is still loading" time="0.000574" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="recovers a lost start response by status without repeating start" time="0.000707" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="does not recover an authorization failure or open an empty run" time="0.001152" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="stopping while the page is reading prevents late writeback" time="0.000500" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="expired page login restores confirmation and preserves pending work" time="0.001048" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="a surviving page read defers recovery until the next run" time="0.000415" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="confirmation preserves a ready SPA even while other resources are loading" time="0.000638" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="confirmation uses only one navigation from https://meli.zying.net/#/login" time="0.252948" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="confirmation uses only one navigation from https://meli.zying.net/#/order" time="0.252345" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<testcase name="a closed login tab is reopened without claiming or writing orders" time="0.000563" classname="test" file="/private/tmp/mercado-retest-100-20261013/tests/zying_order_extension.test.cjs"/>
+	<!-- tests 654 -->
+	<!-- suites 0 -->
+	<!-- pass 608 -->
+	<!-- fail 46 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+	<!-- duration_ms 5807.88425 -->
+</testsuites>

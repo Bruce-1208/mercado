@@ -1,0 +1,29 @@
+{
+  "completed_at": "2026-10-15T22:01:39.391291+08:00",
+  "status": "database and all five workbench services restored; local and public login HTTP 200",
+  "database": "/Volumes/Samsung 980 PRO/mysql-data",
+  "original_preserved": "/Volumes/Samsung 980 PRO/mysql-data-powerloss-20261015",
+  "recovery_workspace": "/Volumes/Samsung 980 PRO/mysql-recovery-20261015",
+  "independent_disk_logical_backup": "/Users/a11/mercado/.data/backups/mysql-recovery-20261015",
+  "tables_restored": 98,
+  "rows_restored": 9196470,
+  "all_table_counts_match_recoverable_source": true,
+  "content_checksums_passed": 97,
+  "quick_table_checks_passed": 136,
+  "normal_mode_verification": {
+    "query_success": true,
+    "innodb_force_recovery": 0,
+    "innodb_flush_log_at_trx_commit": 1,
+    "sync_binlog": 1,
+    "innodb_doublewrite": "ON",
+    "binlog_expire_logs_seconds": 604800
+  },
+  "method": "Original files preserved. A separate experimental clone had FILE_FULL flag cleared on final surviving redo header with CRC32C recomputed, permitting replay of remaining logs at force_recovery=1. Data was then logically exported and rebuilt into a fresh database with recovery disabled. Force-recovery=6 trial was not used for final restored data.",
+  "limitations": [
+    "Missing newest redo file means final transactions cannot be guaranteed complete.",
+    "Source reported residual pages ahead of available redo LSN.",
+    "Final product-table content checksum was cancelled at user request to prioritize service restoration; all 98 table counts and 97 other content checksums passed.",
+    "Further data discrepancy investigation is deferred."
+  ],
+  "backup_validation": "All 100 gzip files decompressed and SHA-256 matched; 102 backup files copied to internal disk and verified."
+}

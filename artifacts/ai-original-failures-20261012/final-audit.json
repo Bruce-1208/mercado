@@ -1,0 +1,1390 @@
+{
+  "counts": {
+    "completed": 60,
+    "pending": 38,
+    "failed": 1,
+    "incomplete": 9
+  },
+  "products": [
+    {
+      "id": 11180444,
+      "category_id": "CBT7787",
+      "status": "completed",
+      "generated_by": "向子立",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 11271693,
+      "category_id": "CBT457411",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 11271694,
+      "category_id": "CBT7787",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 11271695,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 11271696,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 11373942,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 11373944,
+      "category_id": "CBT457501",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088980,
+      "category_id": "CBT455716",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088981,
+      "category_id": "CBT116631",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088982,
+      "category_id": "CBT1584",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088983,
+      "category_id": "CBT433036",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088984,
+      "category_id": "CBT47740",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088985,
+      "category_id": "CBT116631",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088986,
+      "category_id": "CBT116631",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088987,
+      "category_id": "CBT116631",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088988,
+      "category_id": "CBT1584",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13088989,
+      "category_id": "CBT399139",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13091055,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13091056,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13091057,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13091058,
+      "category_id": "CBT24790",
+      "status": "failed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "variations",
+      "input_blockers": []
+    },
+    {
+      "id": 13091059,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13091060,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 13091061,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069593,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069594,
+      "category_id": "CBT457414",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069595,
+      "category_id": "CBT457414",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069596,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069597,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069598,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069599,
+      "category_id": "CBT457414",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069600,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069601,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069602,
+      "category_id": "CBT457414",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069603,
+      "category_id": "CBT378179",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069604,
+      "category_id": "CBT457414",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069605,
+      "category_id": "CBT378179",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14069606,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 14322895,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15001055,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15157623,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15157624,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15158025,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15158026,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15158331,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 15158332,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "向子立",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16326846,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16326847,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16326848,
+      "category_id": "CBT457411",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16326850,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16326851,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16326852,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327015,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327016,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327055,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327056,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327057,
+      "category_id": "CBT457414",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327058,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327207,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327260,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327261,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327262,
+      "category_id": "CBT34271",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16327263,
+      "category_id": "CBT24790",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16616090,
+      "category_id": "CBT9916",
+      "status": "completed",
+      "generated_by": "周乐",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16619491,
+      "category_id": "CBT418448",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16763283,
+      "category_id": "CBT458687",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-805542967249",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "805542967249"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16763284,
+      "category_id": "CBT458687",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-607235703304",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "607235703304"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16763285,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1046883338745",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1046883338745"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16763286,
+      "category_id": "CBT456734",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1020577412003",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1020577412003"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764088,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764089,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-891043260780",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "891043260780"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764090,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1073396360819",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1073396360819"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764091,
+      "category_id": "CBT5751",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764092,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1023381101904",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1023381101904"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764093,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1043968123011",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1043968123011"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764094,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-565133741357",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "565133741357"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764095,
+      "category_id": "CBT373111",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764096,
+      "category_id": "CBT127693",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764097,
+      "category_id": "CBT458687",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-826652801609",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "826652801609"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764098,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-893997049309",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "893997049309"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764099,
+      "category_id": "CBT458684",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764100,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-576024310876",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "576024310876"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764101,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764269,
+      "category_id": "CBT5751",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1086785647564",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1086785647564"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764270,
+      "category_id": "CBT388866",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764271,
+      "category_id": "CBT373348",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764272,
+      "category_id": "CBT371414",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764273,
+      "category_id": "CBT401907",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-732927555653",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "732927555653"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764274,
+      "category_id": "CBT372145",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764275,
+      "category_id": "CBT456502",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50
+          ],
+          "message": "50 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764276,
+      "category_id": "CBT372054",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764277,
+      "category_id": "CBT456980",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-756368413549",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "756368413549"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764278,
+      "category_id": "CBT403348",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-999059746566",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "999059746566"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764279,
+      "category_id": "CBT416792",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2
+          ],
+          "message": "2 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764280,
+      "category_id": "CBT456354",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35
+          ],
+          "message": "35 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764281,
+      "category_id": "CBT413526",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764282,
+      "category_id": "CBT458661",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1004013168215",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1004013168215"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764283,
+      "category_id": "CBT456980",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1076752161435",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1076752161435"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764284,
+      "category_id": "CBT388866",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1
+          ],
+          "message": "1 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764285,
+      "category_id": "CBT373347",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2
+          ],
+          "message": "2 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764286,
+      "category_id": "CBT86978",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": {
+        "value": "AO-1065838233121",
+        "basis": "seller_catalog_identifier",
+        "source_1688_item_id": "1065838233121"
+      },
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764287,
+      "category_id": "CBT412470",
+      "status": "pending",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764288,
+      "category_id": "CBT416792",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2
+          ],
+          "message": "2 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764289,
+      "category_id": "CBT456980",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "message": "6 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16764290,
+      "category_id": "CBT459422",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16764291,
+      "category_id": "CBT431903",
+      "status": "completed",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "",
+      "input_blockers": []
+    },
+    {
+      "id": 16943230,
+      "category_id": "CBT24790",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33
+          ],
+          "message": "33 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    },
+    {
+      "id": 16943431,
+      "category_id": "CBT455862",
+      "status": "incomplete",
+      "generated_by": "管理员",
+      "assigned_part_number": null,
+      "missing_required_attributes": [],
+      "failed_step": "sku_images",
+      "input_blockers": [
+        {
+          "field": "sku_images",
+          "sku_indices": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24
+          ],
+          "message": "24 个 SKU 缺少采集原图，请重新采集或补充图片链接"
+        }
+      ]
+    }
+  ],
+  "validation": {
+    "python": 74,
+    "browser": 4,
+    "node": 54
+  },
+  "service_restarted": false
+}

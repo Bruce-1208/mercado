@@ -1,0 +1,42 @@
+✔ member and store group selections survive reopening and scope the very first reads (15.361833ms)
+✔ unavailable remembered values stay selected without widening the next poll (2.543625ms)
+✔ bad or blocked browser storage does not break initial loading (2.998917ms)
+✔ claim refresh shares in-flight requests and retries after completion (3.779542ms)
+✔ background claim polling preserves snapshots and does not report pending as empty (0.822584ms)
+✔ preload starts both APIs and each response is consumed once (1.254584ms)
+✔ a late task response cannot overwrite a newer filter selection (2.362334ms)
+✔ large lists page without losing rights-holder reply identity or total counts (2.642042ms)
+✔ workbench preloaded snapshots survive navigation, expire, and are account scoped (6.322541ms)
+✔ a completed Mercado listing is pending on Amazon, without Mercado copy or image fallback (9.163209ms)
+✔ explicitly cleared source net stays blank while a later manually saved AI net is shown (1.947792ms)
+✔ platform status filtering and select all use independent draft statuses (2.11675ms)
+✔ generation sends chosen platform and template and excludes Mercado store token (2.177791ms)
+✔ Mercado publishing, approval, translation and parameter mutations are guarded off-platform (2.785291ms)
+✔ Amazon editor uses current limits and PATCH preserves target platform and Item Highlights (2.488292ms)
+✔ switching platforms clears selection and includes platform in backend businessperson filter (1.998208ms)
+✔ platform rules show readable language and safely escape validation content (0.905667ms)
+✔ manual checklist distinguishes suggested or edited net from persisted net and updates on input (2.4405ms)
+✔ parameter save rejects stale net or incomplete approval in the server readback (3.602083ms)
+✔ salesperson statistics reuse concurrent activation and recent scoped results; submit refreshes (49.220375ms)
+✔ salesperson statistics ignore older filter responses and retry failed requests (0.848958ms)
+✔ AI original profiles and store metadata share in-flight requests and completed loads (2.22375ms)
+✔ AI original polling stops when its module becomes inactive (0.767041ms)
+✔ AI original workbench processes large lists with one row lookup and status check per product (1.807542ms)
+✔ infringement task polling pauses for hidden lists and resumes on module visibility (2.691917ms)
+✔ settings validate source, URL, calendar date, and update interval (45.039542ms)
+✔ Beijing dates and timestamps do not use the host timezone (0.711292ms)
+✔ sync panel loads lazily and view-only accounts cannot mutate (2.789708ms)
+✔ logs, history, errors, and messages render as text with no HTML execution (3.012375ms)
+✔ blacklist import displays persisted progress and historical promotions (0.137334ms)
+✔ paused download shows cached bytes and continuation status (0.451459ms)
+✔ save-and-sync saves feed config once, clears token, and refreshes the knowledge list once on completion (0.724875ms)
+✔ polling stops on hidden tab or document, and completion is detected on return (0.772125ms)
+✔ failed configuration save retains entered token and never starts a sync (0.46825ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 125.472208

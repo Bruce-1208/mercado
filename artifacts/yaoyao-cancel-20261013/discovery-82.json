@@ -1,0 +1,62 @@
+{
+  "id": 82,
+  "name": "遥遥领先8号店",
+  "accounts": [
+    {
+      "seller_id": "3614278492",
+      "site_id": "MLU",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611711831",
+      "site_id": "MLA",
+      "promotions": []
+    },
+    {
+      "seller_id": "3614278504",
+      "site_id": "MLM",
+      "promotions": [
+        {
+          "id": "P-MLM17611046",
+          "type": "DEAL",
+          "status": "started",
+          "start_date": "2026-08-17T06:00:00Z",
+          "finish_date": "2026-11-12T06:00:00Z",
+          "deadline_date": "2026-11-07T05:00:00Z",
+          "name": "Activa Tus Descuentos  ",
+          "allow_combination": false
+        },
+        {
+          "id": "P-MLM18015004",
+          "type": "SMART",
+          "status": "started",
+          "start_date": "2026-09-03T06:50:00Z",
+          "finish_date": "2027-03-03T06:50:00Z",
+          "deadline_date": "2027-03-03T06:50:00Z",
+          "name": "Smart Discounts",
+          "allow_combination": false
+        }
+      ]
+    },
+    {
+      "seller_id": "3614280130",
+      "site_id": "MLB",
+      "promotions": []
+    },
+    {
+      "seller_id": "3614278482",
+      "site_id": "MLM",
+      "promotions": []
+    },
+    {
+      "seller_id": "3614280136",
+      "site_id": "MLC",
+      "promotions": []
+    },
+    {
+      "seller_id": "3614278528",
+      "site_id": "MCO",
+      "promotions": []
+    }
+  ]
+}

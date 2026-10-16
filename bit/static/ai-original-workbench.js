@@ -7,10 +7,23 @@ function aiOriginalMissingCheckMessages(row, checks) {
   const status = aiOriginalPlatformStatus(row);
   // A newly collected row has never attempted category generation.
   if (["pending", "processing", "waiting_off_peak"].includes(status)) return [];
+  const draft = aiOriginalPlatformDraft(row) || {};
   return checks.filter(check => !check.ok).map(check => check.label === "SKU 采集原图缺失"
-    ? "SKU 未采集到原图，请更新插件后重新采集或补充图片链接"
+    ? aiOriginalRecoveryMessage(row)
     : check.label === "SKU 白底主图" ? "SKU 原图已齐，执行 AI 任务补齐白底主图"
+    : check.label === "平台语言规则" && !draft.validation ? "平台语言规则尚未校验，前序步骤完成后继续"
+    : check.label === "AI 白底主图" && draft.failed_step === "sku_images" ? "商品白底主图待 SKU 图片处理完成后生成"
     : `${check.label}生成失败，可重新生成`);
+}
+
+function aiOriginalConsolidateIssues(row, messages) {
+  const draft = aiOriginalPlatformDraft(row) || {};
+  const sourceFailure = draft.failed_step === "sku_images" &&
+    /SKU.*(?:缺少采集主图|缺少采集原图|未采集到原图)/.test(draft.error || row.ai_error || "");
+  if (!sourceFailure) return [...new Set(messages)];
+  // Replace stale/repeated missing-source diagnostics with the current recovery state.
+  const remaining = messages.filter(message => !/SKU.*(?:缺少采集主图|缺少采集原图|未采集到原图)/.test(message));
+  return [...new Set([aiOriginalRecoveryMessage(row), ...remaining].filter(Boolean))];
 }
 
 function aiOriginalListingReady(row) {
@@ -20,7 +33,7 @@ function aiOriginalListingReady(row) {
 function aiOriginalManualCheckItems(row, card) {
   const draft = {...row};
   const dirty = new Set();
-  for (const [field, prefix, label] of [["net_proceeds_usd", "net", "净收益"], ["weight_g", "weight", "实重"]]) {
+  for (const [field, prefix, label] of [["net_proceeds_usd", "net", "净收益"], ["weight_g", "weight", "实重"], ["package_length_cm", "length", "包装尺寸"], ["package_width_cm", "width", "包装尺寸"], ["package_height_cm", "height", "包装尺寸"]]) {
     const input = card.querySelector(`#ai-original-${prefix}-${Number(row.id)}`);
     if (!input) continue;
     draft[field] = input.value;
@@ -41,11 +54,28 @@ function aiOriginalManualCheckItems(row, card) {
 }
 
 function updateAiOriginalManualChecks(event) {
-  if (!/^ai-original-(net|weight)-\d+$/.test(event.target?.id || "")) return;
+  if (!/^ai-original-(net|weight|length|width|height)-\d+$/.test(event.target?.id || "")) return;
   const card = event.target.closest(".ai-original-card");
   const row = aiOriginalRows.find(item => Number(item.id) === Number(event.target.id.split("-").pop()));
   const list = card?.querySelector(".ai-original-manual-checks");
-  if (row && list) list.innerHTML = aiOriginalManualCheckItems(row, card);
+  if (row && list) {
+    list.innerHTML = aiOriginalManualCheckItems(row, card);
+    updateAiOriginalCheckPanel(row, card);
+  }
+}
+
+function updateAiOriginalCheckPanel(row, card) {
+  const panel = card.querySelector(".ai-original-check-panel");
+  if (!panel) return;
+  const checks = aiOriginalListingChecks(row);
+  const manualItems = [...panel.querySelectorAll(".ai-original-manual-checks li")];
+  const done = checks.filter(check => check.ok).length + manualItems.filter(item => item.classList.contains("ok")).length;
+  const total = checks.length + manualItems.length;
+  const finished = !["pending", "processing", "waiting_off_peak"].includes(aiOriginalPlatformStatus(row));
+  const needsInput = aiOriginalProductStatus(row) === "incomplete";
+  panel.classList.toggle("has-failure", finished && !needsInput && done < total);
+  panel.classList.toggle("needs-input", (!finished || needsInput) && done < total);
+  panel.querySelector("summary").textContent = `刊登检查 · ${done}/${total} 项完成${done < total ? needsInput ? " · 待补充" : finished ? " · 检查失败" : " · 待完成" : ""}`;
 }
 
 
@@ -125,9 +155,15 @@ function decorateAiOriginalWorkbench() {
     const header = document.createElement("header");
     header.className = "ai-original-card-head";
     const badgeLabel = aiOriginalProductStatusLabels[status];
-    header.innerHTML = `<label><span>1688 · ${aiOriginalEscape(row.original_1688?.source_1688_item_id || row.source_item_id)}</span></label><span class="ai-original-badge ${status}">${badgeLabel}</span>`;
+    header.innerHTML = `<label><span>选择商品</span></label><span class="ai-original-badge ${status}">${badgeLabel}</span>`;
     header.querySelector("label").prepend(checkbox);
     card.prepend(header);
+    const generated = aiOriginalPlatformDraft(row) || {};
+    const generator = generated.generated_by || (isMercado ? row.generator_salesperson : "");
+    const attribution = document.createElement("span");
+    attribution.className = "ai-original-generator";
+    attribution.textContent = `生成者：${generator || (generated.generated_copy || generated.title_es || generated.title ? "历史记录未注明" : "尚未生成")}`;
+    header.querySelector("label").after(attribution);
     const notices = [...card.querySelectorAll(".ai-original-source > p.bad, .ai-original-source > p.pending, .ai-original-copy > p.bad:not(.ai-original-title-text)")];
     const messages = [...notices].sort((a, b) => Number(b.classList.contains("bad")) - Number(a.classList.contains("bad")))
       .map(node => node.textContent.trim()).filter(Boolean);
@@ -136,12 +172,12 @@ function decorateAiOriginalWorkbench() {
       messages.push(...aiOriginalValidationMessages(draft, "errors"), ...aiOriginalValidationMessages(draft, "warnings"));
     }
     const missingChecks = aiOriginalMissingCheckMessages(row, checks);
+    missingChecks.push(...aiOriginalManualListingChecks(row).filter(check => !check.ok).map(check => `${check.label}待补齐`));
     if (isMercado) {
-      missingChecks.push(...aiOriginalManualListingChecks(row).filter(check => !check.ok).map(check => `${check.label}待补齐`));
-      if (aiOriginalProductStatus(row) === "suspected") messages.push("疑似侵权，请核实商品和刊登资料");
+      if (["suspected", "infringing", "risk"].includes(row.review_status)) messages.push("疑似侵权，请核实商品和刊登资料");
     }
     messages.push(...missingChecks);
-    const issues = [...new Set(messages)];
+    const issues = aiOriginalConsolidateIssues(row, messages);
     if (issues.length) {
       card.classList.add("has-issues");
       const panel = document.createElement("details");
@@ -164,14 +200,32 @@ function decorateAiOriginalWorkbench() {
       const checklist = document.createElement("details");
       checklist.className = "ai-original-check-panel";
       const checkItems = items => items.map(check => `<li class="${check.ok ? "ok" : "pending"}"><span>${check.ok ? "✓" : "○"}</span>${check.label}<small>${check.ok ? "已填写" : "待补齐"}</small></li>`).join("");
-      checklist.innerHTML = `<summary>刊登检查 · ${checks.filter(check => check.ok).length}/${checks.length} 项完成</summary><ul>${checkItems(checks)}</ul>${isMercado ? `<strong>人工填写的上架资料</strong><ul class="ai-original-manual-checks">${aiOriginalManualCheckItems(row, card)}</ul><p>包装尺寸、实重、净收益必须填写后才能上架。净收益按已采集的 1688 价格自动计算并保存；修改金额或实重后需点击“保存参数并审核通过”，不参与 AI 生成成败判断。</p>` : "<p>提交前仍需完善平台要求的字段</p>"}`;
+      checklist.innerHTML = `<summary>刊登检查 · ${checks.filter(check => check.ok).length}/${checks.length} 项完成</summary><ul>${checkItems(checks)}</ul><strong>人工填写的上架资料</strong><ul class="ai-original-manual-checks">${aiOriginalManualCheckItems(row, card)}</ul><p>包装尺寸、实重、净收益是各平台共用的必填资料。${isMercado ? "修改后点击“保存参数”；" : "如需补齐，请切换到美客多卡片保存参数；"}AI 制作及必填项全部完成后进入待审核，仅人工修改状态为通过后才能上架，仅缺这些共用资料时为待补充，其他刊登资料缺项为失败；已生成内容保留，补齐并保存后重新判断状态。</p>`;
 
       fields.prepend(checklist);
+      updateAiOriginalCheckPanel(row, card);
+      if (row.can_operate !== false) {
+        const repair = document.createElement("button");
+        repair.type = "button";
+        repair.className = "secondary ai-original-repair-one";
+        repair.dataset.productId = String(row.id);
+        repair.textContent = "修复此商品";
+        repair.disabled = aiOriginalTaskActive() || aiOriginalRepairingIds.has(Number(row.id));
+        repair.addEventListener("click", () => repairAiOriginalProduct(Number(row.id), repair));
+        header.insertBefore(repair, header.querySelector(".ai-original-badge"));
+      }
       if (isMercado) {
         aiOriginalMarkField(card.querySelector(`#ai-original-category-${row.id}`), /^CBT\d+$/.test(row.category_id || "") ? "" : "请填写有效 CBT 类目");
         const dimensions = fields.querySelector(".ai-original-package-dimensions");
         dimensions?.classList.toggle("ai-original-field-issue", !aiOriginalManualListingChecks(row)[0].ok);
       }
+    }
+    const media = card.querySelector(".ai-original-image-pair");
+    if (media) {
+      const number = document.createElement("div");
+      number.className = "ai-original-product-number";
+      number.textContent = `产品编号：${row.product_number || "—"}`;
+      media.append(number);
     }
     // A collected supplier image is not an AI result.
     const generatedFigure = card.querySelectorAll(".ai-original-image-pair figure")[1];
@@ -198,7 +252,7 @@ function decorateAiOriginalWorkbench() {
       const summary = document.createElement("summary");
       summary.textContent = "刊登文案与属性";
       details.append(summary);
-      const visible = [...copy.querySelectorAll(":scope > .ai-original-title-label, :scope > .ai-original-title-text, :scope > .ai-original-issues, :scope > .ai-original-edit-button, :scope > .ai-original-draft-actions")];
+      const visible = [...copy.querySelectorAll(":scope > .ai-original-title-label, :scope > .ai-original-title-text, :scope > .ai-original-issues, :scope > .ai-original-publish-warning, :scope > .ai-original-edit-button, :scope > .ai-original-draft-actions")];
       [...copy.childNodes].forEach(node => { if (!visible.includes(node)) details.append(node); });
       const actions = copy.querySelector(":scope > .ai-original-edit-button, :scope > .ai-original-draft-actions");
       if (actions) actions.before(details);
@@ -233,6 +287,17 @@ function syncAiOriginalWorkbenchSelection() {
 document.addEventListener("DOMContentLoaded", () => {
   const page = document.getElementById("tab-ai-original-products");
   if (!page) return;
+  const toolbar = page.querySelector(".ai-original-list-head");
+  if (toolbar && !document.getElementById("ai-original-bulk-menu")) {
+    const bulk = document.createElement("details");
+    bulk.id = "ai-original-bulk-menu";
+    bulk.className = "zs-bulk-menu";
+    bulk.innerHTML = '<summary>批量编辑</summary><div class="market-selection-tools ai-original-bulk-tools"></div>';
+    const tools = bulk.querySelector(".ai-original-bulk-tools");
+    toolbar.querySelector("#ai-original-selection").after(bulk);
+    for (const node of toolbar.querySelectorAll(".ai-original-bulk-review, #ai-original-review-submit, #ai-original-delete")) tools.append(node);
+    for (const node of page.querySelectorAll(".ai-original-list-panel > .ai-original-bulk-dimensions")) tools.append(node);
+  }
   const settings = page.querySelector(".ai-original-ai-settings");
   if (settings) {
     const advanced = document.createElement("details");

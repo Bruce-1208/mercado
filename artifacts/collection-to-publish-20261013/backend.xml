@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="2.100" timestamp="2026-10-13T16:22:57.524640+08:00" hostname="11deMac-mini.local"><testcase classname="" name="tests.test_bit_interface_mercado_collection" time="0.000"><error message="collection failure">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:339: in connection
+    con = self._idle_cache.pop(0)
+          ^^^^^^^^^^^^^^^^^^^^^^^
+E   IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:661: in connect
+    sock = socket.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:852: in create_connection
+    raise exceptions[0]
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socket.py:837: in create_connection
+    sock.connect(sa)
+E   PermissionError: [Errno 1] Operation not permitted
+
+During handling of the above exception, another exception occurred:
+erp/ai_weight_price/store.py:326: in connect
+    connection = pymysql.connect(**config)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_mysql.py:50: in connect
+    return get_db_connection(kwargs, priority=priority)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:326: in get_db_connection
+    connection = pool.connection(shareable=False)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:341: in connection
+    con = self.steady_connection()
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/pooled_db.py:292: in steady_connection
+    return connect(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:138: in connect
+    return SteadyDBConnection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:197: in __init__
+    self._store(self._create())
+                ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/dbutils/steady_db.py:215: in _create
+    con = self._creator(*self._args, **self._kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/db_pool.py:101: in connect
+    return _ConnectionProxy(pymysql.connect(*args, **kwargs))
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:365: in __init__
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pymysql/connections.py:723: in connect
+    raise exc
+E   pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on '127.0.0.1' ([Errno 1] Operation not permitted)")
+
+The above exception was the direct cause of the following exception:
+tests/test_bit_interface_mercado_collection.py:7: in &lt;module&gt;
+    import bit.bit_interface as workbench
+bit/bit_interface.py:3998: in &lt;module&gt;
+    ai_weight_price_service = AIWeightPriceService(
+erp/ai_weight_price/service.py:39: in __init__
+    RemoteStore(root) if storage_backend == "api" else Store(root, backend=storage_backend))
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:295: in __init__
+    with self.connect() as db:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/contextlib.py:137: in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+erp/ai_weight_price/store.py:348: in connect
+    raise _MySQLTransactionInterrupted("MySQL事务提交前连接中断") from exc
+E   erp.ai_weight_price.store._MySQLTransactionInterrupted: MySQL事务提交前连接中断</error></testcase></testsuite></testsuites>

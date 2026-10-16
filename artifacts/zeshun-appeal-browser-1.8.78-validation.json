@@ -1,0 +1,17 @@
+{
+  "version": "1.8.78",
+  "package": "zeshun-collector-extension-1.8.78-browser-appeal.zip",
+  "sha256": "2e8d622db09df0adf5b7c12f4e62638427acfdf9bff518b32b90d8a89ca9e9ab",
+  "tests": {
+    "python_appeal_and_browser": 46,
+    "javascript_runner_and_mail": 46,
+    "access_control": 32
+  },
+  "web_pid": 69590,
+  "local_health": {
+    "login": 200,
+    "extension_version": "1.8.78"
+  },
+  "live_appeals_sent": false,
+  "public_extension_version": "1.8.78"
+}

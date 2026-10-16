@@ -98,12 +98,35 @@ def save_result(task, status, reason, changes=None, evidence=None):
             if delta:
                 assignments, values, _ = db._product_content_update_plan(delta, preserve_zying_net_proceeds=bool(product_id))
                 assignments = [s.replace("'manual_edit'", "'ai_1688_verified'") for s in assignments]
+                if product_id and str(before.get('source_type') or '').lower() == 'ai_original':
+                    snapshot = db._loads(before.get('source_snapshot_json'), {})
+                    snapshot = snapshot if isinstance(snapshot, dict) else {}
+                    db._mark_ai_marketplace_drafts_unreviewed(snapshot)
+                    assignments.extend(('`source_snapshot_json`=%s', "`review_status`='unreviewed'"))
+                    values.append(db._dumps(snapshot))
             assignments.append('`ai_weight_price_json`=%s')
             values.append(db._dumps(audit))
             cursor.execute(f"UPDATE `{table}` SET {', '.join(assignments)} WHERE `id`=%s", tuple(values + [item_id]))
             # Existing linked products keep the same audit and measurement values.
             if not product_id:
+                linked_ai_rows = []
+                if delta:
+                    cursor.execute(
+                        f"SELECT `id`, `source_snapshot_json` FROM `{db.PRODUCT_TABLE}` "
+                        "WHERE `collection_item_id`=%s AND `source_type`='ai_original' FOR UPDATE",
+                        (item_id,),
+                    )
+                    linked_ai_rows = list(cursor.fetchall() or [])
                 cursor.execute(f"UPDATE `{db.PRODUCT_TABLE}` SET {', '.join(assignments)} WHERE `collection_item_id`=%s", tuple(values + [item_id]))
+                for linked in linked_ai_rows:
+                    snapshot = db._loads(linked.get('source_snapshot_json'), {})
+                    snapshot = snapshot if isinstance(snapshot, dict) else {}
+                    db._mark_ai_marketplace_drafts_unreviewed(snapshot)
+                    cursor.execute(
+                        f"UPDATE `{db.PRODUCT_TABLE}` SET `source_snapshot_json`=%s, "
+                        "`review_status`='unreviewed' WHERE `id`=%s",
+                        (db._dumps(snapshot), linked['id']),
+                    )
         connection.commit()
         return audit
     except BaseException:

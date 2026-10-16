@@ -104,6 +104,9 @@ def _resolve_authorized_window_id(token, browsers):
     aliases = _authorization_aliases(token)
     if not aliases:
         raise RuntimeError("店铺授权缺少显示名称和 Mercado 昵称")
+    if any(str(row.get("id") or "").startswith("ziniao:") for row in browsers):
+        from bit.ziniao_browser import resolve_aliases
+        return resolve_aliases(aliases, browsers)
     errors = []
     for alias in aliases:
         try:

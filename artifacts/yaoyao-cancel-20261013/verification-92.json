@@ -1,0 +1,54 @@
+{
+  "id": 92,
+  "name": "遥遥领先16",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site_id": "MLM",
+      "seller_id": "3632853016",
+      "remaining": [
+        {
+          "id": "MLM3488299837",
+          "status": "started",
+          "price": 12.41,
+          "original_price": 13.79,
+          "currency_id": "USD",
+          "net_proceeds": {
+            "amount": 7.34,
+            "currency": "USD",
+            "selling_fee": 1.92,
+            "shipping_fee": 3.15
+          }
+        },
+        {
+          "id": "MLM3483605605",
+          "status": "started",
+          "price": 5.11,
+          "original_price": 5.68,
+          "currency_id": "USD",
+          "net_proceeds": {
+            "amount": 2.07,
+            "currency": "USD",
+            "selling_fee": 0.79,
+            "shipping_fee": 2.25
+          }
+        }
+      ]
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site_id": "MLM",
+      "seller_id": "3632853016",
+      "remaining": []
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site_id": "MLB",
+      "seller_id": "3632853018",
+      "remaining": []
+    }
+  ]
+}

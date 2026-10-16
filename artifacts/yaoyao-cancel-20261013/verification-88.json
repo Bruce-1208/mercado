@@ -1,0 +1,34 @@
+{
+  "id": 88,
+  "name": "遥遥领先14号店",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site_id": "MLM",
+      "seller_id": "3625495828",
+      "remaining": []
+    },
+    {
+      "promotion_id": "P-MLM18015004",
+      "type": "SMART",
+      "site_id": "MLM",
+      "seller_id": "3625495828",
+      "remaining": []
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site_id": "MLM",
+      "seller_id": "3625495828",
+      "remaining": []
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site_id": "MLB",
+      "seller_id": "3625495380",
+      "remaining": []
+    }
+  ]
+}

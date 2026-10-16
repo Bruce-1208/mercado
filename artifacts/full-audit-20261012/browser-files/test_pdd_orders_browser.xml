@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="0.250" timestamp="2026-10-12T16:46:17.679236+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_pdd_orders_browser.DetailBrowserTests" name="test_launch_and_reuse_dynamic_edge_port" time="0.001"><failure message="RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe">tests/test_pdd_orders_browser.py:21: in test_launch_and_reuse_dynamic_edge_port
+    process, endpoint = pdd.launch_edge_for_collection(pdd.find_edge_executable(), profile)
+                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+scripts/pdd_orders.py:314: in find_edge_executable
+    raise RuntimeError("找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe")
+E   RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe</failure></testcase><testcase classname="tests.test_pdd_orders_browser.DetailBrowserTests" name="test_two_orders_and_logistics_export" time="0.134"><failure message="RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe">tests/test_pdd_orders_browser.py:57: in test_two_orders_and_logistics_export
+    browser = runtime.chromium.launch(executable_path=str(pdd.find_edge_executable()), headless=True)
+                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+scripts/pdd_orders.py:314: in find_edge_executable
+    raise RuntimeError("找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe")
+E   RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe</failure></testcase></testsuite></testsuites>

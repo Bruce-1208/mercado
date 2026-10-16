@@ -890,11 +890,13 @@ class MercadoCommunicationsClient:
         normalized_name = str(file_name or "").strip()
         if not normalized_name or len(normalized_name) > 125:
             raise ValueError("投诉附件名不能为空且不能超过 125 个字符")
-        result = self.request(
-            "POST",
-            f"/marketplace/v2/claims/{claim}/attachments",
-            files={"file": (normalized_name, file_content, str(content_type))},
-        )
+        files = {"file": (normalized_name, file_content, str(content_type))}
+        try:
+            result = self.request("POST", f"/marketplace/v2/claims/{claim}/attachments", files=files)
+        except MercadoCommunicationError as exc:
+            if not exc.claims_1_restricted:
+                raise
+            result = self.request("POST", f"/post-purchase/v1/claims/{claim}/attachments", files=files)
         if not isinstance(result, dict) or not result.get("file_name"):
             raise MercadoCommunicationError("投诉附件接口未返回文件名", payload=result)
         return result

@@ -16,12 +16,14 @@ def store(tmp_path, monkeypatch):
     raw.executescript('''
       CREATE TABLE workbench_organizations (organization_key TEXT PRIMARY KEY, is_active INTEGER);
       INSERT INTO workbench_organizations VALUES ('alpha',1),('beta',1);
-      CREATE TABLE workbench_roles (role_key TEXT PRIMARY KEY, permissions_json TEXT, own_store_only INTEGER);
-      INSERT INTO workbench_roles VALUES
+      CREATE TABLE workbench_roles (role_key TEXT, permissions_json TEXT, own_store_only INTEGER,
+        organization_key TEXT DEFAULT 'alpha', PRIMARY KEY(organization_key, role_key));
+      INSERT INTO workbench_roles (role_key,permissions_json,own_store_only) VALUES
         ('super_admin','["*"]',0), ('enterprise_admin','["*"]',0),
         ('warehouse','["order_print.view","order_print.execute"]',0),
         ('member','["order_print.view","order_print.execute"]',1),
         ('viewer','["order_print.view"]',0);
+      INSERT INTO workbench_roles SELECT role_key,permissions_json,own_store_only,'beta' FROM workbench_roles;
       CREATE TABLE workbench_users (id INTEGER PRIMARY KEY, role_key TEXT, is_active INTEGER,
         username TEXT, display_name TEXT, organization_key TEXT);
       INSERT INTO workbench_users VALUES
@@ -1000,3 +1002,12 @@ def test_warehouse_print_history_only_contains_current_warehouse_orders(store):
     assert records['total'] == 2  # Recharge entry plus the remaining warehouse order.
     assert [r['order_id'] for r in store('history', actor=3) if r['kind'] == 'print'] == ['1001']
     assert len([r for r in store('history', actor=1) if r['kind'] == 'print']) == 2
+
+
+def test_print_permissions_are_resolved_inside_the_actor_enterprise(store):
+    store.execute("UPDATE workbench_roles SET permissions_json='[]' WHERE organization_key='alpha' AND role_key='warehouse'")
+    with pytest.raises(PermissionError, match='打印权限'):
+        reserve(store, actor=3)
+    recharge(store, target=6, organization_key='beta')
+    result = reserve(store, actor=7, orders=('2001',))
+    assert result

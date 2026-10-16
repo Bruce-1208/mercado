@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="6" skipped="0" tests="25" time="45.798" timestamp="2026-10-13T16:28:40.637389+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_mercado_infringement_browser" name="test_both_lists_render_clickable_risk_and_single_item_detection[collection]" time="1.424"><failure message="AssertionError: assert 14 == 15&#10; +  where 14 = count()&#10; +    where count = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-list-head th'&gt;.count&#10; +      where &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-list-head th'&gt; = locator('#mercado-list-head th')&#10; +        where locator = &lt;Page url='http://console.test/'&gt;.locator">console_page = &lt;Page url='http://console.test/'&gt;, mode = 'collection'
+
+    @pytest.mark.parametrize("mode", ["collection", "products"])
+    def test_both_lists_render_clickable_risk_and_single_item_detection(console_page, mode):
+        page = console_page
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        prepare_list(page, mode)
+        assert page.locator("#mercado-infringement-selected").is_visible()
+        if mode == "collection":
+&gt;           assert page.locator("#mercado-list-head th").count() == 15
+E           AssertionError: assert 14 == 15
+E            +  where 14 = count()
+E            +    where count = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-list-head th'&gt;.count
+E            +      where &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-list-head th'&gt; = locator('#mercado-list-head th')
+E            +        where locator = &lt;Page url='http://console.test/'&gt;.locator
+
+tests/test_mercado_infringement_browser.py:39: AssertionError</failure></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_both_lists_render_clickable_risk_and_single_item_detection[products]" time="1.078" /><testcase classname="tests.test_mercado_infringement_browser" name="test_selected_task_keeps_scope_filter_snapshot_and_page" time="0.908" /><testcase classname="tests.test_mercado_infringement_browser" name="test_detail_escapes_evidence_and_requires_scoped_release" time="1.707" /><testcase classname="tests.test_mercado_infringement_browser" name="test_mobile_dialog_stays_inside_viewport_and_range_is_explicit" time="0.790" /><testcase classname="tests.test_mercado_infringement_browser" name="test_cross_page_ranges_send_explicit_filters_without_page_limit[filtered]" time="0.949" /><testcase classname="tests.test_mercado_infringement_browser" name="test_cross_page_ranges_send_explicit_filters_without_page_limit[unchecked]" time="0.739" /><testcase classname="tests.test_mercado_infringement_browser" name="test_publish_readiness_retains_risky_product_and_checks_review_sites" time="0.675"><failure message="AssertionError: assert '侵权风险待处理，保留产品列表' in '本页已选择 1 件 · 1 件侵权风险待处理，将在上架记录中显示拦截原因'">console_page = &lt;Page url='http://console.test/'&gt;
+
+    def test_publish_readiness_retains_risky_product_and_checks_review_sites(console_page):
+        page = console_page
+        prepare_list(page, "products")
+        page.evaluate("""() =&gt; {
+            mercadoListRows[0].review_status = 'approved';
+            selectedMercadoCollectionIds.add(7);
+            mercadoPublishSite.innerHTML = '&lt;option value="MLM" selected&gt;墨西哥&lt;/option&gt;';
+            updateMercadoSelection();
+        }""")
+        summary = page.locator("#mercado-selection-summary").inner_text()
+&gt;       assert "侵权风险待处理，保留产品列表" in summary
+E       AssertionError: assert '侵权风险待处理，保留产品列表' in '本页已选择 1 件 · 1 件侵权风险待处理，将在上架记录中显示拦截原因'
+
+tests/test_mercado_infringement_browser.py:191: AssertionError</failure></testcase><testcase classname="tests.test_mercado_infringement_browser" name="test_task_failures_offer_details_and_retry_only_unfinished" time="0.745" /><testcase classname="tests.test_mercado_infringement_browser" name="test_review_permission_is_separate_and_candidates_preserve_manual_rules" time="1.592" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_preflight_shows_reports_and_invalidates_after_settings_change" time="1.289" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_report_escapes_untrusted_collected_values" time="0.726" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[1440]" time="5.709"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for get_by_label(&quot;型号&quot;, exact=True)">console_page = &lt;Page url='http://console.test/'&gt;, width = 1440
+
+    @pytest.mark.parametrize("width", [1440, 390])
+    def test_user_can_complete_a_missing_attribute_and_recheck(console_page, width):
+        page = console_page
+        page.set_viewport_size({"width": width, "height": 1000})
+        calls = []
+        def preview(route):
+            data = route.request.post_data_json
+            calls.append(data)
+            corrected = bool(data.get('corrections'))
+            result = {"product_id": 1, "source_item_id": "MLM123", "preflight": {
+                "status": "ready" if corrected else "needs_completion", "mappings": [],
+                "issues": [] if corrected else [{"scope":"商品", "attribute_id":"MODEL", "severity":"error", "message":"缺少型号"}]}}
+            if corrected:
+                result['revision'] = 'corrected-draft'
+            else:
+                result['correction_fields'] = [{"category_id":"MLM1", "attribute_id":"MODEL", "sku_index":None,
+                                               "scope":"商品", "name":"型号", "choices":[], "combination":False}]
+            route.fulfill(content_type='application/json', body=json.dumps({'status':'success','data':{'results':[result]}}))
+        page.route('**/api/mercado-products/attribute-preflight', preview)
+        page.evaluate("""() =&gt; {
+            mercadoListMode = 'products'; selectedMercadoCollectionIds.add(1);
+            mercadoStoreTokenRows = [{id:7, site_id:'CBT', display_name:'测试店铺', site_settings:[]}];
+            mercadoPublishMode.value = 'accounts';
+            mercadoPublishStore.innerHTML = '&lt;option value="7" selected&gt;测试店铺&lt;/option&gt;';
+            mercadoPublishSite.innerHTML = '&lt;option value="MLM" selected&gt;墨西哥&lt;/option&gt;';
+            mercadoPublishQuantity.value = 1; mercadoPublishRatio.value = 100;
+            window.syncConsoleWorkflow();
+            const card = document.getElementById('mercado-product-actions');
+            card.closest('.tab-page').classList.add('active'); card.style.display = 'block';
+            card.closest('#mercado-list-module').classList.add('products-mode');
+            document.getElementById('mercado-publish-workspace').open = true;
+        }""")
+        page.locator('#mercado-attribute-preflight-run').click()
+&gt;       page.get_by_label('型号', exact=True).fill('M-123')
+
+tests/test_mercado_attribute_preflight_browser.py:112: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x1421eefc0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x1421f2160&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E           Call log:
+E             - waiting for get_by_label("型号", exact=True)
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[390]" time="5.888"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for get_by_label(&quot;型号&quot;, exact=True)">console_page = &lt;Page url='http://console.test/'&gt;, width = 390
+
+    @pytest.mark.parametrize("width", [1440, 390])
+    def test_user_can_complete_a_missing_attribute_and_recheck(console_page, width):
+        page = console_page
+        page.set_viewport_size({"width": width, "height": 1000})
+        calls = []
+        def preview(route):
+            data = route.request.post_data_json
+            calls.append(data)
+            corrected = bool(data.get('corrections'))
+            result = {"product_id": 1, "source_item_id": "MLM123", "preflight": {
+                "status": "ready" if corrected else "needs_completion", "mappings": [],
+                "issues": [] if corrected else [{"scope":"商品", "attribute_id":"MODEL", "severity":"error", "message":"缺少型号"}]}}
+            if corrected:
+                result['revision'] = 'corrected-draft'
+            else:
+                result['correction_fields'] = [{"category_id":"MLM1", "attribute_id":"MODEL", "sku_index":None,
+                                               "scope":"商品", "name":"型号", "choices":[], "combination":False}]
+            route.fulfill(content_type='application/json', body=json.dumps({'status':'success','data':{'results':[result]}}))
+        page.route('**/api/mercado-products/attribute-preflight', preview)
+        page.evaluate("""() =&gt; {
+            mercadoListMode = 'products'; selectedMercadoCollectionIds.add(1);
+            mercadoStoreTokenRows = [{id:7, site_id:'CBT', display_name:'测试店铺', site_settings:[]}];
+            mercadoPublishMode.value = 'accounts';
+            mercadoPublishStore.innerHTML = '&lt;option value="7" selected&gt;测试店铺&lt;/option&gt;';
+            mercadoPublishSite.innerHTML = '&lt;option value="MLM" selected&gt;墨西哥&lt;/option&gt;';
+            mercadoPublishQuantity.value = 1; mercadoPublishRatio.value = 100;
+            window.syncConsoleWorkflow();
+            const card = document.getElementById('mercado-product-actions');
+            card.closest('.tab-page').classList.add('active'); card.style.display = 'block';
+            card.closest('#mercado-list-module').classList.add('products-mode');
+            document.getElementById('mercado-publish-workspace').open = true;
+        }""")
+        page.locator('#mercado-attribute-preflight-run').click()
+&gt;       page.get_by_label('型号', exact=True).fill('M-123')
+
+tests/test_mercado_attribute_preflight_browser.py:112: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = &lt;playwright._impl._connection.Connection object at 0x1421eefc0&gt;
+cb = &lt;function Channel.send.&lt;locals&gt;.&lt;lambda&gt; at 0x137e1cb80&gt;
+is_internal = False, title = None
+
+    async def wrap_api_call(
+        self, cb: Callable[[], Any], is_internal: bool = False, title: str = None
+    ) -&gt; Any:
+        if self._api_zone.get():
+            return await cb()
+        task = asyncio.current_task(self._loop)
+        st: List[inspect.FrameInfo] = getattr(
+            task, "__pw_stack__", None
+        ) or inspect.stack(0)
+    
+        parsed_st = _extract_stack_trace_information_from_stack(st, is_internal, title)
+        self._api_zone.set(parsed_st)
+        try:
+            return await cb()
+        except Exception as error:
+&gt;           raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E           playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E           Call log:
+E             - waiting for get_by_label("型号", exact=True)
+
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: TimeoutError</failure></testcase><testcase classname="tests.test_mercado_collection_quality_browser" name="test_collection_hover_preview_and_visible_missing_fields[1440]" time="1.584" /><testcase classname="tests.test_mercado_collection_quality_browser" name="test_collection_hover_preview_and_visible_missing_fields[390]" time="0.897" /><testcase classname="tests.test_mercado_collection_quality_browser" name="test_collection_hover_preview_and_visible_missing_fields[320]" time="0.877" /><testcase classname="tests.test_mercado_collection_quality_browser" name="test_stale_salesperson_option_is_removed_and_query_resets" time="7.296" /><testcase classname="tests.test_console_workflow_browser" name="test_advanced_filters_keep_values_and_show_active_count" time="1.290"><failure message="AssertionError: assert '已设置 1 项' in '高级筛选 (1)'&#10; +  where '高级筛选 (1)' = inner_text()&#10; +    where inner_text = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#tab-orders .zs-advanced-filters &gt; summary'&gt;.inner_text">console_page = &lt;Page url='http://console.test/'&gt;
+
+    def test_advanced_filters_keep_values_and_show_active_count(console_page):
+        page = console_page
+        field = page.locator('#order-remark-search')
+        summary = page.locator('#tab-orders .zs-advanced-filters &gt; summary')
+        assert not field.is_visible()
+        summary.click()
+        field.fill('待复核')
+        summary.click()
+        assert not field.is_visible()
+&gt;       assert '已设置 1 项' in summary.inner_text()
+E       AssertionError: assert '已设置 1 项' in '高级筛选 (1)'
+E        +  where '高级筛选 (1)' = inner_text()
+E        +    where inner_text = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#tab-orders .zs-advanced-filters &gt; summary'&gt;.inner_text
+
+tests/test_console_workflow_browser.py:35: AssertionError</failure></testcase><testcase classname="tests.test_console_workflow_browser" name="test_product_filters_and_selection_gate[1440]" time="0.707" /><testcase classname="tests.test_console_workflow_browser" name="test_product_filters_and_selection_gate[390]" time="0.643"><failure message="AssertionError: assert False&#10; +  where False = is_visible()&#10; +    where is_visible = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-review-filter'&gt;.is_visible&#10; +      where &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-review-filter'&gt; = locator('#mercado-review-filter')&#10; +        where locator = &lt;Page url='http://console.test/'&gt;.locator">product_page = &lt;Page url='http://console.test/'&gt;, width = 390
+
+    @pytest.mark.parametrize('width', [1440, 390])
+    def test_product_filters_and_selection_gate(product_page, width):
+        page = product_page
+        page.set_viewport_size({'width': width, 'height': 1000})
+&gt;       assert page.locator('#mercado-review-filter').is_visible()
+E       AssertionError: assert False
+E        +  where False = is_visible()
+E        +    where is_visible = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-review-filter'&gt;.is_visible
+E        +      where &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='#mercado-review-filter'&gt; = locator('#mercado-review-filter')
+E        +        where locator = &lt;Page url='http://console.test/'&gt;.locator
+
+tests/test_console_workflow_browser.py:45: AssertionError</failure></testcase><testcase classname="tests.test_console_workflow_browser" name="test_review_preserves_settings_and_selection_changes_invalidate_it" time="0.947" /><testcase classname="tests.test_console_workflow_browser" name="test_invalid_stock_cannot_reach_review" time="0.832" /><testcase classname="tests.test_console_workflow_browser" name="test_group_review_and_cancel_do_not_publish" time="0.921" /><testcase classname="tests.test_console_workflow_browser" name="test_past_schedule_stays_in_settings" time="5.229" /></testsuite></testsuites>

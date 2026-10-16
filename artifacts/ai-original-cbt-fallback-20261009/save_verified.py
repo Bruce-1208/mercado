@@ -33,7 +33,7 @@ with connection.cursor() as cur:
 connection.close()
 key=browser_extension_models.get_api_key(1,'dashscope',app.app.secret_key)
 app._run_ai_original_task(get_product_items_by_ids([pid]),api_key=key,model=QWEN_MODEL,
-    base_url=QWEN_BASE_URL,workers=1,category_token_id=token_id,generated_by=state['generated_by'],cost_control=True)
+    base_url=QWEN_BASE_URL,workers=1,category_token_id=token_id,generated_by=state['generated_by'],billing_actor=app.ai_billing_actor_context(app.get_workbench_user(user_id=1)),cost_control=True)
 result=app._ai_original_task_snapshot()['results']
 (OUT/'verified-recovery-results.json').write_text(json.dumps(result,ensure_ascii=False,indent=2))
 (OUT/f'{pid}-after.json').write_text(json.dumps(get_product_items_by_ids([pid])[0],ensure_ascii=False,default=str))

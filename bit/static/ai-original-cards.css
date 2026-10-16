@@ -1,0 +1,91 @@
+/* Reuse the product-list column density; keep editable fields inside each tile. */
+body.zs-console #tab-ai-original-products #ai-original-grid {
+  gap: var(--zs-space-2);
+  padding: var(--zs-space-2);
+}
+body.zs-console #tab-ai-original-products #ai-original-grid > .ai-original-card {
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  grid-template-areas: 'head' 'media' 'source' 'copy' 'fields';
+  gap: var(--zs-space-3);
+  padding: 0 var(--zs-space-4) var(--zs-space-4);
+  contain-intrinsic-height: auto 520px;
+}
+body.zs-console #tab-ai-original-products .ai-original-card-head {
+  margin: 0;
+  padding: var(--zs-space-3) 0;
+  gap: var(--zs-space-3);
+  flex-wrap: wrap;
+}
+body.zs-console #tab-ai-original-products .ai-original-card-head > .ai-original-generator {
+  margin-right: auto;
+  font-size: var(--zs-text-small);
+  color: var(--zs-secondary);
+}
+body.zs-console #tab-ai-original-products .ai-original-image-pair {
+  width: 100%; max-width: 180px; margin: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--zs-space-2);
+}
+body.zs-console #tab-ai-original-products .ai-original-image-pair :is(img, .ai-original-image-empty, .ai-original-image-placeholder) {
+  width: 100%; height: auto; aspect-ratio: 1;
+  border-radius: var(--zs-radius-control);
+}
+body.zs-console #tab-ai-original-products .ai-original-product-number {
+  padding: var(--zs-space-2);
+  background: var(--zs-card-soft);
+  border-radius: var(--zs-radius-control);
+  line-height: 1.6;
+}
+body.zs-console #tab-ai-original-products .ai-original-source h4 {
+  height: auto; margin: var(--zs-space-2) 0;
+  font-size: var(--zs-text-body); line-height: 1.6;
+  -webkit-line-clamp: 3;
+}
+body.zs-console #tab-ai-original-products .ai-original-copy {
+  margin: 0; padding: var(--zs-space-3) 0 0;
+  border: 0; border-top: 1px solid var(--zs-stroke);
+  overflow: visible;
+}
+body.zs-console #tab-ai-original-products .ai-original-copy > .ai-original-title-text {
+  height: auto; min-height: 0; margin-bottom: var(--zs-space-3);
+  font-size: var(--zs-text-body); line-height: 1.6;
+}
+body.zs-console #tab-ai-original-products .ai-original-fields {
+  grid-area: fields; overflow: visible;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--zs-space-3) 0 0;
+  border-left: 0;
+  border-top: 1px solid var(--zs-stroke);
+  gap: var(--zs-space-3);
+}
+body.zs-console #tab-ai-original-products .ai-original-edit-button { margin-top: var(--zs-space-3); }
+@media (max-width: 650px) {
+  body.zs-console #tab-ai-original-products #ai-original-grid { padding: var(--zs-space-2); }
+  body.zs-console #tab-ai-original-products #ai-original-grid > .ai-original-card {
+    padding: 0 var(--zs-space-3) var(--zs-space-3);
+    gap: var(--zs-space-3);
+  }
+  body.zs-console #tab-ai-original-products .ai-original-card-head > .ai-original-generator {
+    order: 4; flex-basis: 100%;
+  }
+  body.zs-console #tab-ai-original-products .ai-original-card-head label { margin-right: auto; }
+}
+
+/* Use the same disclosure and action container as the product list. */
+body.zs-console #tab-ai-original-products .ai-original-list-head { flex-wrap: wrap; }
+body.zs-console #tab-ai-original-products #ai-original-bulk-menu[open] { flex-basis: 100%; order: 5; }
+body.zs-console #tab-ai-original-products .ai-original-bulk-tools { display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--zs-space-2); }
+body.zs-console #tab-ai-original-products .ai-original-bulk-tools > .ai-original-bulk-dimensions {
+  flex-basis:100%; box-sizing:border-box; width:100%;
+  padding:var(--zs-space-3); border:1px solid var(--zs-stroke);
+  border-radius:var(--zs-radius-control); background:var(--zs-card-soft);
+}
+body.zs-console #tab-ai-original-products .ai-original-bulk-tools .ai-original-bulk-dimensions > div { flex-basis:100%; }
+body.zs-console #tab-ai-original-products .ai-original-bulk-tools .ai-original-bulk-dimensions small { line-height:1.6; color:var(--zs-secondary); }
+
+body.zs-console #tab-ai-original-products .ai-original-bulk-tools .ai-original-bulk-dimensions label { display:flex; flex-direction:column; align-items:stretch; gap:var(--zs-space-1); }
+body.zs-console #tab-ai-original-products .ai-original-bulk-tools > .ai-original-bulk-review { flex:0 1 auto; }

@@ -37,7 +37,9 @@ def checkpoint(category):
     report['category'] = category
     (OUT/'live-fallback.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
 try:
-    result = complete_marketplace_category(original, copy, OutageClient(), api_key=key,
+    result = app.bind_ai_usage(complete_marketplace_category,
+        **app.ai_billing_actor_context(app.get_workbench_user(user_id=1)),
+        task_id=str(row["source_item_id"]))(original, copy, OutageClient(), api_key=key,
         model=QWEN_MODEL, base_url=QWEN_BASE_URL, chat=_listing_json_chat(model=QWEN_MODEL, base_url=QWEN_BASE_URL), on_category_ready=checkpoint)
     report.update(status='completed', result=result)
 except OriginalPreparationError as exc:

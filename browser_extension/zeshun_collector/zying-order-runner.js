@@ -6,23 +6,27 @@ globalThis.ZeshunOrderSync = (() => {
   const path = "/api/browser-extension/zying-order-sync/";
   let dependencies;
   let running;
+  const orderUrl = "https://meli.zying.net/#/order";
   const api = (action, data) => dependencies.apiRequest(path + action,
     data === undefined ? {method: "GET"} : {method: "POST", body: JSON.stringify(data)});
   const save = session => dependencies.storageSet("local", {[sessionKey]: session});
   const session = async () => (await dependencies.storageGet("local", [sessionKey]))[sessionKey];
+  const pageReady = async tabId => {
+    const results = await chrome.scripting.executeScript({target: {tabId}, world: "MAIN", func: () =>
+      !/login/i.test(location.hash + location.pathname) &&
+      Boolean(document.querySelector('input[placeholder="订单、采购单、运单,多个编号可以逗号、空格分隔"]'))});
+    return Boolean(results?.[0]?.result);
+  };
   const waitTab = async tabId => {
-    await dependencies.waitTab(tabId);
-    // The SPA's search field can mount after the document load event.
-    const results = await chrome.scripting.executeScript({target: {tabId}, world: "MAIN", func: async () => {
-      const deadline = Date.now() + 15000;
-      while (Date.now() < deadline) {
-        if (/login/i.test(location.hash + location.pathname)) return false;
-        if (document.querySelector('input[placeholder="订单、采购单、运单,多个编号可以逗号、空格分隔"]')) return true;
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-      return false;
-    }});
-    if (!results?.[0]?.result) throw new Error("请先登录智赢，并确认可以打开订单列表，再点击确定登录");
+    // Poll short probes: a redirect may destroy an injected execution context,
+    // and unrelated page resources may never reach the tab's complete event.
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      await chrome.tabs.get(tabId);
+      try {if (await pageReady(tabId)) return;} catch (_) {}
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    throw new Error("未检测到智赢订单列表，请在同步标签页登录并打开订单列表，再点击确定登录");
   };
   const open = async state => {
     let saved = await session();
@@ -31,7 +35,7 @@ globalThis.ZeshunOrderSync = (() => {
       try { tab = await chrome.tabs.get(saved.tab_id); } catch (_) {}
     }
     if (tab) await chrome.tabs.update(tab.id, {active: true});
-    else tab = await chrome.tabs.create({url: "https://meli.zying.net/#/order", active: true});
+    else tab = await chrome.tabs.create({url: orderUrl, active: true});
     await save({request_id: state.request_id, tab_id: tab.id});
     return state;
   };
@@ -104,9 +108,19 @@ globalThis.ZeshunOrderSync = (() => {
       const saved = await session();
       const state = await api("status");
       if (!saved || saved.request_id !== state.request_id) throw new Error("请先打开本次任务的智赢页面");
-      // Reload to pick up a login completed in another tab, like the Agent.
-      await chrome.tabs.update(saved.tab_id, {url: "https://meli.zying.net/#/order"});
-      await chrome.tabs.reload(saved.tab_id);
+      // Keep an already usable login intact. Updating the URL and immediately
+      // reloading used to race navigation and discard the page's ready state.
+      let ready = false;
+      try {ready = await pageReady(saved.tab_id);} catch (_) {}
+      if (!ready) {
+        let tab;
+        try {tab = await chrome.tabs.get(saved.tab_id);} catch (_) {
+          await open(state);
+          throw new Error("原智赢标签页已关闭，已重新打开，请登录后再次点击确定登录");
+        }
+        if (tab.url === orderUrl) await chrome.tabs.reload(saved.tab_id);
+        else await chrome.tabs.update(saved.tab_id, {url: orderUrl});
+      }
       await waitTab(saved.tab_id);
       const claimed = await api("confirm", {request_id: saved.request_id});
       void resume();

@@ -14,12 +14,12 @@ globalThis.ZeshunAppealRunner?.configure({apiRequest, storageGet, storageSet});
 globalThis.ZeshunOrderSync?.configure({apiRequest, storageGet, storageSet, waitTab: aiWeightPriceWaitTab});
 
 const DEFAULT_SETTINGS = {
-  consoleUrl: "https://wuhanzeshun.com",
+  consoleUrl: "https://wuhanzeshun.cn",
   openConsoleAfterCollect: false
 };
 const LEGACY_DEFAULT_CONSOLE_URL = "http://127.0.0.1:5000";
 const CONSOLE_URL_DEFAULT_MIGRATION_KEY = "consoleUrlDefaultMigration";
-const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 1;
+const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 2;
 const AUTH_KEY = "browserExtensionAuth";
 const DOWNLOADED_ACCOUNT_BUNDLE_KEY = "downloadedAccountBundleId";
 const DOWNLOADED_ACCOUNT_CONFIG = null;
@@ -142,9 +142,12 @@ async function migrateConsoleUrlDefault(synced) {
   const updates = {
     [CONSOLE_URL_DEFAULT_MIGRATION_KEY]: CONSOLE_URL_DEFAULT_MIGRATION_VERSION
   };
-  if (!synced.consoleUrl || synced.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) {
+  const oldLocalDefault = synced.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL
+    && Number(synced[CONSOLE_URL_DEFAULT_MIGRATION_KEY] || 0) < 1;
+  const oldPublicDefault = /^https?:\/\/(www\.)?wuhanzeshun\.com\/*$/i.test(synced.consoleUrl || "");
+  if (!synced.consoleUrl || oldLocalDefault || oldPublicDefault) {
     updates.consoleUrl = DEFAULT_SETTINGS.consoleUrl;
-    if (synced.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) await clearAuth();
+    if (synced.consoleUrl) await clearAuth();
   }
   await storageSet("sync", updates);
   return {...synced, ...updates};
@@ -1045,6 +1048,9 @@ async function collect1688ListProduct(candidate) {
       if (String(product.source_item_id) !== sourceItemId) {
         throw new Error("1688详情跳转到了其他商品，已停止采集");
       }
+      if (Object.prototype.hasOwnProperty.call(candidate, "management_category_id")) {
+        product.management_category_id = candidate.management_category_id;
+      }
       return await submitProduct(product);
     }
     throw lastError || new Error("1688 商品详情加载超时，请重试");
@@ -1052,6 +1058,23 @@ async function collect1688ListProduct(candidate) {
     // Only close the temporary tab we created; never activate another tab.
     try { await chrome.tabs.remove(tab.id); } catch (_) {}
   }
+}
+
+const originalRecollections = new Map();
+async function recollectOriginalProduct(productId, sender) {
+  const config = await settings();
+  const consoleOrigin = new URL(normalizeConsoleUrl(config.consoleUrl)).origin;
+  if (!sender?.tab || new URL(sender.url || sender.tab.url).origin !== consoleOrigin) {
+    throw new Error("只能从插件当前连接的泽顺工作台发起补采");
+  }
+  if (!Number.isSafeInteger(productId) || productId <= 0) throw new Error("产品编号无效");
+  if (originalRecollections.has(productId)) return originalRecollections.get(productId);
+  const task = (async () => {
+    const result = await apiRequest(`/api/browser-extension/ai-original-products/${productId}/recollect-source`);
+    return collect1688ListProduct(result.data);
+  })();
+  originalRecollections.set(productId, task);
+  try { return await task; } finally { originalRecollections.delete(productId); }
 }
 
 function normalizeZyingToken(value) {
@@ -1407,7 +1430,7 @@ async function aiWeightPriceSendContentMessage(tabId, message, files, timeoutMs 
   }
 }
 
-const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.69";
+const AI_WEIGHT_PRICE_CONTENT_VERSION = "1.8.89";
 
 async function aiWeightPriceFrameIds(tabId) {
   const ids = [0];
@@ -2026,7 +2049,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
         return {ok: true, data: result?.[0]?.result};
       }
+      case "GET_1688_COLLECTED":
+        return {ok: true, ...(await apiRequest("/api/browser-extension/1688/collected", {
+          method: "POST", body: JSON.stringify({offer_ids: message.offer_ids})
+        }))};
       case "COLLECT_1688_URL": return collect1688ListProduct(message.product);
+      case "RECOLLECT_ORIGINAL_PRODUCT": return recollectOriginalProduct(message.productId, sender);
       case "COLLECT_MERCADO_URL": return collectMercadoUrl(message.url);
       case "SUBMIT_PRODUCT": {
         const senderHost = String(sender?.tab?.url || "").match(/^https?:\/\/([^/]+)/i)?.[1]?.toLowerCase() || "";
@@ -2117,6 +2145,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return {ok: true, ...aiWeightPriceUiResult(result)};
       }
       case "GET_STATE": return state();
+      case "GET_PURCHASE_TRACKING_OPTIONS":
+        return {ok: true, ...(await apiRequest("/api/browser-extension/purchase-tracking/options", {method: "GET"}))};
       case "GET_PURCHASE_TRACKING_REQUEST": return {
         ok: true,
         ...(await purchaseTrackingRequest() || {phase: "idle", message: "暂无物流号同步任务"})
@@ -2128,7 +2158,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           throw new Error("任务状态已变化，请刷新后重试");
         }
         const result = await apiRequest("/api/browser-extension/purchase-tracking/fail", {
-          method: "POST", body: JSON.stringify({request_id: request.request_id, pending_only: true, message: "已结束等待，请重新选择日期并启动同步"})
+          method: "POST", body: JSON.stringify({request_id: request.request_id, pending_only: true, message: "已结束等待，请重新选择筛选条件并启动同步"})
         });
         return {ok: true, ...result};
       }
@@ -2137,7 +2167,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let request = await purchaseTrackingRequest();
         if (!request?.request_id || ["completed", "error", "idle"].includes(request.phase)) {
           request = await apiRequest("/api/browser-extension/purchase-tracking/start", {
-            method: "POST", body: JSON.stringify({platform: message.platform, date_start: message.date_start, date_end: message.date_end, order_status: message.order_status || ""})
+            method: "POST", body: JSON.stringify({platform: message.platform, date_start: message.date_start, date_end: message.date_end, order_status: message.order_status || "", salesperson: message.salesperson || "", group_name: message.group_name || ""})
           });
         }
         return openPurchaseTrackingLogin(request);

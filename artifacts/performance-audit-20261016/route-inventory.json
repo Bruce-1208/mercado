@@ -1,0 +1,6834 @@
+[
+  {
+    "path": "/employee-tasks",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/employee_tasks.py",
+    "function": "page",
+    "line": 171,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/employee-tasks",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/employee_tasks.py",
+    "function": "api",
+    "line": 180,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/employee-tasks/<int:task_id>",
+    "methods": [
+      "PUT",
+      "PATCH"
+    ],
+    "source": "bit/employee_tasks.py",
+    "function": "api",
+    "line": 180,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/mercado/today",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "page",
+    "line": 891,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/claims",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "unanswered_post_sale",
+    "line": 903,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/post-sale",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "unanswered_post_sale",
+    "line": 903,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/tasks",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "list_tasks",
+    "line": 968,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/rights-holder/<int:token_id>/<case_id>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "rights_holder_reply",
+    "line": 1064,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/batch-status",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "batch_status",
+    "line": 1101,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/tasks/<int:task_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "update_task",
+    "line": 1156,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/events/<int:event_id>/replay",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "replay_event",
+    "line": 1189,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/notifications",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_action_center.py",
+    "function": "receive_notification",
+    "line": 1211,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/ai-billing",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/ai_billing.py",
+    "function": "page",
+    "line": 147,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-billing",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/ai_billing.py",
+    "function": "records",
+    "line": 154,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/billing",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/account_billing.py",
+    "function": "page",
+    "line": 228,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/billing/accounts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/account_billing.py",
+    "function": "api",
+    "line": 240,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/billing/me",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/account_billing.py",
+    "function": "api",
+    "line": 240,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/billing/accounts/<int:user_id>",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/account_billing.py",
+    "function": "api",
+    "line": 240,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/billing/accounts/<int:user_id>/recharges",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/account_billing.py",
+    "function": "api",
+    "line": 240,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/billing/accounts/<int:user_id>/records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/account_billing.py",
+    "function": "api",
+    "line": 240,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/product-diagnosis",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/product_diagnosis_routes.py",
+    "function": "page",
+    "line": 78,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/product-diagnosis",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/product_diagnosis_routes.py",
+    "function": "listing",
+    "line": 89,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/product-diagnosis/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/product_diagnosis_routes.py",
+    "function": "start",
+    "line": 100,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/product-diagnosis/<int:link_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/product_diagnosis_routes.py",
+    "function": "detail",
+    "line": 105,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/product-diagnosis/<int:link_id>/today",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/product_diagnosis_routes.py",
+    "function": "today",
+    "line": 110,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/product-diagnosis",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/product_diagnosis_routes.py",
+    "function": "internal",
+    "line": 115,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-weight-price/store",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_weight_price_store",
+    "line": 4059,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-action-center",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_action_center",
+    "line": 4108,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-usage-billing",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_usage_billing",
+    "line": 4216,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/print-wallet",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_print_wallet",
+    "line": 4278,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/billing",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_billing",
+    "line": 4293,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/run_shensu",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_run_shensu",
+    "line": 7840,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/run_shensu/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_shensu",
+    "line": 7974,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/appeal-phrases",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_appeal_phrases",
+    "line": 8009,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/appeal-phrases/<int:phrase_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_appeal_phrase_detail",
+    "line": 8022,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/collection/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_knowledge_product_collection_action",
+    "line": 8042,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/collection/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_knowledge_product_collection_status",
+    "line": 8061,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/collection/products",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_knowledge_collected_products",
+    "line": 8068,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_infringement_knowledge",
+    "line": 8080,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_bulk_infringement_knowledge",
+    "line": 8105,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/<int:record_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_get_infringement_knowledge_detail",
+    "line": 8129,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/<int:record_id>/products",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_infringement_knowledge_products",
+    "line": 8138,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/candidates",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_infringement_knowledge_candidate",
+    "line": 8150,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/analysis/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_infringement_knowledge_analysis",
+    "line": 8164,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/analysis/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_infringement_knowledge_analysis_status",
+    "line": 8214,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/<int:record_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_infringement_knowledge_detail",
+    "line": 8228,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infractions/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_latest_infractions",
+    "line": 8383,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infractions/latest/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_latest_infractions",
+    "line": 8400,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infractions/collect",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collect_infractions",
+    "line": 8460,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infractions/collect/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collect_infractions_status",
+    "line": 8511,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/infringement-dashboard",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "official_infraction_dashboard_page",
+    "line": 8521,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/ip-rights-dashboard",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "official_ip_rights_dashboard_page",
+    "line": 8540,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/official-infractions/dashboard",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_official_infraction_dashboard",
+    "line": 8559,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/official-ip-rights/dashboard",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_official_ip_rights_dashboard",
+    "line": 8589,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/official-infractions/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_official_infractions",
+    "line": 8768,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/official-ip-rights/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_official_ip_rights",
+    "line": 8798,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/official-infractions/sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_official_infraction_sync",
+    "line": 8828,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/official-infractions/sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_official_infraction_sync_status",
+    "line": 8867,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/overview-auto-sync",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_overview_auto_sync",
+    "line": 8880,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_latest_reputation",
+    "line": 8910,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/latest/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_latest_reputation",
+    "line": 9008,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/collect",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collect_reputation",
+    "line": 9075,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/update-selected",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_selected_reputation",
+    "line": 9092,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/browser-sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_reputation_browser_sync",
+    "line": 9161,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/browser-sync/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_reputation_browser_sync_status",
+    "line": 9167,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/collect/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collect_reputation_status",
+    "line": 9186,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/collections/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collection_options",
+    "line": 9196,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/funds/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_latest_funds",
+    "line": 9223,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/funds/manual",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_manual_funds",
+    "line": 9239,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/funds/collect",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collect_funds",
+    "line": 9256,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/funds/collect/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_funds_collection",
+    "line": 9425,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/funds/collect/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_collect_funds_status",
+    "line": 9448,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-analysis/import",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_import_order_analysis",
+    "line": 9460,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/upload",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_upload",
+    "line": 9511,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_list",
+    "line": 9536,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/changed",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_changed",
+    "line": 9555,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/saved",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_saved",
+    "line": 9576,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_latest",
+    "line": 9637,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_export_all",
+    "line": 9652,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_status",
+    "line": 9677,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/<task_id>/execute",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_execute",
+    "line": 9698,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/<task_id>/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_stop",
+    "line": 9746,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/weight-dimensions-records/<task_id>/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_weight_dimensions_records_export",
+    "line": 9768,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/weight-dimensions-records/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_weight_dimensions_status",
+    "line": 9788,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/weight-dimensions-records/execute",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_weight_dimensions_execute",
+    "line": 9804,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-analysis/freight-changes",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_freight_changes",
+    "line": 9889,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-analysis/high-after-sales",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_high_after_sale_alerts",
+    "line": 9905,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-analysis/high-profits",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_high_profit_products",
+    "line": 9935,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-sync/yandex",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_unified_yandex_order_sync",
+    "line": 9967,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/order-sync/yandex",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_yandex_order_sync",
+    "line": 9979,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_orders",
+    "line": 10061,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/display-exchange-rate",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_display_exchange_rate",
+    "line": 10109,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/zying-sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_order_sync_start",
+    "line": 10123,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/zying-sync/upload",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_order_excel_upload",
+    "line": 10129,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/zying-sync/confirm-login",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_order_sync_confirm_login",
+    "line": 10174,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/zying-sync/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_order_sync_stop",
+    "line": 10196,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/zying-sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_order_sync_status",
+    "line": 10215,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/zying-sync/<job_id>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_order_sync_agent_step",
+    "line": 10228,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/weight-quote",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_weight_quote",
+    "line": 10257,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/split/preview",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_split_preview",
+    "line": 10283,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/split",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_split",
+    "line": 10304,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-sync/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_sync_options",
+    "line": 10338,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/product-detail",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_product_detail",
+    "line": 10351,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/product-detail",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_product_detail",
+    "line": 10372,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/outbound/confirm",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_confirm_order_outbound",
+    "line": 10402,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/bulk-update",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_bulk_update_orders",
+    "line": 10428,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/purchase-tracking/platforms",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_purchase_tracking_platforms",
+    "line": 10493,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/purchase-tracking/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_purchase_tracking_sync",
+    "line": 10501,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/purchase-tracking/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_purchase_tracking_status",
+    "line": 10555,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/print",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_print_orders_pdf",
+    "line": 10572,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/<order_id>/logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_operation_logs",
+    "line": 10658,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/<order_id>/tracking",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_tracking",
+    "line": 10676,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/stocks",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_stocks",
+    "line": 10706,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/skus",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_skus",
+    "line": 10752,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/skus/<int:sku_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_inventory_sku",
+    "line": 10776,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/sku-mappings",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_sku_mappings",
+    "line": 10794,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/sku-mappings/<int:mapping_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_inventory_sku_mapping",
+    "line": 10820,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/reconciliation",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_reconciliation",
+    "line": 10849,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/shelves",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_shelves",
+    "line": 10866,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/shelves/<int:shelf_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_inventory_shelf",
+    "line": 10890,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/matches",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_matches",
+    "line": 10908,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/movements",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_inventory_movements",
+    "line": 10941,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_order_sync",
+    "line": 10969,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/order-sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_order_sync_status",
+    "line": 11000,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/operation-logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_operation_logs",
+    "line": 11013,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/metrics",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_metrics",
+    "line": 11040,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/metrics",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_link_metrics",
+    "line": 11052,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_links",
+    "line": 11067,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-analysis",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_analysis",
+    "line": 11182,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/category-children",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_product_category_children",
+    "line": 11215,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/category-paths",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_category_paths",
+    "line": 11229,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/<int:link_id>/video",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_video",
+    "line": 11273,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/<int:link_id>/video",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_link_video",
+    "line": 11279,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_jobs",
+    "line": 11413,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs/<job_id>/retry",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_retry",
+    "line": 11466,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/upload-logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_video_upload_logs",
+    "line": 11484,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/upload-logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_video_upload_logs",
+    "line": 11501,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/settings",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_settings",
+    "line": 11518,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs/<job_id>/assets/<asset_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_asset",
+    "line": 11537,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/ai-videos/<job_id>/details",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "ai_video_details",
+    "line": 11573,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs/<job_id>",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_job",
+    "line": 11579,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs/<job_id>/publish",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_publish",
+    "line": 11596,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs/<job_id>/content",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_content",
+    "line": 11636,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/jobs/<job_id>/cover",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_cover",
+    "line": 11671,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-videos/assets/<job_id>/<asset_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_video_signed_asset",
+    "line": 11701,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_jobs",
+    "line": 11718,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/retry",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_retry",
+    "line": 11752,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/settings",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_settings",
+    "line": 11761,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/assets/<asset_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_asset",
+    "line": 11780,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_job",
+    "line": 11793,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/publish",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_publish",
+    "line": 11811,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/content",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_content",
+    "line": 11841,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/cover",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_video_cover",
+    "line": 11854,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/<int:link_id>/advertise",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_advertise",
+    "line": 11897,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/<int:link_id>/advertise",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_link_advertise",
+    "line": 11903,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/bulk-advertise",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_links_bulk_advertise",
+    "line": 11946,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/bulk-advertise",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_links_bulk_advertise",
+    "line": 11952,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/bulk-update",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_bulk_update_store_links",
+    "line": 11961,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/delete",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_delete_store_links",
+    "line": 11991,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/bulk-update/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_remote_update_status",
+    "line": 12013,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_store_link_sync",
+    "line": 12026,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/store-links/sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_store_link_sync_status",
+    "line": 12053,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/prohibited-listings",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_prohibited_listings",
+    "line": 12066,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/prohibited-listings/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_prohibited_listings",
+    "line": 12210,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/prohibited-listings/sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_prohibited_listing_sync",
+    "line": 12236,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/prohibited-listings/sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_prohibited_listing_sync_status",
+    "line": 12282,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/tasks/daily/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_daily_task",
+    "line": 12295,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/tasks/daily/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_daily_task",
+    "line": 12406,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/tasks/daily/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_daily_task_options",
+    "line": 12508,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/tasks/daily/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_daily_task_status",
+    "line": 12569,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/enroll",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_enroll",
+    "line": 12680,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/heartbeat",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_heartbeat",
+    "line": 12716,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/jobs/claim",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_claim_job",
+    "line": 12778,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/jobs/<job_id>/events",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_job_event",
+    "line": 12799,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/jobs/<job_id>/credentials",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_job_credentials",
+    "line": 12835,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/jobs/<job_id>/collection-check",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_collection_check",
+    "line": 12863,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/business-bundle",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_business_bundle",
+    "line": 12897,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/execution-agents",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_execution_agents",
+    "line": 13058,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ad-analysis",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ad_analysis",
+    "line": 13118,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ad-analysis/profit",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ad_analysis_profit",
+    "line": 13193,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ad-analysis/profit",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ad_analysis_profit",
+    "line": 13199,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ad-analysis/actions",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ad_analysis_actions",
+    "line": 13248,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/client-update",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_agent_client_update",
+    "line": 13254,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-agents/download",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_download_local_agent",
+    "line": 13270,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/run_shensu/<task_id>/events",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_appeal_job_events",
+    "line": 13332,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/health",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_health",
+    "line": 13835,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/run_shensu",
+    "methods": [
+      "GET",
+      "POST",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_run_shensu",
+    "line": 13849,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/run_shensu/stop",
+    "methods": [
+      "POST",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_stop_shensu",
+    "line": 13858,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/run_shensu/<task_id>/events",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_appeal_events",
+    "line": 13864,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/tasks/daily/start",
+    "methods": [
+      "POST",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_start_daily_task",
+    "line": 13870,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/tasks/daily/stop",
+    "methods": [
+      "POST",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_stop_daily_task",
+    "line": 13879,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/local-executor/tasks/daily/status",
+    "methods": [
+      "GET",
+      "OPTIONS"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_daily_task_status",
+    "line": 13885,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/risk-check/categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_risk_check_categories",
+    "line": 13891,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/risk-check/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_risk_check_options",
+    "line": 13904,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/risk-check/results",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_risk_check_results",
+    "line": 13917,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/risk-check/results/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_risk_check_results",
+    "line": 13937,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_collection_categories",
+    "line": 14039,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/developers",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_collection_developers",
+    "line": 14052,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/options/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_refresh_zying_collection_options",
+    "line": 14073,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/auth/open",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_zying_collection_login",
+    "line": 14098,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/auth/capture",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_capture_zying_collection_login",
+    "line": 14117,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_zying_collection",
+    "line": 14218,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_zying_collection_status",
+    "line": 14235,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zying-collection/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_zying_collection",
+    "line": 14258,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/risk-check/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_risk_check",
+    "line": 14290,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/risk-check/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_risk_check_status",
+    "line": 14366,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_mercado_collection",
+    "line": 15180,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/browser-windows",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_collection_browser_windows",
+    "line": 15372,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/playwright-setup",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_mercado_playwright_setup",
+    "line": 15410,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_mercado_collection",
+    "line": 15469,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_collection_status",
+    "line": 15481,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/ai-weight-price",
+    "methods": [
+      "GET",
+      "POST",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_collection_ai_weight_price",
+    "line": 15501,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/infringement/tasks",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_infringement_tasks",
+    "line": 15637,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/infringement/tasks/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_infringement_task",
+    "line": 15661,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/infringement/tasks/<task_id>/cancel",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_cancel_mercado_infringement_task",
+    "line": 15670,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/infringement/tasks/<task_id>/retry",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_retry_mercado_infringement_task",
+    "line": 15679,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/infringement/items/<mode>/<int:row_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_infringement_item",
+    "line": 15698,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/infringement/items/<mode>/<int:row_id>/review",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_review_mercado_infringement_item",
+    "line": 15710,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/mercado-collection/items/<int:item_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "mercado_collection_detail_page",
+    "line": 15727,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/items",
+    "methods": [
+      "GET",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_collection_items",
+    "line": 15754,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/attribute-check",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_collection_attribute_check",
+    "line": 15804,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/ai-copy",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_mercado_collection_ai_copy",
+    "line": 15851,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/ai-copy/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_collection_ai_copy_status",
+    "line": 15930,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/catalog/visibility",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_catalog_visibility",
+    "line": 15983,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/catalog/access",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_catalog_access",
+    "line": 15998,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/catalog/visibility",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_catalog_visibility",
+    "line": 16015,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/mercado-categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_product_mercado_categories",
+    "line": 16031,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/salespeople",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_product_salespeople",
+    "line": 16044,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/developers",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_product_developers",
+    "line": 16056,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products",
+    "methods": [
+      "GET",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_products",
+    "line": 16069,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-management-categories",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_management_categories",
+    "line": 16139,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-management-categories/<int:category_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_management_category",
+    "line": 16158,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-management-categories/assign",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_assign_mercado_management_category",
+    "line": 16180,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_add_mercado_products",
+    "line": 16201,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/<int:product_item_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_mercado_product",
+    "line": 16220,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/bulk-edit",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_bulk_update_mercado_products",
+    "line": 16255,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-collection/bulk-edit",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_bulk_update_mercado_collection_items",
+    "line": 16297,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/review-status",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_mercado_product_review_status",
+    "line": 16333,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/attribute-drafts",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_attribute_drafts",
+    "line": 17675,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/attribute-preflight",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_attribute_preflight",
+    "line": 17686,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/publish",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_publish_mercado_products",
+    "line": 17758,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-products/publish/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_product_publish_status",
+    "line": 18241,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-shipping-rates",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_shipping_rates",
+    "line": 18283,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-shipping-rates/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_refresh_mercado_shipping_rates",
+    "line": 18300,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-publish-records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_product_publish_records",
+    "line": 18312,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-publish-records/retry",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_retry_mercado_product_publish_records",
+    "line": 18354,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/tasks",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_create_mercado_collection_task",
+    "line": 18652,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/tasks/<int:task_id>",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_collection_task",
+    "line": 18670,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/items",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_collection_items",
+    "line": 18692,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/items/by-ids",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_get_mercado_collection_items_by_ids",
+    "line": 18738,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/items/<int:item_id>/ai-copy",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_save_mercado_collection_item_ai_copy",
+    "line": 18755,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/mercado-categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_product_mercado_categories",
+    "line": 18771,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/salespeople",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_product_salespeople",
+    "line": 18786,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/developers",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_product_developers",
+    "line": 18799,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_products",
+    "line": 18814,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/bulk-edit",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_bulk_update_mercado_products",
+    "line": 18880,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/bulk-edit",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_bulk_update_mercado_collection",
+    "line": 18893,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/<int:product_item_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_mercado_product",
+    "line": 18906,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_product_publish_records",
+    "line": 18926,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records/published-product-ids",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_published_mercado_product_item_ids",
+    "line": 18958,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records/published-account-ids",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_published_mercado_product_account_ids",
+    "line": 18982,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records/by-ids",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_product_publish_records_by_ids",
+    "line": 19007,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records/existing-user-products",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_existing_mercado_user_product_ids",
+    "line": 19024,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_create_mercado_product_publish_records",
+    "line": 19052,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-publish-records/<int:record_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_mercado_product_publish_record",
+    "line": 19081,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/review-status",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_mercado_product_review_status",
+    "line": 19103,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/move-to-collection",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_move_mercado_products_to_collection",
+    "line": 19124,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/add",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_add_mercado_products",
+    "line": 19144,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-collection/items/delete",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_delete_mercado_collection_items",
+    "line": 19158,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/delete",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_delete_mercado_product_items",
+    "line": 19171,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/by-ids",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_get_mercado_product_items_by_ids",
+    "line": 19184,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_create_mercado_product_publish_schedule",
+    "line": 19198,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_get_latest_mercado_product_publish_schedule",
+    "line": 19224,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/claim",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_claim_mercado_product_publish_schedule",
+    "line": 19238,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/recover",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_recover_mercado_product_publish_schedules",
+    "line": 19254,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/<int:schedule_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_mercado_product_publish_schedule",
+    "line": 19266,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-products/<int:product_item_id>/publish-state",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_mercado_product_publish_state",
+    "line": 19286,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/task-records",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_task_records",
+    "line": 19304,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/task-records/order-print/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_latest_order_print_records",
+    "line": 19316,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/services/health",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_services_health",
+    "line": 19328,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/health",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_health",
+    "line": 19337,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/dashboard",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_official_infraction_dashboard",
+    "line": 19356,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/current-counts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_official_infraction_current_counts",
+    "line": 19386,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/live/jobs",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_start_live_official_infraction_job",
+    "line": 19520,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/live/jobs/<job_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_live_official_infraction_job_status",
+    "line": 19541,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/live",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_collect_live_official_infractions",
+    "line": 19558,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_start_official_infraction_sync",
+    "line": 19579,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/official-infractions/sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_official_infraction_sync_status",
+    "line": 19601,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/publish-concurrency",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_publish_concurrency",
+    "line": 19613,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/publish-concurrency",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_publish_concurrency",
+    "line": 19629,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/overview-auto-sync",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_overview_auto_sync",
+    "line": 19643,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/authorization",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_token_authorization",
+    "line": 19710,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-applications",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_applications",
+    "line": 19724,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-applications/<int:application_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_application",
+    "line": 19741,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-applications/<int:application_id>/authorization",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_application_authorization",
+    "line": 19762,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_list_mercado_tokens",
+    "line": 19777,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-account-groups",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_account_groups",
+    "line": 19787,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-account-groups/<int:group_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_account_group",
+    "line": 19808,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/<int:token_id>/site-settings",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_token_site_settings",
+    "line": 19830,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/exchange",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_exchange_mercado_token",
+    "line": 19849,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/<int:token_id>/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_refresh_mercado_token",
+    "line": 19873,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/<int:token_id>/application",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_reauthorize_mercado_token_application",
+    "line": 19886,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/<int:token_id>/reputation",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_token_reputation",
+    "line": 19902,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-communications/<int:token_id>/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_communication",
+    "line": 19918,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-tokens/<int:token_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_mercado_token",
+    "line": 19933,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/reputation/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_reputation",
+    "line": 19961,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infractions/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_infractions",
+    "line": 19979,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/delays/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_delays",
+    "line": 19996,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/pago/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_pago",
+    "line": 20008,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-products/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_zying_products",
+    "line": 20020,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/weight-dimensions-records",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_weight_dimensions_records",
+    "line": 20032,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/weight-dimensions-changes",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_weight_dimensions_changes",
+    "line": 20051,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/weight-dimensions-records/existing",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_existing_weight_dimensions_record_order_numbers",
+    "line": 20079,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/weight-dimensions-records/log",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_weight_dimensions_record_log",
+    "line": 20095,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-products/existing",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_existing_zying_product_ids",
+    "line": 20111,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-products/product-list",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_upsert_zying_product_list",
+    "line": 20131,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-products/developers/sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_sync_zying_product_developers",
+    "line": 20145,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-risk/candidates",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_zying_risk_candidates",
+    "line": 20159,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-risk/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_zying_risks",
+    "line": 20174,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-risk/categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_zying_risk_categories",
+    "line": 20188,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/zying-risk/results",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_zying_risk_results",
+    "line": 20197,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-risk/candidates",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_risk_candidates",
+    "line": 20216,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-risk/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_infringement_risks",
+    "line": 20239,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-risk/results",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_risk_results",
+    "line": 20253,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-risk/review",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_risk_review",
+    "line": 20279,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/<int:record_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_get_infringement_knowledge_detail",
+    "line": 20294,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/<int:record_id>/products",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_knowledge_products",
+    "line": 20306,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/candidates",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_knowledge_candidate",
+    "line": 20320,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-risk/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_risk_options",
+    "line": 20333,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/stocks",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_stocks",
+    "line": 20345,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/skus",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_skus",
+    "line": 20360,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/skus/<int:sku_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_inventory_sku",
+    "line": 20384,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/sku-mappings",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_sku_mappings",
+    "line": 20402,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/sku-store-sites",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_sku_store_sites",
+    "line": 20428,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/sku-mappings/<int:mapping_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_inventory_sku_mapping",
+    "line": 20443,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/reconciliation",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_reconciliation",
+    "line": 20464,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/1688-products/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_1688_product_options",
+    "line": 20479,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/1688-products/bulk-dimensions",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_1688_product_items",
+    "line": 20488,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/1688-products/<int:product_item_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_1688_product",
+    "line": 20511,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-original-products",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_upsert_ai_original_product",
+    "line": 20533,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-original-products/<int:product_item_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_ai_original_product",
+    "line": 20551,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-original-products/bulk-dimensions",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_ai_original_product_items",
+    "line": 20571,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-original-products/bulk-net-proceeds",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_ai_original_product_items",
+    "line": 20571,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-original-products/<int:product_item_id>/listing",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_ai_original_listing",
+    "line": 20596,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-original-products/<int:product_item_id>/translate",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_translate_ai_original_listing",
+    "line": 20615,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-management-categories",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_management_categories",
+    "line": 20635,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-management-categories/<int:category_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_mercado_management_category",
+    "line": 20654,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/mercado-management-categories/assign",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_assign_mercado_management_category",
+    "line": 20676,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/shelves",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_shelves",
+    "line": 20697,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/shelves/<int:shelf_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_update_inventory_shelf",
+    "line": 20721,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/matches",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_matches",
+    "line": 20739,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/inventory/movements",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_inventory_movements",
+    "line": 20752,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_list_orders",
+    "line": 20773,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-analysis",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_analysis",
+    "line": 20791,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/weight-quote",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_weight_quote",
+    "line": 20818,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/split/preview",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_split_preview",
+    "line": 20837,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/split",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_split",
+    "line": 20856,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/order-sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_start_order_sync",
+    "line": 20883,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/order-sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_sync_status",
+    "line": 20905,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_links",
+    "line": 20914,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ad-analysis",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ad_analysis",
+    "line": 20961,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ad-analysis/actions",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ad_analysis_actions",
+    "line": 20990,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/bulk-update",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_bulk_update_store_links",
+    "line": 20999,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/delete",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_delete_store_links",
+    "line": 21019,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/bulk-update/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_link_remote_update_status",
+    "line": 21036,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_start_store_link_sync",
+    "line": 21048,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/store-links/sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_store_link_sync_status",
+    "line": 21068,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/prohibited-listings",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_prohibited_listings",
+    "line": 21077,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/prohibited-listings/sync/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_start_prohibited_listing_sync",
+    "line": 21111,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/prohibited-listings/sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_prohibited_listing_sync_status",
+    "line": 21139,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/bulk-update",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_bulk_update_orders",
+    "line": 21153,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/access-contexts",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_access_contexts",
+    "line": 21185,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/purchase-tracking",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_purchase_tracking_orders",
+    "line": 21201,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/labels",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_labels",
+    "line": 21226,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/print-logs",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_print_logs",
+    "line": 21271,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/<order_id>/logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_operation_logs",
+    "line": 21289,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/<order_id>/tracking",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_order_tracking",
+    "line": 21302,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_orders",
+    "line": 21317,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/high-after-sales",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_high_after_sale_alerts",
+    "line": 21329,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/orders/high-profits",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_high_profit_products",
+    "line": 21344,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/chat",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_chat",
+    "line": 21359,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/appeal-chat-records",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_appeal_chat_record",
+    "line": 21381,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/appeal-package-ids",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_appeal_package_ids",
+    "line": 21395,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-appeal-product-contexts",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_ai_appeal_product_contexts",
+    "line": 21412,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-appeal-records",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_insert_ai_appeal_record",
+    "line": 21431,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/ai-appeal-records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_get_ai_appeal_records",
+    "line": 21445,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/appeal-phrases",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_appeal_phrases",
+    "line": 21455,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/appeal-phrases/random",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_random_appeal_phrase",
+    "line": 21471,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/appeal-phrases/<int:phrase_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_appeal_phrase_detail",
+    "line": 21484,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_knowledge",
+    "line": 21503,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/bulk",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_bulk_infringement_knowledge",
+    "line": 21529,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/analysis-sources",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_knowledge_analysis_sources",
+    "line": 21543,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/analyzed",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_upsert_analyzed_infringement_knowledge",
+    "line": 21559,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/wipo/records",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_upsert_wipo_infringement_knowledge",
+    "line": 21573,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/<int:record_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_infringement_knowledge_detail",
+    "line": 21589,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infractions/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_latest_infractions",
+    "line": 21608,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/reputation/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_latest_reputation",
+    "line": 21618,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/pago/latest",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_latest_pago",
+    "line": 21627,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/window-anomalies",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_upsert_window_anomaly",
+    "line": 21640,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/window-anomalies",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_get_window_anomalies",
+    "line": 21660,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/window-anomalies/resolve",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_resolve_window_anomaly",
+    "line": 21671,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-appeal-records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_appeal_records",
+    "line": 21682,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/window-anomalies",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_window_anomalies",
+    "line": 21776,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/window-anomalies/<window_id>/resolve",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_resolve_window_anomaly",
+    "line": 21893,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/window-anomalies/mercado-login/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_login_console_status",
+    "line": 21919,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/window-anomalies/mercado-login/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_mercado_login_console",
+    "line": 21929,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/window-anomalies/mercado-login/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_start_mercado_login_console",
+    "line": 21957,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/session-user",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_session_user",
+    "line": 22123,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/profile",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_profile",
+    "line": 22141,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/roles",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_roles",
+    "line": 22157,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/organizations",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_organizations",
+    "line": 22176,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/roles/<role_key>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_role_detail",
+    "line": 22195,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/users",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_users",
+    "line": 22217,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/registration-code",
+    "methods": [
+      "POST",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_registration_code",
+    "line": 22236,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/register",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_register",
+    "line": 22260,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/users/<int:user_id>",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_user_detail",
+    "line": 22276,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/users/<int:user_id>/password",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_user_password",
+    "line": 22292,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/catalog",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_catalog",
+    "line": 22309,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/organizations",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_organizations",
+    "line": 22320,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/organizations/<organization_key>",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_organization_detail",
+    "line": 22377,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/organizations/<organization_key>",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_organization_detail",
+    "line": 22392,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/roles",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_roles",
+    "line": 22408,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/roles/<role_key>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_role_detail",
+    "line": 22427,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/users",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_users",
+    "line": 22450,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/users/<int:user_id>",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_user_detail",
+    "line": 22487,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/access/users/<int:user_id>/password",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_access_user_password",
+    "line": 22528,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/workbench/login",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_db_workbench_login",
+    "line": 22554,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/authorization",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_token_authorization",
+    "line": 22572,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-applications",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_applications",
+    "line": 22584,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-applications/<int:application_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_application",
+    "line": 22601,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_list_mercado_tokens",
+    "line": 22621,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-account-groups",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_account_groups",
+    "line": 22633,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-account-groups/<int:group_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_account_group",
+    "line": 22669,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/<int:token_id>/site-settings",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_token_site_settings",
+    "line": 22690,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/exchange",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_exchange_mercado_token",
+    "line": 22708,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/<int:token_id>/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_refresh_mercado_token",
+    "line": 22762,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/<int:token_id>/application",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_reauthorize_mercado_token_application",
+    "line": 22776,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-reputation/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_refresh_all_mercado_reputation",
+    "line": 23189,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-reputation/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_reputation_status",
+    "line": 23241,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/<int:token_id>/reputation",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_token_reputation",
+    "line": 23250,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-communications/pre-sale-aggregate",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_pre_sale_aggregate",
+    "line": 23276,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/overview/mercado-notices",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_overview_mercado_notices",
+    "line": 23456,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/mercado-notices",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_reputation_mercado_notices",
+    "line": 23471,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-communications/customer-service-aggregate",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_customer_service_aggregate",
+    "line": 23765,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-claims/<int:token_id>/open-browser",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_mercado_claim_browser",
+    "line": 24054,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/<int:token_id>/open-browser",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_reputation_browser",
+    "line": 24064,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/rights-holder/<int:token_id>/open-browser",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_reputation_browser",
+    "line": 24064,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-claims/open-store/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_reputation_browser_status",
+    "line": 24191,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/reputation/open-store/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_reputation_browser_status",
+    "line": 24191,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado/today/rights-holder/open-store/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_open_reputation_browser_status",
+    "line": 24191,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-communications/<int:token_id>/<action>",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_mercado_communication",
+    "line": 24228,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/mercado-tokens/<int:token_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_mercado_token",
+    "line": 24265,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/yandex/search",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_yandex_search",
+    "line": 24296,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/yandex/search/<int:run_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_yandex_search_status",
+    "line": 24317,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/yandex-console/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_yandex_console_status",
+    "line": 24330,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/yandex-console/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_yandex_console_start",
+    "line": 24353,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "index",
+    "line": 24392,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/settings/integrations",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "account_integrations_page",
+    "line": 24426,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/settings/profile",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "account_profile_page",
+    "line": 24441,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account/profile",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_profile",
+    "line": 24448,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account/password",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_profile",
+    "line": 24448,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_integrations",
+    "line": 24486,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/private",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_private_account_integrations",
+    "line": 24503,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/balance",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_model_balance",
+    "line": 24544,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/balances",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_model_balances",
+    "line": 24553,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/tokens",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_integration_tokens",
+    "line": 24577,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/email",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_integration_email",
+    "line": 24594,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/email/test",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_integration_email_test",
+    "line": 24609,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/webhook",
+    "methods": [
+      "PUT"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_integration_webhook",
+    "line": 24622,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/account-integrations/webhook/test",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_account_integration_webhook_test",
+    "line": 24637,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/login",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "login_page",
+    "line": 24649,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/register",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "register_page",
+    "line": 24656,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/registration/send-code",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_registration_send_code",
+    "line": 24662,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/register",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_register",
+    "line": 24700,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/login",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_login",
+    "line": 24719,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/execution-targets/local-token",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_local_executor_token",
+    "line": 24749,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/execution-targets/local-token/verify",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_verify_local_executor_token",
+    "line": 24781,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/login",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_login",
+    "line": 24802,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/version",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_version",
+    "line": 24826,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/download",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_download",
+    "line": 24834,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/console-session",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_console_session",
+    "line": 24866,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/session",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_session",
+    "line": 24887,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/appeal/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_appeal_action",
+    "line": 24910,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/appeal/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_appeal_status",
+    "line": 24952,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/mercado-data/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_mercado_data_status",
+    "line": 24973,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/mercado-data/exchange-rates",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_mercado_exchange_rates",
+    "line": 24980,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/mercado-data/query",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_mercado_data_query",
+    "line": 24996,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/management-categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_management_categories",
+    "line": 25015,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/notifications/send",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_notification_send",
+    "line": 25028,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/request",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_request",
+    "line": 25059,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying-order-sync/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_zying_order_status",
+    "line": 25071,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying-order-sync/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_zying_order_action",
+    "line": 25081,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_options",
+    "line": 25143,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_start",
+    "line": 25156,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/purchase-tracking/logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_purchase_tracking_logs",
+    "line": 25200,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/prepare",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_prepare",
+    "line": 25212,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/claim",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_claim",
+    "line": 25227,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/result",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_result",
+    "line": 25244,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/fail",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_purchase_tracking_fail",
+    "line": 25292,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying/options",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_zying_options",
+    "line": 25349,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_start_zying_collection",
+    "line": 25434,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_zying_collection_status",
+    "line": 25462,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_stop_zying_collection",
+    "line": 25480,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying-infringement/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_start_zying_infringement",
+    "line": 25507,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying-infringement/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_zying_infringement_status",
+    "line": 25532,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/zying-infringement/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_stop_zying_infringement",
+    "line": 25547,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/client/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_client_status",
+    "line": 25695,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/client/<path:action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_client_action",
+    "line": 25712,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_status",
+    "line": 25754,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/login/open",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_open_login",
+    "line": 25769,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/login/confirm",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_confirm_login",
+    "line": 25791,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/categories/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_refresh_categories",
+    "line": 25813,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_start",
+    "line": 25835,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/login/supplier",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_open_supplier",
+    "line": 25882,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/continue",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_continue",
+    "line": 25900,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_ai_weight_price_stop",
+    "line": 25929,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/profiles",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_profiles",
+    "line": 26422,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/<int:product_item_id>/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_export_ai_original_listing",
+    "line": 26430,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_products",
+    "line": 26449,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/cost-summary",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_cost_summary",
+    "line": 26485,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/1688-products/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_1688_product_options",
+    "line": 26498,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/1688-products/bulk-dimensions",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_1688_product_items",
+    "line": 26508,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/1688-products/<int:product_item_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_1688_product",
+    "line": 26528,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/1688-products",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_1688_products",
+    "line": 26555,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/<int:product_item_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_get_ai_original_product",
+    "line": 26608,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/<int:product_item_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_ai_original_product",
+    "line": 26620,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/bulk-dimensions",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_ai_original_product_items",
+    "line": 26642,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/bulk-net-proceeds",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_ai_original_product_items",
+    "line": 26642,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/categories/search",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_category_search",
+    "line": 26718,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/categories/<string:category_id>/attributes",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_category_attributes",
+    "line": 26755,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/<int:product_item_id>/listing",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_update_ai_original_listing",
+    "line": 26787,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/<int:product_item_id>/translate",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_translate_ai_original_listing",
+    "line": 26803,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/process",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_process_ai_original_products",
+    "line": 26818,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/process/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_stop_ai_original_products",
+    "line": 26928,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/process/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_products_status",
+    "line": 26940,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/images/<path:filename>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_product_image",
+    "line": 26947,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/source-image",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_ai_original_source_image",
+    "line": 27042,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/ai-original-products/<int:product_item_id>/recollect-source",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_recollect_source",
+    "line": 27069,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/1688/collected",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_1688_collected",
+    "line": 27093,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/browser-extension/collect",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "api_browser_extension_collect",
+    "line": 27112,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/logout",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "logout",
+    "line": 27224,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/zs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/bit_interface.py",
+    "function": "hello_whzs",
+    "line": 27233,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/clearance-alerts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "clearance_alerts_page",
+    "line": 86,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/clearance-alerts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "api_clearance_alerts",
+    "line": 96,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/clearance-alerts/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "api_clearance_alerts_refresh",
+    "line": 101,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/clearance-alerts/<int:link_id>/facts",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "api_clearance_alerts_facts",
+    "line": 106,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/clearance-alerts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "api_db_clearance_alerts",
+    "line": 111,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/clearance-alerts/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "api_db_clearance_alerts_refresh",
+    "line": 117,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/clearance-alerts/<int:link_id>/facts",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/clearance_routes.py",
+    "function": "api_db_clearance_alerts_facts",
+    "line": 123,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/size-charts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "size_charts_page",
+    "line": 70,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/templates",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_templates",
+    "line": 80,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/templates/<int:template_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_template",
+    "line": 85,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/templates/<int:template_id>/copy",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_copy",
+    "line": 90,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/options",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_options",
+    "line": 95,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/requirements",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_requirements",
+    "line": 100,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/preview",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_preview",
+    "line": 105,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/upload",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_upload",
+    "line": 110,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/batch",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_batch",
+    "line": 115,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_records",
+    "line": 120,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/size-charts/reconcile",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_size_chart_reconcile",
+    "line": 125,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/size-charts/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/size_chart_routes.py",
+    "function": "api_db_size_charts",
+    "line": 130,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/price-competition",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/price_competition_routes.py",
+    "function": "price_competition_page",
+    "line": 52,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/price-competition",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/price_competition_routes.py",
+    "function": "price_competition_list",
+    "line": 62,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/price-competition/stores",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/price_competition_routes.py",
+    "function": "price_competition_stores",
+    "line": 67,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/price-competition/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/price_competition_routes.py",
+    "function": "price_competition_action",
+    "line": 72,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/price-competition/<action>",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/price_competition_routes.py",
+    "function": "price_competition_internal",
+    "line": 77,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/salesperson-stats",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/salesperson_stats_routes.py",
+    "function": "salesperson_stats",
+    "line": 26,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/salesperson-stats",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/salesperson_stats_routes.py",
+    "function": "db_salesperson_stats",
+    "line": 33,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/catalog/attributes/check",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/catalog_attribute_routes.py",
+    "function": "api_catalog_attributes_check",
+    "line": 74,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/catalog/attributes",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "bit/catalog_attribute_routes.py",
+    "function": "api_catalog_attributes_update",
+    "line": 87,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/catalog/attributes",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/catalog_attribute_routes.py",
+    "function": "api_db_catalog_attributes_update",
+    "line": 109,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/wipo/settings",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/wipo_routes.py",
+    "function": "api_wipo_settings",
+    "line": 55,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/wipo/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/wipo_routes.py",
+    "function": "api_wipo_status",
+    "line": 60,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/infringement-knowledge/wipo/sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/wipo_routes.py",
+    "function": "api_wipo_sync",
+    "line": 65,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/wipo/settings",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "bit/wipo_routes.py",
+    "function": "api_db_wipo_settings",
+    "line": 70,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/wipo/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/wipo_routes.py",
+    "function": "api_db_wipo_status",
+    "line": 75,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/db/infringement-knowledge/wipo/sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/wipo_routes.py",
+    "function": "api_db_wipo_sync",
+    "line": 80,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/stores",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_stores",
+    "line": 109,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/amazon-store",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_amazon_store",
+    "line": 113,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/schema",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_schema",
+    "line": 117,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/preview",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_preview",
+    "line": 121,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_submit",
+    "line": 125,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_jobs",
+    "line": 129,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs/<job_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_job",
+    "line": 133,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs/<job_id>/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_refresh",
+    "line": 137,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs/<job_id>/retry",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/ai_original_publish_routes.py",
+    "function": "api_original_publish_retry",
+    "line": 141,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/print-wallet",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "page",
+    "line": 843,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/print-wallet/accounts",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "api",
+    "line": 853,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/print-wallet/me",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "api",
+    "line": 853,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/print-wallet/accounts/<int:user_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "api",
+    "line": 853,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/print-wallet/accounts/<int:user_id>/records",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "api",
+    "line": 853,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/print-wallet/accounts/<int:user_id>/recharges",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "api",
+    "line": 853,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/print-wallet/requests/<request_id>/cancel",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/print_wallet.py",
+    "function": "api",
+    "line": 853,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/promotions",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "page",
+    "line": 75,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/stores",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "stores",
+    "line": 86,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "list_promotions",
+    "line": 94,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/sync",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "sync",
+    "line": 139,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/<int:promotion_id>/items",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "items",
+    "line": 154,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/<int:promotion_id>/withdraw",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "withdraw_listing",
+    "line": 204,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "stop_promotions",
+    "line": 226,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/preview",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "preview",
+    "line": 263,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/enroll",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "enroll",
+    "line": 292,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/promotions/jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "source": "bit/mercado_promotion_routes.py",
+    "function": "jobs",
+    "line": 322,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/automation-center",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/automation_center.py",
+    "function": "page",
+    "line": 984,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/automation-center",
+    "methods": [
+      "GET",
+      "PATCH",
+      "POST"
+    ],
+    "source": "bit/automation_center.py",
+    "function": "api",
+    "line": 991,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/exports",
+    "methods": [
+      "POST"
+    ],
+    "source": "bit/background_exports.py",
+    "function": "enqueue_export",
+    "line": 192,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/exports/<job_id>",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/background_exports.py",
+    "function": "export_status",
+    "line": 217,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/exports/<job_id>/download",
+    "methods": [
+      "GET"
+    ],
+    "source": "bit/background_exports.py",
+    "function": "export_download",
+    "line": 226,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/ai-weight-price",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "page",
+    "line": 138,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "status",
+    "line": 157,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/model/check",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "check_model",
+    "line": 164,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/visuals/<filename>",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "visual_frame",
+    "line": 168,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/login/open",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "open_login",
+    "line": 177,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/login/confirm",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "confirm_login",
+    "line": 185,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/supplier/login/open",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "open_supplier_login",
+    "line": 194,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/categories/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "categories",
+    "line": 202,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/categories",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "cached_categories",
+    "line": 209,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/config",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "config",
+    "line": 215,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/owners",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "owners",
+    "line": 228,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/tasks",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "tasks",
+    "line": 232,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/run-items",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "run_items",
+    "line": 237,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/tasks/<key>",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "task",
+    "line": 253,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/tasks/<key>/manual-execute",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "manual_execute",
+    "line": 261,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/tasks/<key>/retry",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "retry",
+    "line": 271,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/start",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "start",
+    "line": 292,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/stop",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "stop",
+    "line": 307,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/terminate",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "terminate",
+    "line": 315,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/continue",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "continue_after_human",
+    "line": 325,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/skip-current",
+    "methods": [
+      "POST"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "skip_current",
+    "line": 335,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/logs",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "logs",
+    "line": 343,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/ai-weight-price/export",
+    "methods": [
+      "GET"
+    ],
+    "source": "erp/ai_weight_price/web.py",
+    "function": "export",
+    "line": 348,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "index",
+    "line": 90,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/health",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "health",
+    "line": 104,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/token/validate",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "validate_token",
+    "line": 127,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/stores",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_stores",
+    "line": 139,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zeshun-stores",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_zeshun_stores",
+    "line": 147,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zeshun-stores",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "create_zeshun_store",
+    "line": 155,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zeshun-stores/{authorization_id}",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_zeshun_store",
+    "line": 174,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zeshun-stores/{authorization_id}/authorize",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "authorize_zeshun_store",
+    "line": 200,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/zeshun-stores/{authorization_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "delete_zeshun_store",
+    "line": 232,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/exchange-rate",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "exchange_rate",
+    "line": 242,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/stores",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "create_store",
+    "line": 251,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/stores/{store_id}",
+    "methods": [
+      "PATCH"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_store",
+    "line": 270,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/stores/{store_id}/refresh",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "refresh_store",
+    "line": 281,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/stores/{store_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "delete_store",
+    "line": 299,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/search",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "create_search",
+    "line": 310,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/search/{run_id}",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "get_search",
+    "line": 317,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/search/{run_id}/status",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "get_search_status",
+    "line": 326,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_orders",
+    "line": 334,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/orders/action",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_order",
+    "line": 360,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_inventory",
+    "line": 368,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/inventory/stock",
+    "methods": [
+      "PUT"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_inventory_stock",
+    "line": 382,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/listings",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_links",
+    "line": 392,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/listings/price",
+    "methods": [
+      "PUT"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_link_price",
+    "line": 406,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/listings/dimensions",
+    "methods": [
+      "PUT"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_link_dimensions",
+    "line": 420,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/listings/visibility",
+    "methods": [
+      "PUT"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "update_link_visibility",
+    "line": 432,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/listings/delete",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "delete_links",
+    "line": 444,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/returns",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_returns",
+    "line": 452,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/chats",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_chats",
+    "line": 469,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/returns/decisions",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "get_return_decisions",
+    "line": 484,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/returns/decisions",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "submit_return_decisions",
+    "line": 492,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/chats/history",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "get_chat_history",
+    "line": 505,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/chats/reply",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "reply_to_chat",
+    "line": 519,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/todos",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_todos",
+    "line": 527,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/settlements",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "create_settlement_report",
+    "line": 532,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/settlements/{report_id}",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "get_settlement_report",
+    "line": 542,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/chats/create",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "create_chat",
+    "line": 552,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/feedback",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_feedback",
+    "line": 562,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/feedback/reply",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "reply_to_feedback",
+    "line": 577,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/feedback/skip",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "skip_feedback",
+    "line": 587,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/questions",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "list_questions",
+    "line": 595,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/questions/reply",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "reply_to_question",
+    "line": 610,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/publish",
+    "methods": [
+      "POST"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "publish",
+    "line": 620,
+    "coverage": "static_inventory_only"
+  },
+  {
+    "path": "/api/publish/{job_id}",
+    "methods": [
+      "GET"
+    ],
+    "source": "yandex/app/main.py",
+    "function": "get_publish",
+    "line": 682,
+    "coverage": "static_inventory_only"
+  }
+]

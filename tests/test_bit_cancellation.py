@@ -105,7 +105,7 @@ def test_ai_cancellation_uses_infraction_grouping_rules(monkeypatch):
 
     driver = FakeDriver()
     orders = [str(2000017400000000 + index) for index in range(12)]
-    monkeypatch.setattr(bit_appeal_ai, "get_cancellation_orders", lambda *args: orders)
+    monkeypatch.setattr(bit_appeal_ai, "get_cancellation_orders", lambda *args, **kwargs: orders if kwargs["package_ids"] else pytest.fail("must request packages"))
     monkeypatch.setattr(
         bit_appeal_ai,
         "open_help_page_with_daily_validation",
@@ -150,7 +150,7 @@ def test_ai_cancellation_uses_infraction_grouping_rules(monkeypatch):
     assert all(group["appeal_kind"] == "取消率" for group in saved_groups)
     assert sent_groups[0]["message"].startswith("尊敬的平台审核专员：")
     assert (
-        "1. 订单编号：" + "、".join(sent_groups[0]["identifiers"])
+        "1. 包裹号：" + "、".join(sent_groups[0]["identifiers"])
         in sent_groups[0]["message"]
     )
     assert "本次订单为平台系统主动取消交易" in sent_groups[0]["message"]

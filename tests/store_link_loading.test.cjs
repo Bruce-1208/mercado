@@ -48,6 +48,7 @@ function harness({honorAbort = true} = {}) {
         storeLinkSyncRunning: false, storeLinkLastRenderedProgress: -1,
         storeLinkRemoteUpdateRunning: false, storeLinkRemoteUpdatePollTimer: null,
         storeLinkRemoteUpdateStatusLoading: false, storeLinkRemoteUpdateLog: {},
+        storeLinkRemoteUpdateSubmissionVersion: 0,
         storeLinkPendingRefreshPage: null, storeLinkPage: 1, storeLinkPages: 1,
         storeLinksLoaded: false, storeLinkRows: [], storeLinkAllCount: {},
         storeLinkCurrentCount: {}, storeLinkStoreCount: {}, storeLinkLastSync: {},
@@ -59,6 +60,7 @@ function harness({honorAbort = true} = {}) {
             context.storeLinkBody.innerHTML = rows.map(row => `row:${row.id}`).join(',');
         },
         renderStoreLinkStores: () => {}, renderStoreLinkSites: () => {},
+        renderStoreLinkStatusCounts: counts => { context.statusCounts = counts; },
         renderStoreLinkSalespeople: () => {}, renderStoreLinkGroups: () => {}, renderStoreLinkPagination: () => {},
         loadMercadoManagementCategories: () => {}, syncWorkspaceTabs: () => {},
         escapeHtml: value => String(value),
@@ -143,12 +145,17 @@ test('manual filter changes still cancel old requests and discard late responses
     assert.equal(h.context.storeLinkResultSummary.textContent, '正在查询…');
     assert.equal(h.lists()[0].signal.aborted, true);
     assert.match(h.lists()[1].url, /search=new\+filter/);
-    h.lists()[1].respond({rows: [{id: 2}], total: 12345});
+    h.lists()[1].respond({rows: [{id: 2}], total: 12345,
+        summary: {all_count: 13000, current_count: 12345}, status_counts: {'': 12345, active: 12345}});
     await newList;
-    h.lists()[0].respond({rows: [{id: 1}], total: 99999});
+    h.lists()[0].respond({rows: [{id: 1}], total: 99999,
+        summary: {all_count: 99999, current_count: 99999}, status_counts: {'': 99999}});
     await oldList;
     assert.equal(h.context.storeLinkBody.innerHTML, 'row:2');
     assert.equal(h.context.storeLinkResultSummary.textContent, '筛选结果共 12,345 条 · 本页 1 条');
+    assert.equal(h.context.storeLinkAllCount.textContent, '13,000');
+    assert.equal(h.context.storeLinkCurrentCount.textContent, '12,345');
+    assert.equal(h.context.statusCounts.active, 12345);
     assert.match(h.context.storeLinkPaginationSummary.textContent, /筛选结果共 12,345 条/);
     assert.equal(h.context.storeLinkRefreshButton.disabled, false);
 });
@@ -356,4 +363,18 @@ test('changing filters cancels the gateway retry delay', async () => {
     assert.equal(h.timers.size, 0);
     assert.equal(h.lists().length, 2);
     assert.equal(h.context.storeLinkBody.innerHTML, 'row:9');
+});
+
+
+test('status response predating a submission cannot stop the new batch polling', async () => {
+    const h = harness();
+    const oldStatus = h.context.loadStoreLinkRemoteUpdateStatus();
+    h.context.storeLinkRemoteUpdateSubmissionVersion += 1;
+    h.context.renderStoreLinkRemoteUpdateStatus({running: true, status: 'queued', message: 'new batch'});
+    h.updates()[0].respond({running: false, status: 'completed', message: 'old batch'});
+    await oldStatus;
+    assert.equal(h.context.storeLinkRemoteUpdateRunning, true);
+    assert.match(h.context.storeLinkMessage.textContent, /new batch/);
+    assert.equal(h.timers.size, 1);
+    assert.equal(h.lists().length, 0);
 });

@@ -1685,67 +1685,17 @@ def _click_complaint_review_in_metrics(driver):
 
 
 def _extract_visible_cancellation_order_ids(driver):
-    """从当前 Metrics 页的订单行、链接及订单属性中提取订单号。"""
-    result = driver.execute_script(
-        r"""
-        function normalize(value) {
-            return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
-        }
-        function allElements(root = document) {
-            const out = [];
-            const visit = (scope) => {
-                const elements = scope.querySelectorAll ? Array.from(scope.querySelectorAll('*')) : [];
-                for (const element of elements) {
-                    out.push(element);
-                    if (element.shadowRoot) visit(element.shadowRoot);
-                }
-            };
-            visit(root);
-            return out;
-        }
-        const ids = [];
-        const seen = new Set();
-        const add = value => {
-            const id = String(value || '').replace(/\D/g, '');
-            if (id.length >= 10 && id.length <= 20 && !seen.has(id)) {
-                seen.add(id);
-                ids.push(id);
-            }
-        };
-        const prefixedPattern = /(?:order|orders|sale|sales|venta|ventas|venda|vendas|pedido|pedidos|订单|销售单)[^0-9]{0,30}(\d{8,20})/gi;
-        const genericPattern = /\b\d{10,20}\b/g;
-        for (const element of allElements(document)) {
-            for (const attribute of ['data-order-id', 'data-order-number', 'data-sale-id']) {
-                const value = element.getAttribute?.(attribute);
-                if (value) add(value);
-            }
-            const href = element.getAttribute?.('href') || '';
-            const hrefMatches = href.matchAll(/(?:orders?|sales?|ventas?|pedidos?)[^0-9]{0,20}(\d{8,20})/gi);
-            for (const match of hrefMatches) add(match[1]);
-
-            const text = String(element.innerText || element.textContent || '').trim();
-            if (!text || text.length > 800) continue;
-            for (const match of text.matchAll(prefixedPattern)) add(match[1]);
-
-            const tag = String(element.tagName || '').toLowerCase();
-            const role = normalize(element.getAttribute?.('role') || '');
-            const className = normalize(element.className || '');
-            const rowLike = ['tr', 'li'].includes(tag) || role === 'row' ||
-                /row|order|sale|card|item|record/.test(className);
-            const normalizedText = normalize(text);
-            if (rowLike) {
-                for (const match of text.matchAll(genericPattern)) add(match[0]);
-            }
-        }
-        return {
-            ids,
-            fingerprint: ids.join('|') + ':' + String(document.body?.scrollHeight || 0),
-            height: document.body?.scrollHeight || 0
-        };
-        """,
-    ) or {}
+    """Use the same explicit sale/package parser as the extension; never infer from bare digits."""
+    source = (Path(__file__).resolve().parents[1] / "browser_extension" / "zeshun_collector" / "appeal-page.js").read_text(encoding="utf-8")
+    result = driver.execute_async_script(source + """
+        const done = arguments[arguments.length - 1];
+        MercadoAppealPage.action('orders').then(done).catch(error => done({error: String(error)}));
+    """) or {}
+    if result.get("error") or result.get("unsupported"):
+        raise MercadoPageStructureError(result.get("error") or "无法读取当前美客多订单页")
     return {
         "ids": _normalize_cancellation_order_ids(result.get("ids") or []),
+        "pack_ids": _normalize_cancellation_order_ids(result.get("pack_ids") or []),
         "fingerprint": str(result.get("fingerprint") or ""),
         "height": int(result.get("height") or 0),
     }
@@ -1830,6 +1780,7 @@ def _get_reputation_metric_order_ids(
     metric_label,
     click_review,
     max_pages,
+    package_ids=False,
 ):
     """从指定声誉指标的 Metrics 页面读取全部影响声誉的销售单号。"""
     _open_reputation_page_with_validation(driver, name, site)
@@ -1853,11 +1804,13 @@ def _get_reputation_metric_order_ids(
     )
 
     orders = []
+    packages = []
     seen = set()
     stagnant_rounds = 0
     previous_fingerprint = ""
     for page_index in range(1, max(1, int(max_pages)) + 1):
         state = _extract_visible_cancellation_order_ids(driver)
+        packages.extend(state.get("pack_ids") or [])
         added = 0
         for order_id in state["ids"]:
             if order_id in seen:
@@ -1885,10 +1838,14 @@ def _get_reputation_metric_order_ids(
         time.sleep(2 if action.startswith("clicked") else 1)
 
     print(f"{get_now_time()}{name}{site}{metric_label}共获取到{len(orders)}个销售单号：{orders}")
+    if package_ids:
+        from bit.appeal_evidence import normalize_ids
+        from bit.bit_db_api import get_appeal_package_ids
+        return list(dict.fromkeys(normalize_ids(packages) + get_appeal_package_ids(name, site, orders)))
     return orders
 
 
-def get_cancellation_orders(driver, name="", site="", max_pages=100):
+def get_cancellation_orders(driver, name="", site="", max_pages=100, *, package_ids=False):
     """从声誉页取消率的 Review in Metrics 中读取全部取消订单号。"""
     return _get_reputation_metric_order_ids(
         driver,
@@ -1897,10 +1854,11 @@ def get_cancellation_orders(driver, name="", site="", max_pages=100):
         "取消率",
         _click_cancellation_review_in_metrics,
         max_pages,
+        package_ids=package_ids,
     )
 
 
-def get_complaint_orders(driver, name="", site="", max_pages=100):
+def get_complaint_orders(driver, name="", site="", max_pages=100, *, package_ids=False):
     """从声誉页 Complaints 的 Review in Metrics 中读取全部影响声誉的销售单号。"""
     return _get_reputation_metric_order_ids(
         driver,
@@ -1909,6 +1867,7 @@ def get_complaint_orders(driver, name="", site="", max_pages=100):
         "投诉",
         _click_complaint_review_in_metrics,
         max_pages,
+        package_ids=package_ids,
     )
 
 

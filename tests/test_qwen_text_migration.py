@@ -32,7 +32,7 @@ def test_stale_deepseek_settings_rejected_before_client_creation(monkeypatch, op
         adapter.chat_deepseek([], api_key='old-key', **options)
 
 
-def test_appeal_thinking_reaches_provider_and_only_final_text_is_used(monkeypatch):
+def test_appeal_uses_qwen_max_without_thinking_and_only_final_text_is_used(monkeypatch):
     from bit.bit_ai_appeal_copy import generate_ai_appeal_copy
     calls, options = [], []
     response = SimpleNamespace(choices=[SimpleNamespace(
@@ -44,7 +44,8 @@ def test_appeal_thinking_reaches_provider_and_only_final_text_is_used(monkeypatc
     monkeypatch.setattr(adapter, '_get_client', lambda **kw: client)
     result = generate_ai_appeal_copy('侵权', ['MLM123'], 'test-key',
         product_loader=lambda ids: [{'product_id': 'MLM123', 'title': '台灯', 'description': '照明'}])
-    assert calls[0]['extra_body'] == {'enable_thinking': True, 'thinking_budget': 4096}
+    assert calls[0]['model'] == 'qwen-max'
+    assert 'extra_body' not in calls[0]
     assert calls[0]['max_tokens'] == 8192
     assert options == [{'timeout': 120, 'max_retries': 0}]
     assert result['generated_text'] == '请依据商品用途人工复核。'

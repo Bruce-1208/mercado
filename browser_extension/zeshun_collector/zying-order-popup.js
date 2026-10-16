@@ -6,6 +6,7 @@ globalThis.ZeshunOrderPopup = (() => {
   let busy = false;
   let visible = false;
   let timer;
+  let actionError;
   const startDate = element("date-start");
   const endDate = element("date-end");
   const today = new Intl.DateTimeFormat("sv-SE", {timeZone: "Asia/Shanghai"}).format(new Date());
@@ -24,8 +25,9 @@ globalThis.ZeshunOrderPopup = (() => {
   };
   const render = value => {
     state = value || {};
+    if (actionError && (actionError.request_id !== state.request_id || actionError.phase !== state.phase)) actionError = null;
     if (state.running && state.date_start) {startDate.value = state.date_start; endDate.value = state.date_end; element("order-status").value = state.order_status || "";}
-    element("status").textContent = state.message || "选择下单日期范围后启动同步";
+    element("status").textContent = actionError?.message || state.message || "选择下单日期范围后启动同步";
     element("summary").textContent = state.phase === "loading"
       ? `准备订单 ${state.prepared || 0} / ${state.total || 0} · 可先登录智赢`
       : `已处理 ${state.completed || 0} / ${state.total || 0} · 成功 ${state.updated || 0} · 跳过 ${state.skipped || 0} · 失败 ${state.failed || 0}`;
@@ -37,6 +39,7 @@ globalThis.ZeshunOrderPopup = (() => {
     clearTimeout(timer);
     try {
       const response = await runtimeMessage({type: "GET_ZYING_ORDER_STATUS"});
+      if (busy) return;
       if (!response.ok) throw new Error(response.error || "读取进度失败");
       render(response.state);
     } catch (error) {element("status").textContent = error.message || String(error); controls();}
@@ -44,13 +47,18 @@ globalThis.ZeshunOrderPopup = (() => {
   };
   const action = async (type, params = {}) => {
     busy = true;
+    actionError = null;
     clearTimeout(timer);
+    if (type === "CONFIRM_ZYING_ORDER_LOGIN") element("status").textContent = "正在确认智赢登录并等待订单列表，最多约 30 秒…";
     controls();
     try {
       const response = await runtimeMessage({type, ...params});
       if (!response.ok) throw new Error(response.error || "操作失败");
       render(response.state);
-    } catch (error) {element("status").textContent = error.message || String(error);}
+    } catch (error) {
+      actionError = {request_id: state.request_id, phase: state.phase, message: error.message || String(error)};
+      element("status").textContent = actionError.message;
+    }
     finally {busy = false; controls(); if (visible) timer = setTimeout(load, 1500);}
   };
   element("mode").addEventListener("click", () => showMode("zying-order"));

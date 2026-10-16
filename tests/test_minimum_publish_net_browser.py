@@ -19,7 +19,7 @@ def test_floor_input_validation_and_publish_payload(console_page, width, panel):
             'status': 'success', 'data': {'running': False, 'status': 'completed', 'results': []}}))))
     confirmations = []
     page.on('dialog', lambda dialog: (confirmations.append(dialog.message), dialog.accept()))
-    page.evaluate('''panel => {
+    page.evaluate('''async panel => {
         document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
         const original = panel === 'original';
         document.getElementById(original ? 'tab-ai-original-products' : 'tab-mercado-products').classList.add('active');
@@ -32,7 +32,11 @@ def test_floor_input_validation_and_publish_payload(console_page, width, panel):
         if (original) {
             document.getElementById('ai-original-platform').value='mercadolibre';
             aiOriginalRows=[ready]; aiOriginalSelected=new Set([11]);
+            if (aiOriginalStoresPromise) await aiOriginalStoresPromise;
+            aiOriginalStoreRows=[{id:7,site_id:'CBT',display_name:'测试店铺'}];
+            document.getElementById('ai-original-stores').dataset.loaded='1';
             document.getElementById('ai-original-stores').innerHTML='<option value="7" selected>测试店铺</option>';
+            document.querySelector('input[name="ai-original-site"][value="MLM"]').checked=true;
             renderAiOriginalProducts(); updateAiOriginalSelection();
             loadAiOriginalPublishStatus=()=>{};
         } else {
@@ -69,6 +73,7 @@ def test_floor_input_validation_and_publish_payload(console_page, width, panel):
         assert '25.50' in page.locator('#mercado-publish-review').inner_text()
     button.click()
     page.wait_for_function('!aiOriginalSubmitting && !mercadoPublishSubmitting')
+    assert requests, {'confirmations': confirmations, 'status': page.locator('#ai-original-publish-status' if panel == 'original' else '#mercado-publish-status').inner_text()}
     assert requests[0]['minimum_net_proceeds_usd'] == 25.5
     assert requests[0]['net_proceeds_ratio'] == (200 if panel == 'original' else 100)
     assert '25.50' in confirmations[-1]

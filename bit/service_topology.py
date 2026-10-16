@@ -45,6 +45,7 @@ def request_group(path):
                         '/api/official-infractions/sync', '/api/db/official-infractions/sync', '/api/db/official-infractions/live',
                         '/api/mercado-reputation/')) or path in {
         '/api/store-links/delete', '/api/db/store-links/delete',
+        '/api/store-links/metrics', '/api/db/store-links/metrics',
         '/api/overview-auto-sync', '/api/db/overview-auto-sync', '/api/mercado-tokens/exchange',
     }:
         return 'stores'

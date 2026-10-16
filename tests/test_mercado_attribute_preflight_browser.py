@@ -31,14 +31,18 @@ def console_page(console_browser):
 
 
 
-def test_preflight_shows_reports_and_invalidates_after_settings_change(console_page):
+@pytest.mark.parametrize("count,width", [(1, 1440), (51, 1440), (100, 390)])
+def test_preflight_shows_reports_and_invalidates_after_settings_change(console_page, count, width):
     page = console_page
+    page.set_viewport_size({"width": width, "height": 1000})
     calls = []
     def preview(route):
         calls.append(route.request.post_data_json)
         route.fulfill(content_type="application/json", body=json.dumps({"status": "success", "data": {
             "results": [{"product_id": 1, "source_item_id": "MLM123", "revision": "saved-revision",
-                         "preflight": {"status": "ready", "issues": [], "mappings": [
+                         "preflight": {"status": "ready", "issues": [{"code": "virtual_ean", "scope": "商品",
+                             "attribute_id": "GTIN", "severity": "warning",
+                             "message": "自动生成虚拟 EAN-13：2000000000015；未经 GS1 注册"}], "mappings": [
                              {"scope": "商品", "source": {"id": "BRAND", "value_name": "Real brand"},
                               "target": {"id": "BRAND", "value_name": "Real brand"}, "rule": "source_schema_to_target_id"}]}}]}}))
     page.route("**/api/mercado-products/attribute-preflight", preview)
@@ -59,9 +63,14 @@ def test_preflight_shows_reports_and_invalidates_after_settings_change(console_p
         card.closest('#mercado-list-module').classList.add('products-mode');
         document.getElementById('mercado-publish-workspace').open = true;
     }""")
-    page.locator("#mercado-attribute-preflight-run").click(timeout=5000)
+    page.evaluate("count => { for (let id = 1; id <= count; id++) selectedMercadoCollectionIds.add(id); }", count)
+    page.locator("#mercado-attribute-preflight-run").focus()
+    page.keyboard.press("Enter")
     page.wait_for_function("document.body.textContent.includes('属性预检：可上架')")
-    assert calls[0]["product_item_ids"] == [1]
+    page.locator('.publish-record-details summary').first.focus()
+    page.keyboard.press('Enter')
+    assert '自动生成虚拟 EAN-13：2000000000015' in page.locator('body').inner_text()
+    assert calls[0]["product_item_ids"] == list(range(1, count + 1))
     assert page.evaluate("window.mercadoAttributeDraftRevisions()") == {"1:7:MLM": "saved-revision"}
     page.evaluate("mercadoPublishQuantity.value = 2")
     assert page.evaluate("() => {try {window.mercadoAttributeDraftRevisions();} catch(e) {return e.message;}}") == '所选商品或上架设置已变化，请重新检查上架属性'

@@ -8,8 +8,11 @@ from erp import mercadolibre_collection_store as db
 @pytest.mark.parametrize('changed', [False, True])
 def test_product_copy_preserves_variants_and_rejects_concurrent_edits(monkeypatch, changed):
     snapshot = {'source': {'title': 'Old', 'variations': [{'id': 1, 'price': 7}]},
-                'description': {'plain_text': 'Old description'}, 'plugin_snapshot': {'id': 9}}
+                'description': {'plain_text': 'Old description'}, 'plugin_snapshot': {'id': 9},
+                'marketplace_listings': {'amazon': {'review_status': 'approved'},
+                                         'yandex': {'review_status': 'approved'}}}
     row = {'id': 12, 'title': 'Old', 'description_text': 'Old description',
+           'source_type': 'ai_original', 'review_status': 'approved',
            'source_snapshot_json': json.dumps(snapshot)}
     expected = db.product_ai_copy_row(row)
     current = dict(row)
@@ -37,3 +40,6 @@ def test_product_copy_preserves_variants_and_rejects_concurrent_edits(monkeypatc
         assert saved['source']['title'] == generated['title_es']
         assert saved['description']['plain_text'] == 'New ES'
         assert saved['ai_copy']['title_pt'] == generated['title_pt']
+        assert saved['marketplace_listings']['amazon']['review_status'] == 'unreviewed'
+        assert saved['marketplace_listings']['yandex']['review_status'] == 'unreviewed'
+        assert "`review_status`='unreviewed'" in updates[0][0]

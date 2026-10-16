@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="23" skipped="0" tests="25" time="0.441" timestamp="2026-10-12T16:39:46.801512+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_collection_ai_agent" name="test_default_dispatches_real_agent_job_and_rejects_duplicate" time="0.011"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'required_role': 'enterprise_admin', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:57: in test_default_dispatches_real_agent_job_and_rejects_duplicate
+    assert response.status_code == 200, response.get_json()
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'required_role': 'enterprise_admin', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_server_permission_and_admin_dispatch" time="0.008"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, execution_target='server')">tests/test_collection_ai_agent.py:75: in test_server_permission_and_admin_dispatch
+    assert launch(client, execution_target='server').status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, execution_target='server')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_offline_agent_returns_error_and_releases_batch" time="0.007"><failure message="AssertionError: assert 403 == 409&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, agent_id='agent-missing')">tests/test_collection_ai_agent.py:83: in test_offline_agent_returns_error_and_releases_batch
+    assert launch(client, agent_id='agent-missing').status_code == 409
+E   AssertionError: assert 403 == 409
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, agent_id='agent-missing')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_claim_callback_identity_and_completion" time="0.007"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;)">tests/test_collection_ai_agent.py:90: in test_claim_callback_identity_and_completion
+    assert launch(client).status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;)</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_dead_agent_is_reported_and_can_restart" time="0.007"><failure message="TypeError: 'NoneType' object is not subscriptable">tests/test_collection_ai_agent.py:116: in test_dead_agent_is_reported_and_can_restart
+    hub.append_event(job['job_id'], 'agent-office', status='error', message='Edge connection failed')
+                     ^^^^^^^^^^^^^
+E   TypeError: 'NoneType' object is not subscriptable</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_browser_runner_executes_search_detail_without_zying_login" time="0.004" /><testcase classname="tests.test_collection_ai_agent" name="test_browser_launch_failure_records_failure" time="0.004" /><testcase classname="tests.test_collection_ai_agent" name="test_server_edge_runs_whole_batch_with_actor_scope" time="0.008"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, execution_target='server')">tests/test_collection_ai_agent.py:173: in test_server_edge_runs_whole_batch_with_actor_scope
+    assert launch(client, execution_target='server').status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = launch(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, execution_target='server')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_dispatch_function_also_restores_existing_browser_actions" time="0.007"><failure message="assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:191: in test_dispatch_function_also_restores_existing_browser_actions
+    assert response.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_batch_unblocks_login_and_preserves_history[running]" time="0.012"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:214: in test_terminate_orphan_batch_unblocks_login_and_preserves_history
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_batch_unblocks_login_and_preserves_history[blocked]" time="0.013"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:214: in test_terminate_orphan_batch_unblocks_login_and_preserves_history
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_batch_unblocks_login_and_preserves_history[stopped]" time="0.013"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:214: in test_terminate_orphan_batch_unblocks_login_and_preserves_history
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_batch_unblocks_login_and_preserves_history[failed]" time="0.013"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:214: in test_terminate_orphan_batch_unblocks_login_and_preserves_history
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_batch_unblocks_login_and_preserves_history[completed]" time="0.014"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:214: in test_terminate_orphan_batch_unblocks_login_and_preserves_history
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_works_when_agent_offline" time="0.009"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')">tests/test_collection_ai_agent.py:234: in test_terminate_orphan_works_when_agent_offline
+    assert awp_control('terminate').status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_controls_users_job_on_previous_agent" time="0.012"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')">tests/test_collection_ai_agent.py:245: in test_terminate_controls_users_job_on_previous_agent
+    assert awp_control('terminate').status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_admin_termination_cleans_job_owner_state_only" time="0.010"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;Response 98 bytes [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;Response 98 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')">tests/test_collection_ai_agent.py:259: in test_admin_termination_cleans_job_owner_state_only
+    assert awp_control('terminate').status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;Response 98 bytes [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;Response 98 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_employee_cannot_terminate_another_owners_job" time="0.009"><failure message="AssertionError: assert 403 == 409&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')">tests/test_collection_ai_agent.py:271: in test_employee_cannot_terminate_another_owners_job
+    assert awp_control('terminate').status_code == 409
+E   AssertionError: assert 403 == 409
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_endpoint_clears_stale_running_status" time="0.022"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent'}&#10;assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:292: in test_terminate_endpoint_clears_stale_running_status
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent'}
+E   assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_orphan_without_selected_agent" time="0.008"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate', agent_id='')">tests/test_collection_ai_agent.py:305: in test_terminate_orphan_without_selected_agent
+    assert awp_control('terminate', agent_id='').status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;Response 104 bytes [403 FORBIDDEN]&gt; = awp_control('terminate', agent_id='')</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_start_reaps_expired_worker_without_visiting_agent_list[False]" time="0.009"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:320: in test_start_reaps_expired_worker_without_visiting_agent_list
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_start_reaps_expired_worker_without_visiting_agent_list[True]" time="0.010"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:320: in test_start_reaps_expired_worker_without_visiting_agent_list
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_start_preserves_live_worker_and_exposes_blocking_job" time="0.009"><failure message="assert 403 == 409&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:331: in test_start_preserves_live_worker_and_exposes_blocking_job
+    assert response.status_code == 409
+E   assert 403 == 409
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_login_job_without_batch[False]" time="0.010"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:346: in test_terminate_login_job_without_batch
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_collection_ai_agent" name="test_terminate_login_job_without_batch[True]" time="0.010"><failure message="AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}&#10;assert 403 == 200&#10; +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code">tests/test_collection_ai_agent.py:346: in test_terminate_login_job_without_batch
+    assert response.status_code == 200, response.json
+E   AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+E   assert 403 == 200
+E    +  where 403 = &lt;Response 104 bytes [403 FORBIDDEN]&gt;.status_code</failure></testcase></testsuite></testsuites>

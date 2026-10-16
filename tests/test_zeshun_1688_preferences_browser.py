@@ -109,3 +109,54 @@ def test_collection_preserves_title_destination_over_other_links(products_browse
     assert product['final_url'] == product['source_url']
     assert page.url == 'https://s.1688.com/selloffer/offer_search.htm'
     page.close()
+
+
+def test_collected_status_survives_refresh_and_reused_cards(products_browser):
+    for width in (1440, 390):
+        page = products_browser.new_page(viewport={'width': width, 'height': 900})
+        page.route('**/*', lambda route: route.fulfill(content_type='text/html', body='''
+          <div class="offer-item"><a href="https://detail.1688.com/offer/123456.html">历史商品</a></div>
+          <div class="offer-item"><a href="https://detail.1688.com/offer/234567.html">新商品</a></div>
+        '''))
+        page.add_init_script('''window.chrome = {
+          runtime: {onMessage: {addListener() {}}, sendMessage: async m => {
+            if(m.type === 'GET_STATE') return {authenticated:false};
+            if(m.type === 'GET_1688_COLLECTED') return {ok:true,collected_ids:['123456']};
+            if(m.type === 'COLLECT_1688_URL') return {ok:true};
+          }}, storage: {local: {get:async () => ({})}}
+        };''')
+        page.goto('https://s.1688.com/selloffer/offer_search.htm')
+        source = Path('browser_extension/zeshun_collector/content-1688.js').read_text()
+        page.add_script_tag(content=source)
+        buttons = page.locator('.zeshun-card-collect')
+        page.wait_for_function("document.querySelector('.zeshun-card-collect').textContent === '已采集'")
+        assert buttons.nth(1).inner_text() == '采集'
+        buttons.nth(1).focus()
+        page.keyboard.press('Enter')
+        page.wait_for_function("document.querySelectorAll('.zeshun-card-collect')[1].textContent === '已采集'")
+        page.wait_for_timeout(2000)
+        assert buttons.nth(1).inner_text() == '已采集'
+        page.evaluate("document.querySelector('.offer-item a').href='https://detail.1688.com/offer/345678.html'; document.querySelector('.offer-item a').textContent='替换商品'")
+        page.wait_for_function("document.querySelector('.zeshun-card-collect').textContent === '采集'")
+        page.reload()
+        page.add_script_tag(content=source)
+        page.wait_for_function("document.querySelector('.zeshun-card-collect').textContent === '已采集'")
+        page.close()
+
+
+def test_detail_collected_and_queued_labels(products_browser):
+    page = products_browser.new_page()
+    page.set_content('<button data-zeshun-offer-id="123456" data-collect-label="采集到泽顺">采集到泽顺</button>')
+    source = Path('browser_extension/zeshun_collector/content-1688.js').read_text()
+    start = source.index('  const collectionStates =')
+    end = source.index('  function mountCollectorButton()', start)
+    page.add_script_tag(content='''let queued = false;
+      const extractProduct = async () => ({source_item_id:'123456'});
+      const sendRuntimeMessage = async () => ({ok:true, queued});
+      const showToast = () => {};
+    ''' + source[start:end])
+    page.evaluate("collectFromPage(document.querySelector('button'))")
+    assert page.locator('button').inner_text() == '已采集'
+    page.evaluate("queued=true; collectFromPage(document.querySelector('button'))")
+    assert page.locator('button').inner_text() == '已待传'
+    page.close()

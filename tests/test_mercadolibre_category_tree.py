@@ -170,3 +170,42 @@ def test_missing_cached_category_is_filled_from_official_detail(monkeypatch, tmp
     tree._site_cache.clear()
     assert tree.category_paths_for_ids(['CBT2'])['CBT2'][-1]['id'] == 'CBT2'
     assert calls == ['https://api.mercadolibre.com/categories/CBT2']
+
+
+def test_bulk_catalog_failure_falls_back_to_details_and_chinese(monkeypatch, tmp_path):
+    monkeypatch.setattr(tree, '_CACHE_DIR', tmp_path)
+    monkeypatch.setattr(tree, '_site_cache', {})
+    monkeypatch.setattr(tree, '_translate_names', lambda lang, names: {'Tools': '工具', 'Hammers': '锤子'})
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {'path_from_root': [{'id': 'CBT1', 'name': 'Tools'}, {'id': 'CBT2', 'name': 'Hammers'}]}
+    def get(url, **kwargs):
+        if '/sites/' in url:
+            raise tree.requests.HTTPError('catalog unavailable')
+        return Response()
+    monkeypatch.setattr(tree.requests, 'get', get)
+    result = tree.category_paths_for_ids(['CBT2'])
+    assert [node['name'] for node in result['CBT2']] == ['工具', '锤子']
+    assert tree.category_filter_ids('tree:CBT1') == ['CBT1', 'CBT2']
+
+
+def test_translation_merged_lines_retry_individually_and_save(monkeypatch, tmp_path):
+    # Use the actual implementation rather than this file's translation fixture.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('isolated_category_translation', tree.__file__)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module._CACHE_DIR = tmp_path
+    calls = []
+    class Response:
+        def __init__(self, value): self.value = value
+        def raise_for_status(self): pass
+        def json(self): return [[[self.value]]]
+    def get(url, **kwargs):
+        value = kwargs['params']['q']
+        calls.append(value)
+        return Response({'Hammers': '锤子', 'Tools': '工具'}.get(value, '工具和锤子'))
+    monkeypatch.setattr(module.requests, 'get', get)
+    assert module._translate_names('en', {'Tools', 'Hammers'}) == {'Tools': '工具', 'Hammers': '锤子'}
+    assert len(calls) == 3
+    assert (tmp_path / 'names_en_zh.json').exists()

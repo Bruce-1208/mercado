@@ -1,0 +1,28 @@
+{
+  "sidebarRight": -15,
+  "visibility": "hidden",
+  "navInert": true,
+  "width": 390,
+  "viewport": 390,
+  "bodyOverflow": "hidden auto",
+  "scrollers": [
+    {
+      "cls": "page",
+      "overflow": "visible",
+      "height": 1840,
+      "scroll": 1840
+    },
+    {
+      "cls": "content",
+      "overflow": "visible",
+      "height": 1784,
+      "scroll": 1784
+    },
+    {
+      "cls": "order-table-wrap zs-table-scroll",
+      "overflow": "auto",
+      "height": 0,
+      "scroll": 0
+    }
+  ]
+}

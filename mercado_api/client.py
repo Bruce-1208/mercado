@@ -322,6 +322,19 @@ class MercadoLibreClient:
             "total": total,
         }
 
+    def get_order_billing(self, order_ids, *, seller_id) -> dict[str, Any]:
+        """Read the official post-sale billing report for up to 60 orders."""
+        ids = list(dict.fromkeys(str(value) for value in order_ids))
+        if not ids or len(ids) > 60 or any(not value.isdigit() for value in ids):
+            raise ValueError("账单查询须包含 1 至 60 个有效订单编号")
+        if not str(seller_id).isdigit() or int(seller_id) <= 0:
+            raise ValueError("账单查询缺少站点卖家编号")
+        result = self.request("GET", "/billing/integration/group/ML/order/details",
+                              params={"order_ids": ",".join(ids), "seller_id": str(seller_id)})
+        if not isinstance(result, dict):
+            raise MercadoAPIError("订单账单响应格式无效")
+        return result
+
     def get_order(self, order_id: str) -> dict[str, Any]:
         """读取单个订单的完整详情。"""
         return self.request("GET", f"/marketplace/orders/{order_id}")

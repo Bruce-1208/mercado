@@ -1,7 +1,8 @@
 """Persist missing AI-original net proceeds from captured 1688 prices.
 
-Preview by default; --apply fills only NULL amounts and preserves manual
-overrides, review status, and generated content. No AI or marketplace calls.
+Preview by default; --apply fills only NULL amounts, preserves manual overrides
+and generated content, then returns every affected listing to human review.
+No AI or marketplace calls.
 """
 import argparse
 from decimal import Decimal
@@ -42,10 +43,17 @@ def repair(connection, *, apply=False):
                     continue
                 change = {"id": row["id"], "before": None, "net_proceeds_usd": net}
                 if apply:
+                    from erp.mercadolibre_collection_store import (
+                        _dumps, _loads, _mark_ai_marketplace_drafts_unreviewed,
+                    )
+                    snapshot = _loads(row.get("source_snapshot_json"), {})
+                    snapshot = snapshot if isinstance(snapshot, dict) else {}
+                    _mark_ai_marketplace_drafts_unreviewed(snapshot)
                     cursor.execute(
-                        "UPDATE erp_mercadolibre_products SET net_proceeds_usd=%s "
+                        "UPDATE erp_mercadolibre_products SET net_proceeds_usd=%s, "
+                        "source_snapshot_json=%s, review_status='unreviewed' "
                         "WHERE id=%s AND source_type='ai_original' AND net_proceeds_usd IS NULL",
-                        (net, row["id"]),
+                        (net, _dumps(snapshot), row["id"]),
                     )
                     if cursor.rowcount != 1:
                         raise RuntimeError(f"商品 {row['id']} 的净收益保存未确认")

@@ -1,0 +1,12 @@
+{
+  "version": "1.8.77",
+  "tests": {
+    "backend_and_platform_and_new_browser_tests": 39,
+    "existing_tracking_browser_tests": 7,
+    "manifest_syntax_download_tests": 4,
+    "background_runner_tests": 7
+  },
+  "validation": "Isolated Chromium extension with mocked procurement pages and real page fetch/XHR; no live procurement writeback performed.",
+  "package": "zeshun-collector-extension-1.8.77-purchase-tracking.zip",
+  "sha256": "6b8c30adf76a70c4bf992af3e7943bbfeb2de3c3b38225ffa9cf3495db17d7e2"
+}

@@ -1,0 +1,125 @@
+--- before/bit/bit_mysql.py
++++ bit/bit_mysql.py
+@@ -4002,12 +4002,13 @@
+             pattern = f"%{search}%"
+             clauses.append(
+                 f"(CAST({column('id')} AS CHAR) LIKE %s OR "
+-                f"{column('order_number')} LIKE %s OR {column('purchase_order')} LIKE %s OR "
++                f"{column('purchase_order')} LIKE %s OR "
+                 f"{column('purchase_tracking')} LIKE %s OR "
+                 f"{column('platform_tracking_number')} LIKE %s OR {column('product_id')} LIKE %s OR "
+                 f"{column('title')} LIKE %s OR {column('buyer')} LIKE %s OR "
+                 f"{column('purchase_remark')} LIKE %s OR {column('remark')} LIKE %s OR "
+-                f"{column('shop_name')} LIKE %s OR {column('order_remark')} LIKE %s)"
++                f"{column('shop_name')} LIKE %s OR {column('order_remark')} LIKE %s OR "
++                f"{column('order_number')} LIKE %s)"
+             )
+             params.extend([pattern] * 12)
+         return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+@@ -4304,7 +4305,21 @@
+             # financial aggregation. Detail pricing still uses the real joins.
+             needs_filter_finance = include_summary or sort_by not in {"ordered_at", "cost"} or bool(freight_variance) or difference_active
+             filter_freight_local = freight_local_sql if needs_filter_finance else "NULL"
+-            filter_freight_currency = freight_currency_sql if needs_filter_finance else "NULL"
++            # Internal aggregate currency may be populated even without freight:
++            # NULL freight multiplied by any rate stays NULL. Avoid re-evaluating
++            # shipped-status JSON just to choose a currency for the same row.
++            filter_freight_currency = (
++                f"UPPER(COALESCE(NULLIF(synced.`freight_currency_id`, ''), {currency_sql}))"
++                if needs_filter_finance else "NULL"
++            )
++            needs_freight_comparison = difference_active or freight_variance in {
++                "different", "different_any", "actual_higher", "actual_lower"
++            }
++            if not needs_freight_comparison:
++                # Summary and financial sorting use local freight plus currency,
++                # not these comparison-only columns. Page detail is unchanged.
++                filter_quote_usd_sql = "NULL"
++                filter_actual_usd_sql = "NULL"
+             filter_cost_join = """
+                     LEFT JOIN `mercado_shipment_costs` AS actual_costs
+                       ON actual_costs.`shipping_id` = synced.`shipping_id`
+@@ -4351,12 +4366,12 @@
+                 ) AS `order_filter_source`
+             """
+             base_where_sql, base_params = build_where(
+-                include_country=False,
+-                include_status=False,
+-                include_origin=False,
+-                include_salesperson=False,
+-                include_group=False,
+-                include_store=False,
++                include_country=summary_only,
++                include_status=summary_only,
++                include_origin=summary_only,
++                include_salesperson=summary_only,
++                include_group=summary_only,
++                include_store=summary_only,
+             )
+             order_filter_table = "`tmp_mercado_order_filter_source`"
+             cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {order_filter_table}")
+--- before/bit/order_read_cache.py
++++ bit/order_read_cache.py
+@@ -23,14 +23,20 @@
+     # Each in-flight key owns its own lock. Hash stripes made unrelated users
+     # and filters queue behind an expensive query merely due to a collision.
+     with _LOCK:
+-        flight = _FLIGHTS.setdefault(key, [threading.Lock(), 0])
++        flight = _FLIGHTS.setdefault(key, [threading.Lock(), 0, 0])
++        observed_completion = flight[2]
+         flight[1] += 1
+     try:
+         with flight[0]:
+             with _LOCK:
+                 generation = _GENERATION
+                 cached = _CACHE.get(key)
+-                hit = not refresh and cached and time.monotonic() - cached[0] < 10
++                # A refresh bypasses a result that already existed on arrival,
++                # but can share a fresh result completed while it was waiting.
++                # Invalidation clears the cache, so queued readers cannot reuse
++                # a snapshot from before a write, even if a flight completed.
++                hit = (cached and time.monotonic() - cached[0] < 10
++                       and (not refresh or flight[2] > observed_completion))
+             if hit:
+                 return deepcopy(cached[1])
+             result = loader(**params)
+@@ -40,6 +46,7 @@
+             with _LOCK:
+                 if generation == _GENERATION:
+                     _CACHE[key] = (time.monotonic(), snapshot)
++                    flight[2] += 1
+                     _CACHE.move_to_end(key)
+                     while len(_CACHE) > 64:
+                         _CACHE.popitem(last=False)
+--- before/bit/static/console-preload.js
++++ bit/static/console-preload.js
+@@ -82,6 +82,9 @@
+                 created_before: storeLinkAuditDateBoundary(value('store-link-audit-to'), true)})]),
+             module('store-links', () => [storeLinks(), '/api/mercado-management-categories', '/api/store-links/sync/status', '/api/store-links/bulk-update/status']),
+             frame('size-charts', 'size-charts-frame'), frame('clearance-alerts', 'clearance-alerts-frame'), frame('promotions', 'promotions-frame'),
++            frame('automation-center', 'automation-center-frame'),
++            frame('product-diagnosis', 'product-diagnosis-frame'),
++            frame('price-competition', 'price-competition-frame'),
+             module('ad-analysis', () => ['/api/mercado-tokens', '/api/ad-analysis?force=0']),
+             module('prohibited-listings', () => ['/api/prohibited-listings?page=1&page_size=100', '/api/prohibited-listings/sync/status']),
+             module('store-tokens', () => ['/api/mercado-applications', '/api/mercado-tokens', '/api/mercado-account-groups']),
+--- before/bit/templates/index.html
++++ bit/templates/index.html
+@@ -21765,7 +21765,7 @@
+                 const sourceUrl = mercadoSafeUrl(row.final_url || row.source_url);
+                 const imageUrl = mercadoSafeUrl(row.main_image_url);
+                 const image = imageUrl
+-                    ? `<div class="market-card-image"><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer"><img class="market-product-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.title || '商品主图')}" loading="lazy" onerror="this.parentElement.parentElement.classList.add('is-missing'); this.parentElement.remove()"></a></div>`
++                    ? `<div class="market-card-image"><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener noreferrer"><img class="market-product-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(row.title || '商品主图')}" loading="lazy" onerror="this.onerror = null; const link = this.parentElement; if (link) { link.parentElement?.classList.add('is-missing'); link.remove(); }"></a></div>`
+                     : '<div class="market-card-image is-missing"></div>';
+                 const title = escapeHtml(row.title || "未识别标题");
+                 const itemLink = sourceUrl
+@@ -36012,7 +36012,7 @@
+     <script src="{{ url_for('static', filename='mercado-infringement.js') }}?v=20261007-preload"></script>
+     <link rel="stylesheet" href="{{ url_for('static', filename='video-upload-logs.css') }}?v=20261011-audit">
+     <script src="{{ url_for('static', filename='video-upload-logs.js') }}?v=20261011-audit"></script>
+-    <script src="{{ url_for('static', filename='console-preload.js') }}?v=20261009-store-link-salesperson"></script>
++    <script src="{{ url_for('static', filename='console-preload.js') }}?v=20261012-module-coverage"></script>
+     <script src="{{ url_for('static', filename='store-link-metrics.js') }}?v=20261012"></script>
+ </body>
+ </html>

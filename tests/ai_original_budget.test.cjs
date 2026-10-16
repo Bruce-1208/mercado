@@ -18,7 +18,7 @@ function setup(platform = 'mercadolibre', role = 'super_admin') {
         return nodes.get(id);
       },
     },
-    window: {location: {origin: 'http://localhost'}},
+    window: {catalogOperationMarkup(_row, markup) { return markup; },location: {origin: 'http://localhost'}},
     localStorage: {getItem() { return null; }},
     setTimeout(callback, delay) { timers.push({callback, delay}); return timers.length; },
     clearTimeout() {},
@@ -29,6 +29,8 @@ function setup(platform = 'mercadolibre', role = 'super_admin') {
     },
   });
   const run = code => vm.runInContext(code, context);
+  run(fs.readFileSync(path.join(__dirname, '../bit/static/sku-matrix.js'), 'utf8'));
+  run('globalThis.ZeshunSku = window.ZeshunSku');
   run(fs.readFileSync(path.join(__dirname, '../bit/static/ai-original-products.js'), 'utf8'));
   run(`document.getElementById('ai-original-platform').value = ${JSON.stringify(platform)};
     aiOriginalRows = [{id: 1, title: 'Source', ai_status: 'pending', original_1688: {}, ai_original: {}}];
@@ -117,13 +119,13 @@ test('off-peak waiting stays active, uses Beijing resume time and polls even whe
   assert.equal(requests.length, 1);
 });
 
-test('failure log includes known budget estimate and unresolved charge reserve', () => {
+test('failure log excludes budget estimates and unresolved reserves even for administrators', () => {
   const {run, nodes} = setup();
   run(`renderAiOriginalTaskStatus({status: 'error', failed_count: 1, requested_count: 1, processed_count: 1,
     results: [{product_id: 1, status: 'failed', message: '人工补齐',
       generation_budget: {cap_yuan: 0.03, spent_yuan: 0.01, reserved_yuan: 0.015}}]});`);
-  assert.match(nodes.get('ai-original-task-log').textContent, /模型计费估算 ¥0.01/);
-  assert.match(nodes.get('ai-original-task-log').textContent, /待核对预留 ¥0.015/);
+  assert.match(nodes.get('ai-original-task-log').textContent, /人工补齐/);
+  assert.doesNotMatch(nodes.get('ai-original-task-log').textContent, /计费|¥|Token|预留/);
 });
 
 
@@ -146,5 +148,21 @@ for (const role of ['member', 'warehouse', 'enterprise_admin', 'admin', undefine
     run('aiOriginalTotalCost = {spent_yuan: 0.012, recorded_products: 1, total_products: 1}; updateAiOriginalTotal()');
     assert.doesNotMatch(nodes.get('ai-original-total').textContent, /费用|计费|Token|¥/);
     assert.doesNotMatch(run('aiOriginalRecoveryMessage({ai_original: {workflow_status: "needs_budget_review"}})'), /费用/);
+  });
+}
+
+for (const role of ['super_admin', 'enterprise_admin', 'operator', 'member', 'warehouse', 'viewer', '']) {
+  test(`legacy SKU error accounting is filtered for ${role}`, () => {
+    const {run, nodes} = setup('mercadolibre', role);
+    const reason = '产品 16943431：24 个 SKU 缺少采集原图，请重新采集或补充图片链接';
+    const message = reason + ' · 模型计费估算 ¥0.013195（含已记录尝试） · 累计 60,318 Token · 金额不限额 · 复用结果 1 次';
+    run(`renderAiOriginalFailureLog([${JSON.stringify(message)}]); aiOriginalStatus(${JSON.stringify(message)});`);
+    for (const id of ['ai-original-task-log', 'ai-original-task-status']) {
+      const text = nodes.get(id).textContent;
+      assert.ok(text.includes(reason));
+      assert.doesNotMatch(text, /Token|¥|计费|金额不限额|复用结果/);
+    }
+    run('currentWorkbenchUser = null');
+    assert.equal(run('aiOriginalBudgetSummary({spent_yuan: 1})'), '');
   });
 }

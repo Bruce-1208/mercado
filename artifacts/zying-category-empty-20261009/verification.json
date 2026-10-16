@@ -1,0 +1,25 @@
+{
+  "tests_passed": 84,
+  "worker_pid": 46287,
+  "extension_update_required": false,
+  "progress": {
+    "saved_rows": 738,
+    "page": 265
+  },
+  "verified_missing_category_products": [
+    {
+      "product_id": "354092044",
+      "category_id": "CBT4159",
+      "page": 264,
+      "category_lookup_status": "missing",
+      "category_lookup_warning": "分类接口未返回数据：CBT4159；已保留原始分类编号，分类名称待补全"
+    }
+  ],
+  "verified_product_list_rows": [
+    {
+      "source_item_id": "354092044",
+      "category_id": "CBT4159",
+      "category_lookup_status": "missing"
+    }
+  ]
+}

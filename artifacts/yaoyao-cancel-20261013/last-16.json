@@ -1,0 +1,7 @@
+{
+  "id": "MLM3483596525",
+  "status": "active",
+  "sub_status": [],
+  "condition": null,
+  "error": "取消活动未完成：DELETE /marketplace/seller-promotions/items/MLM3483596525 网关或平台异常 (500)，结果未知；请先同步官方状态，禁止直接重试"
+}

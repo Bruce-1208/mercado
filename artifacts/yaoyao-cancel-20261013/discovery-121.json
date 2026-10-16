@@ -1,0 +1,41 @@
+{
+  "id": 121,
+  "name": "遥遥领先6号店",
+  "accounts": [
+    {
+      "seller_id": "3611458073",
+      "site_id": "MCO",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611455407",
+      "site_id": "MLC",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611457035",
+      "site_id": "MLA",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611457029",
+      "site_id": "MLM",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611455433",
+      "site_id": "MLU",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611458103",
+      "site_id": "MLM",
+      "promotions": []
+    },
+    {
+      "seller_id": "3611455445",
+      "site_id": "MLB",
+      "promotions": []
+    }
+  ]
+}

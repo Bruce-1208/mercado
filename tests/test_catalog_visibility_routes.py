@@ -68,3 +68,38 @@ def test_public_caller_cannot_forge_product_actor_header(console):
     import json
     response = client.get('/api/mercado-products', headers={product_access.HEADER: json.dumps(user('super_admin'))})
     assert [row['id'] for row in response.json['data']['rows']] == [5,3,1]
+
+
+@pytest.mark.parametrize('path,method,payload', [
+    ('/api/mercado-products/3', 'patch', {'title': 'changed'}),
+    ('/api/1688-products/3', 'patch', {'title': 'changed'}),
+    ('/api/ai-original-products/3/listing', 'patch', {}),
+    ('/api/ai-original-products/process', 'post', {'product_item_ids': [1, 3]}),
+    ('/api/mercado-products', 'delete', {'product_item_ids': [1, 3]}),
+    ('/api/mercado-products/add', 'post', {'collection_item_ids': [11, 13]}),
+    ('/api/mercado-collection/bulk-edit', 'patch', {'collection_item_ids': [13], 'changes': {'title': 'changed'}}),
+    ('/api/mercado-products/publish', 'post', {'product_item_ids': [3]}),
+    ('/api/mercado-management-categories/assign', 'post', {'item_type': 'collection', 'item_ids': [13]}),
+])
+def test_shared_products_cannot_be_operated_by_members(console, path, method, payload):
+    current, db, client = console
+    before = db.db.total_changes
+    response = getattr(client, method)(path, json=payload)
+    assert response.status_code == 403
+    assert db.db.total_changes == before
+
+
+@pytest.mark.parametrize('role', ['member', 'operator', 'viewer', 'enterprise_admin', 'super_admin'])
+def test_operation_scope_allows_own_and_only_admins_others(console, role):
+    current, db, client = console
+    current['role_key'] = role
+    with product_access.scope(current):
+        store.check_catalog_access('products', [1, 5], operate=True)
+        if role in {'enterprise_admin', 'super_admin'}:
+            store.check_catalog_access('products', [1, 2, 3], operate=True)
+        else:
+            with pytest.raises(PermissionError):
+                store.check_catalog_access('products', [1, 3], operate=True)
+        with pytest.raises(PermissionError):
+            store.check_catalog_access('products', [4], operate=True)
+        assert store._json_safe_row({'organization_key': 'acme', 'owner_user_id': 8, 'visibility': 'enterprise'})['can_operate'] == (role in {'enterprise_admin', 'super_admin'})

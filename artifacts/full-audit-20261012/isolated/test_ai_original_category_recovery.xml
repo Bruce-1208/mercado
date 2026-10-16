@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="21" time="0.196" timestamp="2026-10-12T16:37:15.672080+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_ai_original_category_recovery" name="test_first_empty_recommendation_can_recover_with_generic_entity[Halloween LED string lights-string lights-CBT101]" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_first_empty_recommendation_can_recover_with_generic_entity[Children's Venom Costume with Gloves-children costume-CBT102]" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_exhausted_search_is_bounded_and_never_keeps_an_old_category" time="0.001"><failure message="AssertionError: Regex pattern did not match.&#10;  Expected regex: '有效分类编号'&#10;  Actual message: &quot;[Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'&quot;">tests/test_ai_original_category_recovery.py:70: in test_exhausted_search_is_bounded_and_never_keeps_an_old_category
+    with pytest.raises(products.OriginalPreparationError, match="有效分类编号") as error:
+E   AssertionError: Regex pattern did not match.
+E     Expected regex: '有效分类编号'
+E     Actual message: "[Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'"</failure></testcase><testcase classname="tests.test_ai_original_category_recovery" name="test_repeated_or_non_english_queries_are_not_sent[  STRING    Lights  ]" time="0.001"><failure message="assert 0 == 2&#10; +  where 0 = len([])">tests/test_ai_original_category_recovery.py:98: in test_repeated_or_non_english_queries_are_not_sent
+    assert len(calls) == 2
+E   assert 0 == 2
+E    +  where 0 = len([])</failure></testcase><testcase classname="tests.test_ai_original_category_recovery" name="test_repeated_or_non_english_queries_are_not_sent[\u706f\u4e32]" time="0.001"><failure message="assert 0 == 2&#10; +  where 0 = len([])">tests/test_ai_original_category_recovery.py:98: in test_repeated_or_non_english_queries_are_not_sent
+    assert len(calls) == 2
+E   assert 0 == 2
+E    +  where 0 = len([])</failure></testcase><testcase classname="tests.test_ai_original_category_recovery" name="test_repeated_or_non_english_queries_are_not_sent[12345]" time="0.001"><failure message="assert 0 == 2&#10; +  where 0 = len([])">tests/test_ai_original_category_recovery.py:98: in test_repeated_or_non_english_queries_are_not_sent
+    assert len(calls) == 2
+E   assert 0 == 2
+E    +  where 0 = len([])</failure></testcase><testcase classname="tests.test_ai_original_category_recovery" name="test_confirmed_override_skips_discovery_and_reads_current_schema" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_invalid_override_is_rejected_before_any_api_call" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_category_checkpoint_survives_a_later_variation_failure" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_variation_checkpoint_is_written_before_required_completion" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_matching_cached_category_reuses_attrs_and_variations_after_reading_schema" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_changed_schema_or_category_invalidates_cached_mapping[schema]" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_changed_schema_or_category_invalidates_cached_mapping[category]" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_model_account_error_is_not_changed_into_a_category_failure" time="0.000"><failure message="erp.ai_original_products.OriginalPreparationError: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'">erp/ai_original_products.py:1779: in _fallback_marketplace_category
+    category = select_known_cbt_category(
+erp/ai_original_category_catalog.py:32: in select_known_cbt_category
+    paths = known_cbt_paths()
+            ^^^^^^^^^^^^^^^^^
+erp/ai_original_category_catalog.py:15: in known_cbt_paths
+    saved = json.loads(CATALOG_PATH.read_text(encoding='utf-8'))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1028: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/pathlib.py:1014: in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'
+
+The above exception was the direct cause of the following exception:
+tests/test_ai_original_category_recovery.py:227: in test_model_account_error_is_not_changed_into_a_category_failure
+    products.complete_marketplace_category({}, {"product_type_en": "string lights"}, DiscoveryClient(), chat=chat)
+erp/ai_original_products.py:1992: in complete_marketplace_category
+    category = _select_marketplace_category(
+erp/ai_original_products.py:1805: in _select_marketplace_category
+    return _fallback_marketplace_category(original, query, [query], **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/ai_original_products.py:1786: in _fallback_marketplace_category
+    raise OriginalPreparationError('category', str(exc), {
+E   erp.ai_original_products.OriginalPreparationError: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'</failure></testcase><testcase classname="tests.test_ai_original_category_recovery" name="test_retry_on_the_same_client_reads_live_schema_again" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_malformed_category_id_from_model_does_not_escape_the_bounded_fallback" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_explicit_manual_attrs_override_model_values_under_current_category_rules" time="0.000" /><testcase classname="tests.test_ai_original_category_recovery" name="test_manual_attr_overrides_cannot_bypass_required_enum_validation" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_explicitly_deleted_optional_attr_is_not_resurrected_by_cached_or_generated_values" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_budget_mode_fills_schema_attributes_before_sku_failure" time="0.001" /><testcase classname="tests.test_ai_original_category_recovery" name="test_part_number_cannot_be_a_generated_product_name" time="0.000" /></testsuite></testsuites>

@@ -1,0 +1,61 @@
+{
+  "checked_at": "2026-10-13T21:09:14.069233+08:00",
+  "checks": [
+    {
+      "url": "https://wuhanzeshun.cn/login",
+      "exit_code": 0,
+      "http_status": "200",
+      "redirect": "",
+      "remote_ip": "111.229.187.101",
+      "ssl_verify_result": "0",
+      "error": ""
+    },
+    {
+      "url": "http://wuhanzeshun.cn/login",
+      "exit_code": 0,
+      "http_status": "301",
+      "redirect": "https://wuhanzeshun.cn/login",
+      "remote_ip": "111.229.187.101",
+      "ssl_verify_result": "0",
+      "error": ""
+    },
+    {
+      "url": "https://wuhanzeshun.cn/",
+      "exit_code": 0,
+      "http_status": "302",
+      "redirect": "https://wuhanzeshun.cn/login?next=/?",
+      "remote_ip": "111.229.187.101",
+      "ssl_verify_result": "0",
+      "error": ""
+    },
+    {
+      "url": "https://wuhanzeshun.cn/static/zeshun-theme.css",
+      "exit_code": 0,
+      "http_status": "200",
+      "redirect": "",
+      "remote_ip": "111.229.187.101",
+      "ssl_verify_result": "0",
+      "error": ""
+    },
+    {
+      "url": "https://wuhanzeshun.com/login",
+      "exit_code": 0,
+      "http_status": "200",
+      "redirect": "",
+      "remote_ip": "2606:4700:3031::6815:4a7d",
+      "ssl_verify_result": "0",
+      "error": ""
+    },
+    {
+      "url": "https://wuhanzeshun.com/",
+      "exit_code": 0,
+      "http_status": "302",
+      "redirect": "https://wuhanzeshun.com/login?next=/?",
+      "remote_ip": "2606:4700:3031::6815:4a7d",
+      "ssl_verify_result": "0",
+      "error": ""
+    }
+  ],
+  "tunnel": "127.0.0.1:15000 -> 127.0.0.1:5000",
+  "launch_agent": "/Users/a11/Library/LaunchAgents/com.zeshun.cloud-tunnel.plist"
+}

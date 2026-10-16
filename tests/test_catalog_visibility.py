@@ -28,6 +28,7 @@ class Connection:
                 id INTEGER PRIMARY KEY, source_item_id TEXT, task_id INTEGER,
                 management_category_id INTEGER, added_to_products INTEGER,
                 organization_key TEXT, owner_user_id INTEGER, owner_name TEXT, visibility TEXT);
+            CREATE TABLE workbench_users (id INTEGER, is_active INTEGER, organization_key TEXT, username TEXT, display_name TEXT);
             CREATE TABLE erp_mercadolibre_collection_tasks (id INTEGER, created_by TEXT);
             CREATE TABLE erp_mercadolibre_management_categories (id INTEGER, name TEXT, listing_ratio_percent INTEGER);
             INSERT INTO erp_mercadolibre_products VALUES
@@ -154,3 +155,14 @@ def test_background_actor_survives_thread_boundary():
     with ThreadPoolExecutor(1) as pool:
         assert pool.submit(task).result() == user()
     assert access.actor() is None
+
+
+def test_shared_products_remain_readable_but_store_mutations_are_denied(database):
+    with access.scope(user()):
+        assert store.get_product_items_by_ids([3])[0]['id'] == 3
+        for mutate, args in [(store.delete_product_items, ([1, 3],)),
+                             (store.update_product_item, (3, {})),
+                             (store.delete_collection_items, ([11, 13],))]:
+            with pytest.raises(PermissionError, match='只能操作自己的产品'):
+                mutate(*args)
+    assert database.db.execute('SELECT COUNT(*) FROM erp_mercadolibre_products').fetchone()[0] == 6

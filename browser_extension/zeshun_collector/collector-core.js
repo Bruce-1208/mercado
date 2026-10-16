@@ -98,14 +98,14 @@
 
   function variationArrayScore(value) {
     if (!Array.isArray(value) || !value.length || value.length > 500) return -1;
-    const rows = value.filter(item => item && typeof item === "object" && !Array.isArray(item));
+    const rows = value.filter(item => item && typeof item === "object" && !Array.isArray(item) && item.type !== "TITLE_STRIPED");
     if (!rows.length) return -1;
     const useful = rows.filter(item => {
       const combinations = item.attribute_combinations || item.attributeCombinations ||
         item.combinations || item.variation_attributes || item.specifications;
       return Array.isArray(combinations) && combinations.length ||
         Array.isArray(item.attributes) && item.attributes.length ||
-        item.sku || item.sku_id || item.skuId || item.seller_sku || item.sellerSku || item.skuCode ||
+        item.sku || item.sku_id || item.skuId || item.seller_sku || item.sellerSku || item.skuCode || item.color || item.size ||
         ((item.label || item.name || item.sku_name || item.skuName) &&
           (item.price !== undefined || item.available_quantity !== undefined || item.stock !== undefined));
     });
@@ -198,23 +198,93 @@
     return merged.slice(0, 500);
   }
 
-  function hasUncollectedVariantOptions(states) {
+  function hasUncollectedVariantOptions(states, variantCount = 0) {
     let visited = 0;
     const walk = (value, depth = 0) => {
       if (!value || typeof value !== "object" || depth > 22 || ++visited > 120000) return false;
       if (Array.isArray(value)) return value.slice(0, 1000).some(v => walk(v, depth + 1));
       return Object.entries(value).some(([key, child]) => {
         if (/recommend|carousel|related|tracking|analytics/i.test(key)) return false;
+        if (["variation_ids", "variationIds"].includes(key) && Array.isArray(child) && child.length > 500) return true;
         if (key === "pickers" && Array.isArray(child) && child.some(p => p &&
-          ["products", "options", "values"].some(k => Array.isArray(p[k]) && p[k].length > 1))) return true;
+          ["products", "options", "values"].some(k => Array.isArray(p[k]) && p[k].length > Math.max(1, variantCount)))) return true;
+        if (/^(?:variations?|variants?|hasVariant|skus?|sku_list|skuList|item_skus|itemSkus|sku_map|skuMap|sku_info_map|skuInfoMap)$/i.test(key)
+            && child && typeof child === "object" && Object.keys(child).length > 500) return true;
         return walk(child, depth + 1);
       });
     };
     return states.some(value => walk(value));
   }
 
-  function extractProductVariations(doc, product, states) {
+  function pickerText(value) {
+    if (value && typeof value === "object") value = value.text || value.name || value.value;
+    return typeof value === "string" ? value.trim() : "";
+  }
+
+  function pickerVariants(pickers, pageUrl) {
+    const dimensions = pickers.filter(p => p && ["products", "options", "values"].some(k => Array.isArray(p[k]) && p[k].length));
+    const rows = new Map(), dimensionIds = [];
+    for (const picker of dimensions) {
+      const dimension = picker.attribute_id || picker.picker_id || picker.id;
+      if (typeof dimension !== "string" || !dimension || dimensionIds.includes(dimension)) return [];
+      dimensionIds.push(dimension);
+      const options = ["products", "options", "values"].map(k => picker[k]).find(v => Array.isArray(v) && v.length);
+      for (const option of options) {
+        if (!option || typeof option !== "object" || Array.isArray(option)) return [];
+        const label = ["value_name", "picker_label", "label", "name", "value"].map(k => pickerText(option[k])).find(Boolean);
+        let identities = option.variation_ids ?? option.variationIds;
+        if (identities == null) {
+          const identity = option.variation_id ?? option.variationId;
+          if (identity != null) identities = [identity];
+        }
+        if (identities == null && Array.isArray(option.variations)) identities = option.variations;
+        if (identities == null && pageUrl) {
+          // Bare IDs can be catalog/value IDs; a link must explicitly identify
+          // a variation of this same listing before it is used as SKU evidence.
+          const link = option.permalink || option.url;
+          if (typeof link === "string") try {
+            const base = new URL(pageUrl), target = new URL(link, pageUrl);
+            if (!/\/(?:p|up)\//i.test(base.pathname) && base.origin === target.origin && base.pathname === target.pathname) {
+              const linkedIds = [...new Set(["variation", "variation_id", "searchVariation"].flatMap(k => target.searchParams.getAll(k)))];
+              if (linkedIds.length === 1) identities = linkedIds;
+            }
+          } catch (_) {}
+        }
+        if (!label || !Array.isArray(identities) || !identities.length) return [];
+        for (const identity of identities) {
+          if (!["string", "number"].includes(typeof identity) || !/^\d+$/.test(String(identity))) return [];
+          const key = String(identity);
+          if (!rows.has(key)) {
+            if (rows.size >= 500) return [];
+            rows.set(key, {id: identity, attribute_combinations: []});
+          }
+          const row = rows.get(key), previous = row.attribute_combinations.find(a => a.id === dimension);
+          if (previous && previous.value_name !== label) return [];
+          if (!previous) row.attribute_combinations.push({id: dimension, value_name: label});
+          // An option shared by several SKUs cannot supply per-SKU stock/price.
+          if (identities.length === 1) {
+            const metadata = {
+              seller_sku: option.seller_sku ?? option.sellerSku ?? option.sku ?? option.skuCode,
+              price: option.price ?? option.price_amount ?? option.offers?.price,
+              available_quantity: option.available_quantity ?? option.availableQuantity ?? option.stock ?? option.quantity ?? option.available,
+              picture_ids: option.picture_ids ?? option.pictureIds,
+              images: option.images, pictures: option.pictures
+            };
+            for (const [field, value] of Object.entries(metadata)) if (value != null) {
+              if (field in row && JSON.stringify(row[field]) !== JSON.stringify(value)) return [];
+              row[field] = value;
+            }
+          }
+        }
+      }
+    }
+    if ([...rows.values()].some(row => row.attribute_combinations.length !== dimensionIds.length)) return [];
+    return [...rows.values()];
+  }
+
+  function extractProductVariations(doc, product, states, pageUrl) {
     const candidates = [];
+    const pictureUrls = new Map();
     const add = value => {
       const score = variationArrayScore(value);
       if (score >= 0) candidates.push({value, score});
@@ -234,10 +304,39 @@
       }
       for (const [key, child] of Object.entries(value)) {
         if (/recommend|carousel|related|tracking|analytics/i.test(key)) continue;
+        if (key === "pickers" && Array.isArray(child)) {
+          const dimensions = child.filter(p => p && ["products", "options", "values"].some(k => Array.isArray(p[k]) && p[k].length));
+          for (const picker of dimensions) for (const container of ["products", "options", "values"]) {
+            const options = picker[container];
+            if (!Array.isArray(options)) continue;
+            const rows = options.map(option => {
+              if (!option || typeof option !== "object" || Array.isArray(option)) return null;
+              const row = {...option};
+              const combinations = row.attribute_combinations || row.attributeCombinations || row.combinations || row.variation_attributes || row.specifications;
+              if (Array.isArray(combinations) && combinations.length) return row;
+              if (Array.isArray(row.attributes) && row.attributes.some(a => a && ["COLOR", "SIZE"].includes(a.id))) return row;
+              if (row.color || row.size) return row;
+              // Independent picker options are not a Cartesian SKU matrix.
+              // Only a single dimension with explicit variation IDs is enough.
+              const identity = row.variation_id ?? row.variationId;
+              const label = pickerText(row.value_name || row.picker_label || row.label || row.name);
+              const dimension = picker.attribute_id || picker.picker_id || picker.id;
+              if (dimensions.length !== 1 || identity == null || !dimension || typeof label !== "string" || !label.trim()) return null;
+              return {...row, id: identity, attribute_combinations: [{id: dimension, value_name: label}]};
+            });
+            if (rows.every(Boolean)) add(rows);
+          }
+          add(pickerVariants(child, pageUrl));
+        }
+        if (key === "pictures" && Array.isArray(child)) child.forEach(picture => {
+          const url = picture && (picture.secure_url || picture.url || picture.source);
+          if (picture && picture.id != null && /^https?:\/\//.test(url || "")) pictureUrls.set(String(picture.id), url);
+        });
         const collectionKey = /^(?:variations?|variants?|hasVariant|skus?|sku_list|skuList|item_skus|itemSkus|sku_map|skuMap|sku_info_map|skuInfoMap)$/i.test(key);
         if (Array.isArray(child) && collectionKey) add(child);
         else if (child && typeof child === "object" && !Array.isArray(child) && collectionKey) {
-          add(Object.values(child).slice(0, 500));
+          add(Object.entries(child).filter(([, v]) => v && typeof v === "object" && !Array.isArray(v))
+            .map(([id, v]) => ({...v, id: v.id ?? id})));
         }
         if (child && typeof child === "object" && !["parent", "owner", "_owner", "stateNode"].includes(key)) walk(child, depth + 1);
       }
@@ -245,18 +344,32 @@
     parsedScripts.forEach(value => walk(value));
     if (!candidates.length) return [];
     candidates.sort((left, right) => right.score - left.score);
-    const sourceRows = candidates[0].value.filter(item => item && typeof item === "object" && !Array.isArray(item)).slice(0, 200);
+    const sourceRows = candidates[0].value.filter(item => item && typeof item === "object" && !Array.isArray(item) && item.type !== "TITLE_STRIPED");
     return sourceRows.map(raw => {
       const variation = {...raw};
       const combinations = raw.attribute_combinations || raw.attributeCombinations || raw.combinations || raw.variation_attributes;
       if (Array.isArray(combinations) && combinations.length) variation.attribute_combinations = combinations;
       else if (Array.isArray(raw.specifications) && raw.specifications.length) variation.attribute_combinations = raw.specifications;
-      else if (Array.isArray(raw.attributes)) {
-        const combinationAttributes = raw.attributes.filter(attribute => attribute &&
-          typeof attribute === "object" && !["SELLER_SKU", "SKU"].includes(String(attribute.id || "").toUpperCase()) &&
-          (attribute.value_name || attribute.value_id || attribute.values));
-        if (combinationAttributes.length) variation.attribute_combinations = combinationAttributes;
+      else if (Array.isArray(raw.attributes) && raw.attributes.some(a => a && ["COLOR", "SIZE"].includes(a.id))) {
+        variation.attribute_combinations = raw.attributes.filter(a => a && ["COLOR", "SIZE"].includes(a.id));
+        variation.attributes = raw.attributes.filter(a => !a || !["COLOR", "SIZE"].includes(a.id));
       }
+      else {
+        const dimensions = ["color", "size"].filter(key => raw[key] != null && raw[key] !== "")
+          .map(key => ({id: key.toUpperCase(), value_name: String(raw[key])}));
+        if (dimensions.length) variation.attribute_combinations = dimensions;
+      }
+      if (Array.isArray(variation.attribute_combinations)) variation.attribute_combinations = variation.attribute_combinations.map(rawAttribute => {
+        if (!rawAttribute || typeof rawAttribute !== "object") return rawAttribute;
+        const attribute = {...rawAttribute};
+        if (!attribute.id && attribute.attribute_id) attribute.id = attribute.attribute_id;
+        if (attribute.value_name == null && attribute.value != null) {
+          const value = attribute.value;
+          attribute.value_name = typeof value === "object" ? value.name || value.text : String(value);
+          if (typeof value === "object" && attribute.value_id == null && value.id != null) attribute.value_id = value.id;
+        }
+        return attribute;
+      });
       if (variation.id === undefined && (raw.variation_id !== undefined || raw.variationId !== undefined)) {
         variation.id = raw.variation_id ?? raw.variationId;
       }
@@ -264,7 +377,21 @@
         variation.available_quantity = raw.availableQuantity ?? raw.stock ?? raw.quantity ?? raw.available;
       }
       if (variation.price === undefined && raw.price_amount !== undefined) variation.price = raw.price_amount;
+      if (variation.price == null && raw.offers && !Array.isArray(raw.offers)) variation.price = raw.offers.price;
+      if (variation.seller_sku == null) variation.seller_sku = raw.sellerSku ?? raw.sku ?? raw.skuCode;
       if (!variation.picture_ids && Array.isArray(raw.pictureIds)) variation.picture_ids = raw.pictureIds;
+      const resolved = (variation.picture_ids || []).map(id => pictureUrls.get(String(id))).filter(Boolean);
+      if (resolved.length) {
+        variation.images = [...(Array.isArray(variation.images) ? variation.images : []), ...resolved];
+        variation.pictures = variation.picture_ids.filter(id => pictureUrls.has(String(id)))
+          .map(id => ({id: String(id), source: pictureUrls.get(String(id))}));
+      }
+      const aliases = {id: ["variation_id", "variationId"], seller_sku: ["sellerSku", "sku", "skuCode"],
+        available_quantity: ["availableQuantity", "stock", "quantity", "available"], price: ["price_amount"],
+        picture_ids: ["pictureIds"], attribute_combinations: ["attributeCombinations", "combinations", "variation_attributes", "specifications"]};
+      for (const [key, names] of Object.entries(aliases)) {
+        if (key in variation) names.forEach(name => delete variation[name]);
+      }
       return variation;
     });
   }
@@ -749,6 +876,28 @@
     }
   }
 
+  function extractPlatformCategory(doc, states) {
+    const valid = value => /^(?:ML[A-Z]|MCO|CBT)\d+$/.test(String(value || "").trim().toUpperCase());
+    const queue = [...states];
+    let visited = 0;
+    while (queue.length && visited++ < 20000) {
+      const node = queue.shift();
+      if (!node || typeof node !== 'object') continue;
+      for (const key of ['category_id', 'categoryId', 'categoryID']) {
+        if (valid(node[key])) return {category_id: String(node[key]).trim().toUpperCase(),
+          category_name: clean(node.category_name || node.categoryName || '')};
+      }
+      if (node.category && typeof node.category === 'object' && valid(node.category.id)) {
+        return {category_id: String(node.category.id).trim().toUpperCase(), category_name: clean(node.category.name)};
+      }
+      for (const [key, value] of Object.entries(node)) {
+        if (!/recommend|carousel|related|suggest|variations|variants/i.test(key) && value && typeof value === 'object') queue.push(value);
+      }
+    }
+    const id = meta(doc, 'meta[itemprop="categoryID"]') || meta(doc, 'meta[name="category_id"]');
+    return valid(id) ? {category_id: id.trim().toUpperCase(), category_name: ''} : {category_id: '', category_name: ''};
+  }
+
   function extractProduct(doc, pageUrl, pluginOverride = null, priceMode = "original") {
     if (!isSupportedUrl(pageUrl)) throw new Error("当前页面不是支持的 Mercado Libre 页面");
     const product = structuredProducts(doc)[0] || {};
@@ -764,7 +913,8 @@
     const pictures = extractImages(doc, product);
     const specs = extractSpecs(doc);
     const states = productStates(doc);
-    const variations = extractProductVariations(doc, product, states);
+    const category = extractPlatformCategory(doc, states);
+    const variations = extractProductVariations(doc, product, states, pageUrl);
     // Mercado collection gets measurements from ZeshunMercadoData.apply.
     // Never discover another extension's DOM implicitly, including async callers.
     const plugin = pluginOverride || {metrics: {}, lines: [], text: "", sales: null,
@@ -792,6 +942,7 @@
     const source = {
       id: itemId,
       site_id: itemId.slice(0, 3),
+      ...category,
       title,
       price,
       currency_id: currencyId,
@@ -802,11 +953,13 @@
       pictures: pictures.map(url => ({source: url})),
       attributes: extractProductAttributes(doc, product, specs, states),
       variations,
-      ...(!variations.length && hasUncollectedVariantOptions(states) ? {variation_collection_status:"incomplete"} : {}),
+      ...(hasUncollectedVariantOptions(states, variations.length) || variations.some(v => !v.attribute_combinations?.length)
+        ? {variation_collection_status:"incomplete"} : {}),
       sale_terms: []
     };
     return {
       source_item_id: itemId,
+      ...category,
       source_url: pageUrl,
       final_url: finalUrl,
       main_image_url: pictures[0] || "",
@@ -826,6 +979,7 @@
       source,
       description: {plain_text: description},
       page_snapshot: {
+        ...category,
         page_title: clean(doc.title),
         specs,
         pictures,
@@ -992,6 +1146,7 @@
     const pictures = mainImage ? [mainImage] : [];
     return {
       source_item_id: itemId,
+      ...category,
       source_url: pageUrl,
       final_url: pageUrl,
       main_image_url: mainImage,
@@ -1009,6 +1164,7 @@
       source: {
         id: itemId,
         site_id: itemId.slice(0, 3),
+      ...category,
         title,
         price,
         currency_id: currencyId,

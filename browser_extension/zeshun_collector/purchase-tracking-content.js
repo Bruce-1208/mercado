@@ -47,9 +47,31 @@
   }
 
   function findSearchInput(platform) {
-    const selectors = platform === "1688"
-      ? ["input[placeholder*='订单']", "input[placeholder*='搜索']", "input[name*='order']", "input[type='search']"]
-      : ["input[placeholder*='订单']", "input[name*='order']", "input[type='search']"];
+    if (platform === "1688") {
+      const inputs = [...document.querySelectorAll("input")].filter(input =>
+        visible(input) && !input.disabled && !input.readOnly &&
+        ["text", "search", "tel", "number"].includes(input.type));
+      // Buyer forms may use a separate label, aria name or tradeId rather
+      // than a placeholder. Never fall back to the site's product search.
+      const identity = input => [input.placeholder, input.name, input.id,
+        input.getAttribute("aria-label"), ...[...(input.labels || [])].map(label => label.textContent),
+        ...(input.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean)
+          .map(id => document.getElementById(id)?.textContent)].join(" ");
+      const orderField = /订单(?:号|编号|号码)|(?:order|trade)[_-]?(?:id|no|number)/i;
+      const named = inputs.find(input => orderField.test(identity(input)));
+      if (named) return named;
+      for (const input of inputs) {
+        // Some forms render the field caption as a sibling span/div. Only
+        // inspect a small, single-input field so adjacent filters cannot match.
+        for (let field = input.parentElement, depth = 0;
+          field && field !== document.body && depth < 3; field = field.parentElement, depth += 1) {
+          if (field.querySelectorAll("input").length !== 1) break;
+          if (/^订单(?:号|编号|号码)\s*[：:]?\s*$/.test(String(field.innerText || "").trim())) return input;
+        }
+      }
+      return inputs.find(input => /订单/.test(identity(input))) || null;
+    }
+    const selectors = ["input[placeholder*='订单']", "input[name*='order']", "input[type='search']"];
     for (const selector of selectors) {
       const candidate = [...document.querySelectorAll(selector)].find(visible);
       if (candidate) return candidate;
@@ -58,8 +80,44 @@
   }
 
   function findAction(label, scope) {
-    return [...scope.querySelectorAll("button,a,[role='button'],span,div")]
-      .find(element => visible(element) && String(element.textContent || "").trim() === label);
+    const matches = element => visible(element) && !element.disabled &&
+      String(element.value || element.textContent || "").replace(/\s+/g, "") === label;
+    return [...scope.querySelectorAll("button,a,[role='button'],input[type='submit'],input[type='button']")].find(matches)
+      || [...scope.querySelectorAll("span,div")].find(matches);
+  }
+
+  function searchAction(search) {
+    for (let root = search.parentElement; root; root = root.parentElement) {
+      const action = ["搜索订单", "查询订单", "查询", "搜索"]
+        .map(label => findAction(label, root)).find(Boolean);
+      if (action) return action;
+      if (root === search.form || root.getAttribute("role") === "search") break;
+    }
+    return search.form?.querySelector("button[type='submit'],input[type='submit']");
+  }
+
+  async function waitForOrderSearch(platform, order) {
+    const deadline = Date.now() + (platform === "1688" ? 12000 : 0);
+    const expanded = new Set();
+    do {
+      const problem = pageProblem();
+      if (problem) return {problem};
+      const scope = findOrderScope(order);
+      if (scope) return {scope};
+      const search = findSearchInput(platform);
+      if (search) return {search};
+      if (platform === "1688") {
+        const toggle = ["展开筛选", "更多筛选", "高级搜索", "高级筛选", "展开更多筛选"]
+          .map(label => findAction(label, document.body)).find(element => element && !expanded.has(element));
+        if (toggle) {
+          expanded.add(toggle);
+          toggle.click();
+        }
+      }
+      if (Date.now() >= deadline) break;
+      await sleep(250);
+    } while (Date.now() < deadline);
+    return {};
   }
 
   function extractTracking(value) {
@@ -161,25 +219,28 @@
     let changed = false;
     let observer;
     if (!scope && !queried) {
-      const search = findSearchInput(platform);
-      if (!search) {
+      const ready = await waitForOrderSearch(platform, order);
+      if (ready.problem) return ready.problem;
+      scope = ready.scope;
+      const search = ready.search;
+      if (!scope && !search) {
         return {status: "failed", fatal: true, message: "未找到订单查询入口，未执行查询；请打开采购订单列表后重试"};
       }
-      // Observe results, not our own input value. Old empty results cannot prove
-      // that the new query completed.
-      observer = new MutationObserver(() => { changed = true; });
-      setInputValue(search, order);
-      observer.observe(document.body, {childList: true, subtree: true, characterData: true});
-      const root = search.form || search.closest("[role='search']") || document.body;
-      const submit = ["搜索", "查询", "搜索订单", "查询订单"].map(label => findAction(label, root)).find(Boolean)
-        || search.form?.querySelector("button[type='submit'],input[type='submit']");
-      if (submit) submit.click();
-      else if (search.form) search.form.requestSubmit();
-      else {
-        search.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", code: "Enter", bubbles: true}));
-        search.dispatchEvent(new KeyboardEvent("keyup", {key: "Enter", code: "Enter", bubbles: true}));
+      if (search) {
+        // Observe results, not our own input value. Old empty results cannot prove
+        // that the new query completed.
+        observer = new MutationObserver(() => { changed = true; });
+        setInputValue(search, order);
+        observer.observe(document.body, {childList: true, subtree: true, characterData: true});
+        const submit = searchAction(search);
+        if (submit) submit.click();
+        else if (search.form) search.form.requestSubmit();
+        else {
+          search.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", code: "Enter", bubbles: true}));
+          search.dispatchEvent(new KeyboardEvent("keyup", {key: "Enter", code: "Enter", bubbles: true}));
+        }
+        queried = true;
       }
-      queried = true;
     }
     const dialogsBefore = new Set([...document.querySelectorAll("[role='dialog'],dialog,.ant-modal,.el-dialog")].filter(visible));
     const clicked = new Set();

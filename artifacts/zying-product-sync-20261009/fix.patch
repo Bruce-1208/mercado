@@ -1,0 +1,84 @@
+--- before/bit_mysql.py
++++ bit/bit_mysql.py
+@@ -9284,21 +9284,58 @@
+ 
+ 
+ def _backfill_legacy_zying_risk_checks(cursor):
+-    """Make legacy Zying 0/1/2 decisions visible in the unified result list once."""
+-    cursor.execute(
+-        """
+-        INSERT IGNORE INTO `infringement_risk_checks` (
+-            `source_type`, `source_row_id`, `product_id`, `title`, `main_image_url`,
+-            `product_category`, `zying_category_id`, `zying_category`, `risk_level`,
+-            `keywords`, `reason`, `checked_at`
++    """Copy missing legacy decisions without locking the source product range.
++
++    INSERT ... SELECT takes shared next-key locks under REPEATABLE READ, even
++    when INSERT IGNORE finds every decision already present. A candidate stream
++    can then hold the supremum gap for minutes and block new product snapshots.
++    Use consistent reads and bounded VALUES inserts; existing reviews win races.
++    The caller commits before handing any candidate to the consumer.
++    """
++    after_id = 0
++    while True:
++        cursor.execute(
++            """
++            SELECT z.`id` AS source_row_id, z.`产品编号` AS product_id,
++                   z.`标题` AS title, z.`主图链接` AS main_image_url,
++                   z.`产品分类` AS product_category,
++                   z.`智赢分类编号` AS zying_category_id,
++                   z.`智赢产品分类` AS zying_category,
++                   CAST(z.`疑似侵权` AS UNSIGNED) AS risk_level,
++                   z.`侵权关键词` AS keywords,
++                   COALESCE(z.`提交时间`, NOW()) AS checked_at
++            FROM `zying_product` AS z
++            LEFT JOIN `infringement_risk_checks` AS checked
++              ON checked.`source_type` = 'zying' AND checked.`source_row_id` = z.`id`
++            WHERE z.`id` > %s AND z.`疑似侵权` IN ('0', '1', '2')
++              AND checked.`id` IS NULL
++            ORDER BY z.`id` LIMIT 200
++            """,
++            (after_id,),
+         )
+-        SELECT 'zying', `id`, `产品编号`, `标题`, `主图链接`, `产品分类`,
+-               `智赢分类编号`, `智赢产品分类`, CAST(`疑似侵权` AS UNSIGNED),
+-               `侵权关键词`, '旧版智赢侵权检测结果', COALESCE(`提交时间`, NOW())
+-        FROM `zying_product`
+-        WHERE `疑似侵权` IN ('0', '1', '2')
+-        """
+-    )
++        rows = cursor.fetchall() or []
++        if not rows:
++            return
++        next_id = int(rows[-1]["source_row_id"])
++        if next_id <= after_id:
++            raise ValueError("智赢历史侵权结果分页游标未前进")
++        after_id = next_id
++        fields = ("source_row_id", "product_id", "title", "main_image_url",
++                  "product_category", "zying_category_id", "zying_category",
++                  "risk_level", "keywords", "checked_at")
++        cursor.executemany(
++            """
++            INSERT IGNORE INTO `infringement_risk_checks` (
++                `source_type`, `source_row_id`, `product_id`, `title`, `main_image_url`,
++                `product_category`, `zying_category_id`, `zying_category`, `risk_level`,
++                `keywords`, `checked_at`, `reason`
++            ) VALUES ('zying', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
++                      '旧版智赢侵权检测结果')
++            """,
++            [tuple(row.get(field) for field in fields) for row in rows],
++        )
++        if len(rows) < 200:
++            return
+ 
+ 
+ def _normalize_risk_sources(sources):
+@@ -9410,6 +9447,8 @@
+             if "zying" in selected_sources:
+                 _ensure_zying_product_table(cursor)
+                 _backfill_legacy_zying_risk_checks(cursor)
++                # Release backfill writes before a lazy consumer scans or calls AI.
++                connection.commit()
+ 
+             def fetch(source_type, select_sql, where, params):
+                 nonlocal emitted

@@ -42,8 +42,10 @@ def test_discovery_uses_product_identity_and_maps_only_live_schema():
                                {'params': {'q': 'Stainless steel water bottle'}})
     assert client.calls[1][0] == '/categories/CBT123/attributes'
     assert result['category_id'] == 'CBT123'
-    assert result['attributes'] == [{'id': 'MATERIAL', 'name': 'Material', 'value_name': 'Steel', 'value_id': '12'}]
-    assert result['missing_required_attributes'] == [{'id': 'CAPACITY', 'name': 'CAPACITY'}]
+    assert result['attributes'][0] == {'id': 'MATERIAL', 'name': 'Material', 'value_name': 'Steel', 'value_id': '12'}
+    assert result['attributes'][1]['id'] == 'CAPACITY'
+    assert result['attributes'][1]['value_basis'] == 'ai_default'
+    assert result['missing_required_attributes'] == []
 
 
 def test_empty_recommendation_does_not_keep_old_category():

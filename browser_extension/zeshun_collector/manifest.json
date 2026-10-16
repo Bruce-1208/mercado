@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "泽顺插件",
-  "version": "1.8.77",
+  "version": "1.8.94",
   "description": "采集 Mercado Libre、Yandex、1688 与智赢商品，自动化申诉，检查侵权风险，按日期同步智赢订单与采购物流号。",
   "permissions": [
     "alarms",
+    "downloads",
     "contextMenus",
     "debugger",
     "cookies",
@@ -15,7 +16,10 @@
     "webNavigation"
   ],
   "host_permissions": [
+    "https://wuhanzeshun.cn/*",
+    "https://www.wuhanzeshun.cn/*",
     "https://wuhanzeshun.com/*",
+    "https://www.wuhanzeshun.com/*",
     "http://127.0.0.1/*",
     "http://localhost/*",
     "https://*.1688.com/*",
@@ -172,6 +176,20 @@
       ],
       "world": "MAIN",
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*",
+        "https://wuhanzeshun.cn/*",
+        "https://www.wuhanzeshun.cn/*",
+        "https://wuhanzeshun.com/*",
+        "https://www.wuhanzeshun.com/*"
+      ],
+      "js": [
+        "console-recollect.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

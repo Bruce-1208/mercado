@@ -55,25 +55,23 @@ def test_product_workspaces_share_drawers_and_keep_list_state(console_page, widt
 
     select_tab("1688-products")
     page.locator('#products-1688-body button').filter(has_text="查看详情").click()
-    assert "原始描述完整结尾" in page.locator("#products-1688-detail-content").inner_text()
+    assert "原始描述完整结尾" in page.locator("#products-1688-source-content").inner_text()
     assert_sheet("#products-1688-detail-dialog", "1688")
-    page.locator('#products-1688-body button').filter(has_text="修改资料").click()
-    assert_sheet("#products-1688-edit-dialog", "1688-edit")
+    assert page.locator('#products-1688-body button').filter(has_text="修改资料").count() == 0
+    assert page.locator('#products-1688-body button').filter(has_text="编辑刊登内容").count() == 0
+    assert page.locator('#products-1688-edit-dialog').count() == 0
 
     select_tab("ai-original-products")
-    page.locator('#ai-original-grid button').filter(has_text="查看详情").click()
-    assert "Descripción completa hasta el final" in page.locator(".product-drawer-body").inner_text()
-    assert "CUP-BLUE" in page.locator(".product-drawer-body").inner_text()
-    assert_sheet("#product-detail-drawer", "original")
+    assert page.locator('#ai-original-grid button').filter(has_text="查看详情").count() == 0
     page.locator('#ai-original-grid button').filter(has_text="编辑分类").click()
+    assert "Descripción completa hasta el final" in page.locator('#ai-original-editor-description-es').input_value()
+    assert page.locator('#ai-original-editor-variations input[data-variant-field="sku"]').first.input_value() == "CUP-BLUE"
     assert_sheet("#ai-original-editor-dialog", "original-edit")
 
     select_tab("mercado-products")
     page.evaluate("document.getElementById('tab-mercado-products').appendChild(document.getElementById('mercado-list-module'))")
-    page.locator('.market-card-detail-trigger').click()
-    assert "采集 / 加入时间" in page.locator(".product-drawer-body").inner_text()
-    assert_sheet("#product-detail-drawer", "products")
-    assert page.locator('.market-card-detail-trigger').evaluate("el => el === document.activeElement")
+    assert page.locator('.market-card-detail-trigger, .market-card-detail-content').count() == 0
+    assert page.evaluate('typeof openMercadoProductDetail') == 'undefined'
     assert len(page.locator('.market-product-card-row').all()) == 1
     page.locator('.market-product-edit-button').click()
     assert_sheet("#mercado-product-edit-dialog", "products-edit")

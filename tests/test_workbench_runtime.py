@@ -41,7 +41,7 @@ def test_invalid_runtime_role_is_rejected():
 def test_default_public_database_api_uses_https():
     settings = resolve_runtime_settings(argv=["--role", "client"], environment={})
 
-    assert DEFAULT_DB_API_BASE_URL == "https://wuhanzeshun.com"
+    assert DEFAULT_DB_API_BASE_URL == "https://wuhanzeshun.cn"
     assert settings.api_base_url == DEFAULT_DB_API_BASE_URL
 
 

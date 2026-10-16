@@ -1,0 +1,54 @@
+[
+  {
+    "file": "bit/bit_mysql.py",
+    "tested_sha256": "5afbc5e1ec691a2bbbf62d57c73bfceceb211e5f32a66774bd36afcd73de9630",
+    "current_sha256": "28256198556f769dc2a9f0345e7c27bb96819b5b23670f26a465cb6f4cca5286",
+    "whole_file_equal": false,
+    "tested_functions_equal": {
+      "list_orders": true,
+      "_prepare_order_list_schema": true
+    }
+  },
+  {
+    "file": "bit/bit_interface.py",
+    "tested_sha256": "ab23f07e7c617a18762aadf710ca8d85d0e409c4b2c36087c0ef71877716d459",
+    "current_sha256": "512f211d637ba808110ad0d3ac260c651314a7a04b81aa497f1615924a067c39",
+    "whole_file_equal": false,
+    "tested_functions_equal": {
+      "api_orders": true,
+      "_order_list_query_params": true,
+      "_parse_int_param": true,
+      "get_workbench_user": true
+    }
+  },
+  {
+    "file": "bit/order_read_cache.py",
+    "tested_sha256": "74c43db9b4a068d04e31fac67b6ff4adb5814132a513cb057bc741ec13edfa5e",
+    "current_sha256": "74c43db9b4a068d04e31fac67b6ff4adb5814132a513cb057bc741ec13edfa5e",
+    "whole_file_equal": true
+  },
+  {
+    "file": "bit/order_search_projection.py",
+    "tested_sha256": "271eefd05a01d19928c1f74fd1c18a3f7df92845a5493fad3fa100959f6fa2af",
+    "current_sha256": "271eefd05a01d19928c1f74fd1c18a3f7df92845a5493fad3fa100959f6fa2af",
+    "whole_file_equal": true
+  },
+  {
+    "file": "scripts/optimize_order_search_projection.py",
+    "tested_sha256": "e90064cbcaa1d2d76a07a5833479dc3cdde2e877cb186c9d42c5842681725e01",
+    "current_sha256": "e90064cbcaa1d2d76a07a5833479dc3cdde2e877cb186c9d42c5842681725e01",
+    "whole_file_equal": true
+  },
+  {
+    "file": "tests/test_order_authorized_cache.py",
+    "tested_sha256": "4e02cbd75846582ea4efb1696121e98d5567733ee05d0412f10df1b79c0edc0a",
+    "current_sha256": "4e02cbd75846582ea4efb1696121e98d5567733ee05d0412f10df1b79c0edc0a",
+    "whole_file_equal": true
+  },
+  {
+    "file": "tests/test_order_search_projection.py",
+    "tested_sha256": "4d503a87a36a3222f6d9ebaf3eb485e39e3406f35ae0ca839070753679317c9b",
+    "current_sha256": "4d503a87a36a3222f6d9ebaf3eb485e39e3406f35ae0ca839070753679317c9b",
+    "whole_file_equal": true
+  }
+]

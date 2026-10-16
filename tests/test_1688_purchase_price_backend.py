@@ -1,4 +1,22 @@
 from erp.ai_original_products import normalize_1688_product
+import pytest
+
+
+@pytest.mark.parametrize('field,value,expected', [
+    ('salePrice', {'quantity': 200, 'price': '18.00'}, 18),
+    ('priceValue', '26.00', 26),
+    ('price', {'price': 1, 'amount': '26.00'}, 26),
+])
+def test_supported_sku_amount_fields_become_editable_prices(field, value, expected):
+    product = normalize_1688_product({
+        'source_url': 'https://detail.1688.com/offer/1075332656756.html',
+        'title': '测试商品', 'price': None, 'scrape_status': 'ok',
+        'variations': [{'id': '11', field: value}],
+    })
+    assert product['price'] == expected
+    assert product['variations'][0]['price'] == expected
+    assert product['variations'][0]['net_proceeds_usd'] is not None
+    assert product['scrape_status'] == 'ok'
 
 
 def test_old_collector_cannot_mark_missing_purchase_price_complete():

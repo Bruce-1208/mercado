@@ -1,0 +1,27 @@
+{
+  "site": "https://wuhanzeshun.com",
+  "category_counts": {
+    "completed": 61,
+    "failed_variations": 4,
+    "pending": 41
+  },
+  "checks": [
+    {
+      "file": "ai-original-products.js",
+      "http_status": 200,
+      "matches_workspace": true,
+      "sha256": "533bf0d071b26a1a224970df5fc28fe577e9acbf2d73c1554f6ab8c4cc28f036"
+    },
+    {
+      "file": "ai-original-workbench.js",
+      "http_status": 200,
+      "matches_workspace": true,
+      "sha256": "a2feaf7ecdcb869b785348ee9241496ab01588ac0388c360ede1a2ba33e33493"
+    }
+  ],
+  "verification": "Mocked generation retries; live read-only database status filtering; public static file verification. No paid model calls or product publication.",
+  "preexisting_test_failures": [
+    "test_product_list_applies_status_range_and_date_filters_in_database",
+    "test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_products-list_product_items]"
+  ]
+}

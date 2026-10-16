@@ -2,12 +2,21 @@
 import hashlib
 import io
 import json
+from pathlib import Path
 import struct
 import zipfile
 
 import pytest
 
 from scripts import build_windows_agent as build
+
+
+def test_windows_agent_bundles_selenium_chrome_webdriver_and_smoke_checks_it():
+    spec = (Path(build.__file__).resolve().parents[1] / "MercadoLocalAgent.spec").read_text()
+    source = Path(build.__file__).read_text()
+
+    assert '"selenium.webdriver.chrome.webdriver"' in spec
+    assert "from selenium.webdriver.chrome.webdriver import WebDriver" in source
 
 
 def pe_bytes(*, machine=0x8664, subsystem=2):

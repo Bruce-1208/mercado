@@ -1,0 +1,27 @@
+[
+  {
+    "path": "bit/bit_mysql.py",
+    "sha256": "9c15e52bce4fc3cd8b0c0331e8c10f715a6eb4e90aaa9883b071340a236d80f0",
+    "matches_tested_copy": true
+  },
+  {
+    "path": "bit/order_read_cache.py",
+    "sha256": "2cb7d75517526ebb9a6a4fe01a39c03f33b1c716e305a50e3f1ebe9d5fa42461",
+    "matches_tested_copy": true
+  },
+  {
+    "path": "bit/static/console-preload.js",
+    "sha256": "8f9e87249d2454c3aaa2488997d4c0f568e61ea6a727204e38cadfccf9acf8ce",
+    "matches_tested_copy": true
+  },
+  {
+    "path": "bit/templates/index.html",
+    "sha256": "febbb985d5b4e5d6af69144cb40ac3059b890705cff4d4bc8faf9937d4735a88",
+    "matches_tested_copy": true
+  },
+  {
+    "path": "tests/test_order_refresh_coalescing.py",
+    "sha256": "2d51ac882c7d21ec3b9fccf53f7a771d978f37aab41e31c5efbc4c6aa1776720",
+    "matches_tested_copy": true
+  }
+]

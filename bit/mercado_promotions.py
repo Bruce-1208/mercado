@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import queue
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import time
@@ -16,9 +17,11 @@ from typing import Any, Iterable
 from bit import bit_mysql
 from bit.bit_store_link_sync import _client_and_token, _marketplace_accounts, _refresh_token
 from bit.bit_runtime_lock import InterProcessLock
-from erp.mercadolibre_promotion_store import PromotionStore, APPLIED_STATUSES
+from erp.mercadolibre_promotion_store import (
+    PromotionStore, APPLIED_STATUSES, snapshot_started_after,
+)
 from mercado_api.client import MercadoAPIError
-from mercado_api.promotions import MercadoPromotionsClient, WRITABLE_TYPES
+from mercado_api.promotions import MercadoPromotionsClient, WRITABLE_TYPES, WITHDRAWABLE_TYPES, OFFER_ENROLLMENT_TYPES
 
 
 _sync_lock = threading.Lock()
@@ -170,7 +173,9 @@ def sync_promotions(
                                     "price": product.get("price"), "currency_id": product.get("currency_id"),
                                     "net_proceeds": product["net_proceeds"],
                                 }
-                        item_count += store.replace_items(local_id, items)
+                        item_count += store.replace_items(
+                            local_id, items, snapshot_started_at=snapshot_started_at,
+                        )
                         store.reconcile_completed_jobs(local_id, items, snapshot_started_at=snapshot_started_at)
                     store.record_scope_sync(token_id, site_id, 'succeeded', seen_promotion_ids)
                 total_promotions += promotion_count
@@ -343,16 +348,17 @@ def create_preview(
     rows: list[dict[str, Any]],
     actor: str,
     store: PromotionStore | None = None,
+    promotion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     store = store or PromotionStore()
-    promotion = store.get_promotion(promotion_fk)
+    promotion = promotion or store.get_promotion(promotion_fk, include_summary=False)
     if not promotion:
         raise ValueError("活动不存在或已失效")
     action = str(action or "").strip().lower()
     if action not in {"enroll", "withdraw"}:
         raise ValueError("不支持的活动操作")
     promotion_type = str(promotion.get("promotion_type") or "UNKNOWN").upper()
-    if promotion_type not in WRITABLE_TYPES:
+    if promotion_type not in (WRITABLE_TYPES if action == "enroll" else WITHDRAWABLE_TYPES):
         raise ValueError(f"{promotion_type} 当前仅支持查看")
     if action == "enroll":
         if str(promotion.get("status_raw") or "").lower() in {"finished", "ended", "cancelled", "canceled", "deleted"}:
@@ -367,41 +373,101 @@ def create_preview(
                 finished_at = None
             if finished_at and finished_at <= _now():
                 raise ValueError("活动已结束，不能重新报名")
-    indexed = {int(item["id"]): item for item in enrich_item_products(promotion, store.list_items(promotion_fk))}
+    campaign_block_reason = ""
+    if action == "enroll" and promotion.get("deadline_date"):
+        deadline = str(promotion.get("deadline_date") or "").strip()
+        try:
+            deadline_at = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+            if deadline_at.tzinfo is None:
+                deadline_at = deadline_at.replace(tzinfo=timezone.utc)
+        except ValueError:
+            campaign_block_reason = "活动报名截止时间无效，请同步活动后重试"
+        else:
+            if deadline_at <= _now():
+                campaign_block_reason = "活动报名截止时间已过，请同步活动后重试"
+    if not isinstance(rows, list):
+        raise ValueError("报名商品格式无效")
+    if len(rows) > 20000:
+        raise ValueError("每次最多处理 20000 件商品，请缩小范围后重试")
+    requested_ids = []
+    for intent in rows:
+        if not isinstance(intent, dict):
+            continue
+        raw_local_id = intent.get("item_local_id")
+        local_id = raw_local_id if type(raw_local_id) is int else 0
+        if local_id > 0:
+            requested_ids.append(local_id)
+    # Submission validation only needs the selected promotion rows.  Avoid the
+    # historical-result scan and remote product metadata enrichment used by the
+    # visible product table; those made large campaign previews take minutes.
+    selected = store.list_items_by_local_ids(promotion_fk, requested_ids)
+    indexed = {int(item["id"]): _normalise_item_proceeds(promotion, item) for item in selected}
     preview_rows = []
+    seen_ids = set()
     for intent in rows or []:
-        item = indexed.get(int(intent.get("item_local_id") or 0))
+        if not isinstance(intent, dict):
+            preview_rows.append({"status": "blocked", "reason": "商品数据格式无效", "item_id": ""})
+            continue
+        raw_local_id = intent.get("item_local_id")
+        item_local_id = raw_local_id if type(raw_local_id) is int else 0
+        if item_local_id <= 0:
+            preview_rows.append({"item_local_id": item_local_id, "status": "blocked", "reason": "商品编号无效", "item_id": ""})
+            continue
+        if item_local_id in seen_ids:
+            item = indexed.get(item_local_id)
+            preview_rows.append({
+                "item_local_id": item_local_id,
+                "status": "blocked", "reason": "重复商品已自动排除",
+                "item_id": (item or {}).get("item_id", ""),
+            })
+            continue
+        seen_ids.add(item_local_id)
+        item = indexed.get(item_local_id)
         if not item:
-            preview_rows.append({"status": "blocked", "reason": "商品不属于该活动", "item_id": ""})
+            preview_rows.append({"item_local_id": item_local_id, "status": "blocked", "reason": "商品不属于该活动", "item_id": ""})
             continue
         raw = item.get("raw") or {}
         status = str(item.get("status_raw") or "").lower()
         reason = ""
         price = intent.get("deal_price")
+        if action == "enroll" and promotion_type in OFFER_ENROLLMENT_TYPES:
+            price = None
+            if status == "candidate" and not item.get("offer_id"):
+                reason = "缺少官方候选优惠编号，请同步活动后重新报名"
         if action == "enroll" and status not in {"candidate", "withdrawn"}:
             reason = f"当前官方状态 {status or 'unknown'} 不可报名"
         if action == "withdraw" and status not in APPLIED_STATUSES:
             reason = f"当前官方状态 {status or 'unknown'} 不可退出"
         if action == "enroll" and promotion_type in {"DEAL", "PRICE_DISCOUNT"}:
-            try:
-                price = float(price)
-                if not math.isfinite(price) or price <= 0:
-                    raise ValueError
-            except (TypeError, ValueError):
+            price = _finite_number(price)
+            if price is None or price <= 0:
                 reason = "请填写有效活动价"
-            minimum = item.get("min_price")
-            maximum = item.get("max_price")
-            if not reason and minimum is not None and price < float(minimum):
-                reason = f"活动价低于官方下限 {minimum}"
-            if not reason and maximum is not None and price > float(maximum):
-                reason = f"活动价高于官方上限 {maximum}"
+            minimum = _finite_number(item.get("min_price"))
+            maximum = _finite_number(item.get("max_price"))
+            if not reason and item.get("min_price") not in (None, "") and minimum is None:
+                reason = "官方活动价下限无效，请同步活动后重试"
+            if not reason and item.get("max_price") not in (None, "") and maximum is None:
+                reason = "官方活动价上限无效，请同步活动后重试"
+            if not reason and minimum is not None and price < minimum:
+                reason = f"活动价低于官方下限 {item.get('min_price')}"
+            if not reason and maximum is not None and price > maximum:
+                reason = f"活动价高于官方上限 {item.get('max_price')}"
         if action == "enroll" and promotion_type == "PRICE_DISCOUNT":
             start_date = str(intent.get("start_date") or "").strip()
             finish_date = str(intent.get("finish_date") or "").strip()
             if not start_date or not finish_date:
                 reason = "请选择折扣开始和结束日期"
-            elif finish_date < start_date:
-                reason = "折扣结束日期不能早于开始日期"
+            else:
+                try:
+                    start_value = datetime.fromisoformat(start_date).date()
+                    finish_value = datetime.fromisoformat(finish_date).date()
+                except ValueError:
+                    reason = "折扣日期格式无效"
+                else:
+                    if finish_value < start_value:
+                        reason = "折扣结束日期不能早于开始日期"
+        if campaign_block_reason:
+            reason = campaign_block_reason
         preview_rows.append({
             "item_local_id": int(item["id"]),
             "requires_eligibility_check": status == "withdrawn",
@@ -411,6 +477,8 @@ def create_preview(
             "reason": reason,
             "deal_price": price,
             "original_price": item.get("original_price"),
+            "last_synced_at": item.get("last_synced_at"),
+            "source_status": status,
             "currency_id": item.get("currency_id") or raw.get("currency_id") or ("USD" if promotion_type == "DEAL" else ""),
             "start_date": str(intent.get("start_date") or ""),
             "finish_date": str(intent.get("finish_date") or ""),
@@ -422,7 +490,26 @@ def create_preview(
         })
     ready = [row for row in preview_rows if row["status"] == "ready"]
     expires_at = (_now() + timedelta(minutes=5)).replace(microsecond=0).isoformat()
-    payload = {"promotion": promotion, "rows": preview_rows}
+    blocked = [row for row in preview_rows if row["status"] == "blocked"]
+    blocked_reasons = {}
+    for row in blocked:
+        reason = str(row.get("reason") or "不符合报名要求")
+        blocked_reasons[reason] = blocked_reasons.get(reason, 0) + 1
+    # Only executable rows are required by the worker.  Keep a compact reason
+    # summary for audit instead of persisting thousands of blocked row payloads.
+    payload = {
+        "promotion": promotion,
+        "rows": ready,
+        "excluded_count": len(blocked),
+        "excluded_reasons": [{"reason": reason, "count": count} for reason, count in blocked_reasons.items()],
+        "excluded_results": [{
+            "item_id": row.get("item_id"),
+            "item_local_id": row.get("item_local_id"),
+            "offer_id": row.get("offer_id"),
+            "status": "blocked",
+            "message": row.get("reason") or "不符合报名要求，已自动屏蔽",
+        } for row in blocked],
+    }
     preview_id = store.create_preview(
         actor=actor, action=action, promotion_fk=promotion_fk, payload=payload, expires_at=expires_at
     )
@@ -435,6 +522,232 @@ def create_preview(
         "ready_count": len(ready),
         "blocked_count": len(preview_rows) - len(ready),
     }
+
+
+def start_enrollment(
+    *,
+    promotion_fk: int,
+    rows: list[dict[str, Any]],
+    actor: str,
+    store: PromotionStore | None = None,
+    promotion: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Validate, screen and enqueue enrollment without a confirmation round trip."""
+    store = store or PromotionStore()
+    preview = create_preview(
+        promotion_fk=promotion_fk,
+        action="enroll",
+        rows=rows,
+        actor=actor,
+        store=store,
+        promotion=promotion,
+    )
+    blocked = [row for row in preview["rows"] if row.get("status") == "blocked"]
+    reasons = {}
+    for row in blocked:
+        reason = str(row.get("reason") or "不符合报名要求")
+        reasons[reason] = reasons.get(reason, 0) + 1
+    result = {
+        "status": "skipped",
+        "job_id": "",
+        "submitted_count": int(preview["ready_count"]),
+        "excluded_count": int(preview["blocked_count"]),
+        "excluded_reasons": [{"reason": reason, "count": count} for reason, count in reasons.items()],
+    }
+    job = execute_preview(
+        preview["preview_id"], actor=actor, store=store,
+        background=bool(preview["ready_count"]),
+    )
+    response = {**result, **job}
+    # The durable execution log owns per-item details. Returning thousands of
+    # blocked rows here would make the direct-enrollment response slow again.
+    response.pop("results", None)
+    return response
+
+
+def _interrupted_job_results(store, job: dict[str, Any]) -> list[dict[str, Any]]:
+    """Preserve saved outcomes and account for every row of an interrupted job."""
+    results = [dict(row) for row in job.get("results") or [] if isinstance(row, dict)]
+    preview = store.get_preview(job.get("preview_id") or "") or {}
+    payload = preview.get("payload") or {}
+    blocked_rows = [
+        dict(row) for row in payload.get("excluded_results") or []
+        if isinstance(row, dict)
+    ]
+    ready_rows = [
+        row for row in payload.get("rows") or []
+        if isinstance(row, dict) and row.get("status") == "ready"
+    ]
+
+    def identity(row):
+        return (
+            row.get("item_local_id"),
+            str(row.get("item_id") or ""),
+            str(row.get("offer_id") or ""),
+        )
+
+    missing_message = (
+        "旧执行进程已中断，请按官方状态核实；未自动重提报名"
+        if job.get("status") == "running"
+        else "历史执行日志不完整，请按官方状态核实；未自动重提"
+    )
+
+    # Match preflight exclusions first. They are known not to have reached the
+    # platform and must not be downgraded to an ambiguous remote result.
+    used = set()
+    for expected in blocked_rows:
+        match = next((
+            index for index, current in enumerate(results)
+            if index not in used
+            and current.get("status") == "blocked"
+            and identity(current) == identity(expected)
+        ), None)
+        if match is None:
+            results.append(expected)
+            used.add(len(results) - 1)
+        else:
+            used.add(match)
+
+    for row in ready_rows:
+        match = next((
+            index for index, current in enumerate(results)
+            if index not in used and identity(current) == identity(row)
+        ), None)
+        if match is not None:
+            used.add(match)
+            continue
+        results.append({
+            "item_id": row.get("item_id"),
+            "item_local_id": row.get("item_local_id"),
+            "offer_id": row.get("offer_id"),
+            "status": "unknown",
+            "message": missing_message,
+        })
+        used.add(len(results) - 1)
+
+    expected_total = max(int(job.get("total_count") or 0), len(results))
+    while len(results) < expected_total:
+        results.append({
+            "status": "unknown",
+            "message": missing_message,
+        })
+    return results
+
+
+def _recover_jobs_for_campaign(
+    store, promotion_fk: int, *, include_terminal: bool = True,
+) -> int:
+    """Repair interrupted or incomplete jobs while holding the campaign lock."""
+    recovered = 0
+    for job in store.list_jobs(
+        limit=500, promotion_fk=int(promotion_fk), status="running",
+    ):
+        results = _interrupted_job_results(store, job)
+        store.set_job_total(
+            job["job_id"], max(int(job.get("total_count") or 0), len(results)),
+        )
+        store.finish_job(job["job_id"], results=results)
+        if hasattr(store, "compact_preview"):
+            store.compact_preview(job.get("preview_id") or "")
+        recovered += 1
+    if include_terminal:
+        # list_jobs is deliberately bounded. Drain successive batches so
+        # starting a new submission can never leave a 501st incomplete guard.
+        while True:
+            repairable = store.list_jobs(
+                limit=500, promotion_fk=int(promotion_fk), repairable_only=True,
+            )
+            if not repairable:
+                break
+            for job in repairable:
+                results = _interrupted_job_results(store, job)
+                # finish_job atomically re-derives all counters and total_count
+                # from preserved plus reconstructed results. Padding guarantees
+                # this job will not match repairable_only on the next batch.
+                store.finish_job(
+                    job["job_id"], results=results, preserve_finished_at=True,
+                )
+                if hasattr(store, "compact_preview"):
+                    store.compact_preview(job.get("preview_id") or "")
+                recovered += 1
+    return recovered
+
+
+def recover_stale_running_jobs(
+    *,
+    store: PromotionStore | None = None,
+    token_ids: Iterable[int] | None = None,
+    promotion_fks: Iterable[int] | None = None,
+    job_ids: Iterable[str] | None = None,
+    action: str = "",
+    include_terminal: bool = True,
+) -> int:
+    """Recover visible incomplete jobs only when no live campaign worker owns them."""
+    store = store or PromotionStore()
+    allowed_tokens = None if token_ids is None else tuple(dict.fromkeys(
+        int(value) for value in token_ids
+    ))
+    selected_promotions = None if promotion_fks is None else tuple(dict.fromkeys(
+        int(value) for value in promotion_fks if int(value) > 0
+    ))
+    if selected_promotions is None:
+        candidates = store.list_jobs(
+            limit=500,
+            token_ids=allowed_tokens,
+            job_ids=job_ids,
+            action=str(action or ""),
+            status="running",
+            summary_only=True,
+        )
+        if include_terminal:
+            candidates.extend(store.list_jobs(
+                limit=500,
+                token_ids=allowed_tokens,
+                job_ids=job_ids,
+                action=str(action or ""),
+                repairable_only=True,
+                summary_only=True,
+            ))
+    else:
+        candidates = []
+        for promotion_fk in selected_promotions:
+            candidates.extend(store.list_jobs(
+                limit=500,
+                token_ids=allowed_tokens,
+                promotion_fk=promotion_fk,
+                job_ids=job_ids,
+                action=str(action or ""),
+                status="running",
+                summary_only=True,
+            ))
+            if include_terminal:
+                candidates.extend(store.list_jobs(
+                    limit=500,
+                    token_ids=allowed_tokens,
+                    promotion_fk=promotion_fk,
+                    job_ids=job_ids,
+                    action=str(action or ""),
+                    repairable_only=True,
+                    summary_only=True,
+                ))
+    recovered = 0
+    for promotion_fk in dict.fromkeys(
+        int(job["promotion_fk"]) for job in candidates
+    ):
+        lease = InterProcessLock(
+            f"promotion_campaign_{promotion_fk}", owner="promotion-job-recovery",
+        )
+        if not lease.acquire(timeout=0):
+            continue
+        try:
+            # Re-read after taking the lock. A worker may have completed
+            # between the candidate query and this exclusive probe.
+            recovered += _recover_jobs_for_campaign(
+                store, promotion_fk, include_terminal=include_terminal,
+            )
+        finally:
+            lease.release()
+    return recovered
 
 
 def execute_preview(
@@ -459,44 +772,177 @@ def execute_preview(
     payload = preview.get("payload") or {}
     promotion = payload.get("promotion") or {}
     rows = [row for row in payload.get("rows") or [] if row.get("status") == "ready"]
-    if not rows:
+    excluded_results = [row for row in payload.get("excluded_results") or [] if isinstance(row, dict)]
+    whole_campaign = payload.get("stop_campaign") is True
+    if not rows and not whole_campaign and not excluded_results:
         raise ValueError("没有可提交的商品")
-    token_id = int(promotion.get("token_id") or 0)
-    secret = dict(bit_mysql.get_mercado_store_token(token_id) or {})
-    adapter, _ = _adapter(secret)
-    action = str(preview.get("action") or "")
-    job_id = store.create_job(preview_id=preview_id, actor=actor, action=action, total=len(rows))
-    if background:
-        thread = threading.Thread(
-            target=_execute_job, args=(store, job_id, adapter, promotion, rows, action),
-            name=f"promotion-{job_id[:10]}", daemon=True,
+    lease = InterProcessLock(f"promotion_campaign_{promotion['id']}", owner={"actor": actor})
+    if not lease.acquire(timeout=0):
+        raise ValueError("该活动已提交任务，正在执行报名或停止，请等待该活动完成；其他活动可继续操作")
+    try:
+        # A held campaign lease belongs to a live worker. Remaining running rows
+        # with no lease are interrupted jobs, never evidence to replay a request.
+        _recover_jobs_for_campaign(
+            store, int(promotion["id"]), include_terminal=False,
         )
-        thread.start()
+        action = str(preview.get("action") or "")
+        job_id = store.create_job(
+            preview_id=preview_id, actor=actor, action=action,
+            total=len(rows) + len(excluded_results),
+        )
+    except Exception:
+        lease.release()
+        raise
+
+    def run():
+        adapter = None
+        try:
+            lease.transfer_to_current_thread()
+            if not rows and excluded_results:
+                store.finish_job(job_id, results=excluded_results)
+                return {"job_id": job_id, "action": action, "results": excluded_results}
+            secret = dict(bit_mysql.get_mercado_store_token(int(promotion['token_id'])) or {})
+            adapter, _ = _adapter(secret)
+            if whole_campaign:
+                return _execute_stop_job(store, job_id, adapter, promotion)
+            return _execute_job(
+                store, job_id, adapter, promotion, rows, action,
+                prior_results=excluded_results,
+            )
+        except Exception as exc:
+            current = store.list_jobs(job_ids=[job_id])[0]
+            results = list(current.get("results") or excluded_results)
+            # A blocked preflight row and an executable row can share the same
+            # local/item/offer identity (for example, a duplicate selection).
+            # Only a non-blocked result can account for an executable row, and
+            # occurrence counts matter when identities repeat.
+            accounted_ready = Counter(
+                (row.get("item_local_id"), str(row.get("item_id") or ""), str(row.get("offer_id") or ""))
+                for row in results
+                if row.get("status") != "blocked"
+            )
+            missing_status = "failed" if adapter is None else "unknown"
+            missing_message = (
+                "任务初始化失败，未向平台提交：" if adapter is None
+                else "任务未完成，需核实官方状态："
+            ) + str(exc)
+            for row in rows:
+                identity = (row.get("item_local_id"), str(row.get("item_id") or ""), str(row.get("offer_id") or ""))
+                if accounted_ready[identity]:
+                    accounted_ready[identity] -= 1
+                    continue
+                results.append({
+                    "item_id": row.get("item_id"), "item_local_id": row.get("item_local_id"),
+                    "offer_id": row.get("offer_id"), "status": missing_status,
+                    "message": missing_message,
+                })
+            store.set_job_total(job_id, max(int(current.get('total_count') or 0), len(results)))
+            store.finish_job(job_id, results=results)
+            return {"job_id": job_id, "action": action, "results": results}
+        finally:
+            lease.release()
+            if isinstance(adapter, MercadoPromotionsClient):
+                adapter.client.session.close()
+            if hasattr(store, "compact_preview"):
+                try:
+                    store.compact_preview(preview_id)
+                except Exception:
+                    logging.getLogger(__name__).warning("Unable to compact promotion preview", exc_info=True)
+
+    if background:
+        try:
+            threading.Thread(target=run, name=f"promotion-{job_id[:10]}", daemon=True).start()
+        except Exception:
+            lease.release()
+            results = list(excluded_results) + [{
+                "item_id": row.get("item_id"), "item_local_id": row.get("item_local_id"),
+                "offer_id": row.get("offer_id"), "status": "failed",
+                "message": "无法启动执行线程，未向平台提交",
+            } for row in rows]
+            store.finish_job(job_id, results=results)
+            if hasattr(store, "compact_preview"):
+                store.compact_preview(preview_id)
+            raise
         return {"job_id": job_id, "action": action, "status": "running", "results": []}
-    return _execute_job(store, job_id, adapter, promotion, rows, action)
+    return run()
 
 
 def stop_campaign(*, promotion_fk, actor, store=None, background=True):
-    """Withdraw every enrolled offer in a campaign, independently of UI paging."""
+    """Discover all current offers remotely, then withdraw and verify in a worker."""
     store = store or PromotionStore()
     promotion = store.get_promotion(promotion_fk)
     if not promotion:
         raise ValueError("活动不存在")
-    if promotion["promotion_type"] not in WRITABLE_TYPES:
-        raise ValueError("该活动类型暂不支持停止，请在平台取消后同步活动")
-    running = next((job for job in store.list_jobs(promotion_fk=promotion_fk)
-                    if job["status"] == "running"), None)
-    if running:
-        raise ValueError("该活动仍有执行中的任务，请完成后再停止")
+    if promotion["promotion_type"] not in WITHDRAWABLE_TYPES:
+        reason = "清仓活动由平台自动管理，官方接口禁止取消" if promotion["promotion_type"] == "CLEARANCE" else "该活动类型官方接口暂不支持停止"
+        raise ValueError(reason)
     rows = [dict(row, item_local_id=row["id"], status="ready")
             for row in store.list_items(promotion_fk)
             if str(row.get("status_raw") or "").lower() in APPLIED_STATUSES]
-    if not rows:
-        return {"status": "skipped", "total": 0, "message": "该活动没有已报名商品"}
     preview_id = store.create_preview(actor=actor, action="withdraw", promotion_fk=promotion_fk,
-        payload={"promotion": promotion, "rows": rows},
+        payload={"promotion": promotion, "rows": rows, "stop_campaign": True},
         expires_at=(_now() + timedelta(minutes=5)).isoformat())
-    return {**execute_preview(preview_id, actor=actor, store=store, background=background), "total": len(rows)}
+    return {"total": len(rows), **execute_preview(
+        preview_id, actor=actor, store=store, background=background,
+    )}
+
+
+def _stop_snapshot(store, adapter, promotion):
+    snapshot_started_at = _now().isoformat()
+    if promotion['promotion_type'] == 'PRICE_DISCOUNT' and promotion['promotion_id'].startswith('ITEM-PRICE_DISCOUNT-'):
+        item_id = promotion['promotion_id'].removeprefix('ITEM-PRICE_DISCOUNT-')
+        rows = [dict(entry, id=item_id) for entry in _matching_item_promotions(adapter, promotion, item_id)]
+    else:
+        rows = list(adapter.iter_items(str(promotion['seller_id']), promotion['promotion_id'],
+                                       promotion_type=promotion['promotion_type']))
+    inactive = {"candidate", "finished", "ended", "cancelled", "canceled", "deleted", "withdrawn", "rejected"}
+    if any(_official_item_status(row) not in inactive | set(APPLIED_STATUSES) for row in rows):
+        raise MercadoAPIError("官方返回未知商品状态，无法确认活动已全部停止")
+    store.replace_items(
+        promotion['id'], rows, snapshot_started_at=snapshot_started_at,
+    )
+    return [dict(row, item_local_id=row['id'], status="ready") for row in store.list_items(promotion['id'])
+            if row['status_raw'].lower() in APPLIED_STATUSES]
+
+
+def _execute_stop_job(store, job_id, adapter, promotion):
+    results = {}
+    key = lambda row: (str(row.get('item_id') or ''), str(row.get('offer_id') or ''))
+    try:
+        active = _stop_snapshot(store, adapter, promotion)
+        # A second pass covers confirmed leftovers and newly discovered offers.
+        # Every retry is preceded by a complete official snapshot, never blind.
+        for _ in range(2):
+            work = [row for row in active if results.get(key(row), {}).get('status') != 'failed']
+            if not work:
+                break
+            for row in work:
+                results.setdefault(key(row), dict(_item_result(row), status="unknown", message="等待取消"))
+            store.set_job_total(job_id, len(results))
+            batch = _execute_job(store, job_id, adapter, promotion, work, 'withdraw', finish=False,
+                                 prior_results=[r for k, r in results.items() if k not in {key(w) for w in work}])
+            results.update((key(row), row) for row in batch['results'])
+            active = _stop_snapshot(store, adapter, promotion)
+            remaining = {key(row) for row in active}
+            for identity, result in results.items():
+                if identity not in remaining:
+                    result.update(status='succeeded', message='已通过官方完整商品列表核实取消')
+            if not active:
+                break
+        for row in active:
+            result = results.setdefault(key(row), _item_result(row))
+            if result.get('status') != 'failed' or not result.get('message'):
+                result.update(status='unknown', message='官方仍显示参与，活动未全部停止；可再次停止以核实并处理剩余商品')
+    except Exception as exc:
+        # A successful DELETE alone is not proof that the whole activity ended.
+        for result in results.values():
+            if result['status'] == 'succeeded':
+                result.update(status='unknown', message='取消已提交，最终官方核验未完成')
+        results[('', '')] = {'status': 'unknown', 'message': '活动未核实完成：' + str(exc)}
+    final = list(results.values())
+    store.set_job_total(job_id, len(final))
+    store.finish_job(job_id, results=final)
+    return {'job_id': job_id, 'action': 'withdraw', 'total': len(final), 'results': final}
 
 
 def _live_listing_activities(adapter, seller_id, item_id):
@@ -518,6 +964,7 @@ def _live_listing_activities(adapter, seller_id, item_id):
 def _refresh_live_listing_activities(store, adapter, token, key):
     # The listing's child seller is authoritative; the parent token ID must
     # never be used as the promotion API's user_id.
+    snapshot_started_at = _now().isoformat()
     item = adapter.client.get_marketplace_item(key[2])
     seller_id = str(item.get("seller_id") or "")
     if str(item.get("id") or "").upper() != key[2] or not seller_id:
@@ -530,7 +977,10 @@ def _refresh_live_listing_activities(store, adapter, token, key):
         if row["promotion_type"] == "PRICE_DISCOUNT" and row["promotion_id"].startswith("ITEM-PRICE_DISCOUNT-"):
             identity = ("", "PRICE_DISCOUNT")
         if identity not in identities:
-            store.set_item_status(row["promotion_fk"], key[2], "withdrawn")
+            store.set_item_status(
+                row["promotion_fk"], key[2], "withdrawn",
+                snapshot_started_at=snapshot_started_at,
+            )
     for row in active:
         campaign = dict(row)
         if not campaign.get("id"):
@@ -538,7 +988,10 @@ def _refresh_live_listing_activities(store, adapter, token, key):
         pk = store.upsert_promotion(token_id=key[0], site_id=key[1], seller_id=seller_id,
             application_id=str(token.get("client_id") or ""),
             store_name=str(token.get("display_name") or token.get("nickname") or key[0]), row=campaign)
-        store.replace_items(pk, [dict(row, id=key[2])], item_id=key[2])
+        store.replace_items(
+            pk, [dict(row, id=key[2])], item_id=key[2],
+            snapshot_started_at=snapshot_started_at,
+        )
     return seller_id
 
 
@@ -557,7 +1010,7 @@ def withdraw_listing_promotions(*, token_id, site_id, item_id, actor, promotion_
         activities = [row for row in activities if row["promotion_fk"] == int(promotion_fk)]
         if not activities:
             raise ValueError("该商品当前没有参加此活动，请刷新后重试")
-    if any(row["promotion_type"] not in WRITABLE_TYPES for row in activities):
+    if any(row["promotion_type"] not in WITHDRAWABLE_TYPES for row in activities):
         raise ValueError("该商品包含暂不支持自动取消的活动，请先在平台取消后同步活动")
     if activities and adapter is None:
         adapter, _ = _adapter(dict(bit_mysql.get_mercado_store_token(int(token_id)) or {}))
@@ -566,12 +1019,21 @@ def withdraw_listing_promotions(*, token_id, site_id, item_id, actor, promotion_
     for row in activities:
         grouped.setdefault(row["promotion_fk"], []).append(dict(row, item_id=key[2], status="ready"))
     for pk, rows in grouped.items():
-        promotion = store.get_promotion(pk)
-        preview_id = store.create_preview(actor=actor, action="withdraw", promotion_fk=pk,
-            payload={"promotion": promotion, "rows": rows},
-            expires_at=(_now() + timedelta(minutes=5)).isoformat())
-        job_id = store.create_job(preview_id=preview_id, actor=actor, action="withdraw", total=len(rows))
-        outcome = _execute_job(store, job_id, adapter, promotion, rows, "withdraw")
+        lease = InterProcessLock(
+            f"promotion_campaign_{pk}", owner={"actor": actor, "action": "withdraw"},
+        )
+        if not lease.acquire(timeout=0):
+            raise ValueError("该活动正在执行报名或停止，请等待完成后重试")
+        try:
+            _recover_jobs_for_campaign(store, int(pk))
+            promotion = store.get_promotion(pk)
+            preview_id = store.create_preview(actor=actor, action="withdraw", promotion_fk=pk,
+                payload={"promotion": promotion, "rows": rows},
+                expires_at=(_now() + timedelta(minutes=5)).isoformat())
+            job_id = store.create_job(preview_id=preview_id, actor=actor, action="withdraw", total=len(rows))
+            outcome = _execute_job(store, job_id, adapter, promotion, rows, "withdraw")
+        finally:
+            lease.release()
         results.extend(outcome["results"])
         failed = [row for row in outcome["results"] if row["status"] != "succeeded"]
         if failed:
@@ -594,6 +1056,8 @@ def withdraw_listing_promotions(*, token_id, site_id, item_id, actor, promotion_
             # an unverified local "withdrawn" state after a successful DELETE.
             _refresh_live_listing_activities(store, adapter, token, key)
             raise ValueError("平台仍返回已参与活动，取消尚未确认，停止修改净收益")
+    from bit.store_link_metrics import invalidate
+    invalidate(key[0], key[2])
     return {"cancelled_count": len(results), "results": results}
 
 
@@ -609,6 +1073,76 @@ def _matching_item_promotions(adapter, promotion, item_id):
 def _official_item_status(row):
     status = row.get("status")
     return str(status.get("id") if isinstance(status, dict) else status or "").lower()
+
+
+def _enrollment_identity(promotion, row):
+    """Return the remote mutation identity used by submit-once guards."""
+    return (
+        str(row.get("item_id") or row.get("id") or ""),
+        str(row.get("offer_id") or "")
+        if str(promotion.get("promotion_type") or "").upper() in OFFER_ENROLLMENT_TYPES
+        else "",
+    )
+
+
+def _identity_matches(promotion, row, entry):
+    if str(promotion.get("promotion_type") or "").upper() not in OFFER_ENROLLMENT_TYPES:
+        return True
+    offer_id = str(row.get("offer_id") or "")
+    return bool(offer_id) and str(entry.get("offer_id") or "") == offer_id
+
+
+def _same_enrollment_terms(promotion, row, entry):
+    if str(promotion.get("promotion_type") or "").upper() not in {"DEAL", "PRICE_DISCOUNT"}:
+        return True
+    if not _same_price(entry.get("price"), row.get("deal_price")):
+        return False
+    return not (
+        entry.get("currency_id") and row.get("currency_id")
+        and entry["currency_id"] != row["currency_id"]
+    )
+
+
+def _probe_enrollment(adapter, promotion, row):
+    """Read the exact item/offer state without performing a mutation.
+
+    A candidate is explicit proof that the guarded identity is currently
+    eligible again.  An empty or failed response is kept unverified because it
+    cannot safely distinguish replication lag from a withdrawn offer.
+    """
+    if not callable(getattr(adapter, "get_item_promotions", None)):
+        return "unverified", None
+    for delay in (0, 1, 2):
+        if delay:
+            time.sleep(delay)
+        try:
+            matches = [
+                entry for entry in _matching_item_promotions(
+                    adapter, promotion, row["item_id"],
+                )
+                if _identity_matches(promotion, row, entry)
+            ]
+        except Exception:
+            continue
+        applied = next((
+            entry for entry in matches
+            if _official_item_status(entry) in APPLIED_STATUSES
+            and _same_enrollment_terms(promotion, row, entry)
+        ), None)
+        if applied is not None:
+            return "applied", applied
+        mismatched = next((
+            entry for entry in matches
+            if _official_item_status(entry) in APPLIED_STATUSES
+        ), None)
+        if mismatched is not None:
+            return "applied_mismatch", mismatched
+        candidate = next((
+            entry for entry in matches if _official_item_status(entry) == "candidate"
+        ), None)
+        if candidate is not None:
+            return "candidate", candidate
+    return "unverified", None
 
 
 def _verify_mutation(adapter, promotion, row, action):
@@ -629,13 +1163,12 @@ def _verify_mutation(adapter, promotion, row, action):
                     return {}
             else:
                 for entry in matches:
+                    if not _identity_matches(promotion, row, entry):
+                        continue
                     if _official_item_status(entry) not in APPLIED_STATUSES:
                         continue
-                    if promotion["promotion_type"] in {"DEAL", "PRICE_DISCOUNT"}:
-                        if not _same_price(entry.get("price"), row.get("deal_price")):
-                            continue
-                        if entry.get("currency_id") and row.get("currency_id") and entry["currency_id"] != row["currency_id"]:
-                            continue
+                    if not _same_enrollment_terms(promotion, row, entry):
+                        continue
                     return entry
         except Exception:
             continue
@@ -653,17 +1186,27 @@ def _item_result(row):
     }
 
 
+def _timestamp_after(value, reference):
+    return snapshot_started_after(value, reference)
+
+
 def _execute_item(store, job_id, adapter, promotion, row, action, previous_results):
     result = _item_result(row)
     lease = InterProcessLock(f"promotion_item_{promotion.get('token_id')}_{row.get('item_id')}", owner={"job_id": job_id})
     try:
-        if not lease.acquire(timeout=0):
-            raise ValueError("该商品正在执行其他活动操作，请完成后再提交")
+        if not lease.acquire(timeout=30 if action == "withdraw" else 0):
+            result.update(status="blocked", message="该商品仍在执行其他活动操作，尚未提交取消" if action == "withdraw" else "该商品正在执行其他活动操作，请完成后再提交")
+            return result
         if action == "enroll" and row.get("requires_eligibility_check"):
             candidates = [entry for entry in _matching_item_promotions(adapter, promotion, row["item_id"])
                           if _official_item_status(entry) == "candidate"]
             if not candidates:
                 raise ValueError("平台尚未恢复该商品的报名资格，请同步活动后重试")
+            if promotion["promotion_type"] in OFFER_ENROLLMENT_TYPES:
+                if len(candidates) != 1 or not candidates[0].get("offer_id"):
+                    raise ValueError("无法确认新的候选优惠编号，请同步活动后重新报名")
+                row = dict(row, offer_id=candidates[0]["offer_id"])
+                result["offer_id"] = row["offer_id"]
             candidate = candidates[0]
             minimum, maximum = candidate.get("min_discounted_price"), candidate.get("max_discounted_price")
             price = _finite_number(row.get("deal_price"))
@@ -671,22 +1214,53 @@ def _execute_item(store, job_id, adapter, promotion, row, action, previous_resul
                                       or (maximum is not None and price > float(maximum))):
                 raise ValueError("平台活动价格区间已变化，请同步活动后重新设置折扣")
         current = store.item_rows(int(promotion.get("id") or 0), str(row["item_id"])) if hasattr(store, "item_rows") else []
-        applied = [item for item in current if str(item.get("status_raw") or "").lower() in APPLIED_STATUSES]
+        offer_scoped = promotion["promotion_type"] in OFFER_ENROLLMENT_TYPES
+        exact_current = [
+            item for item in current
+            if not offer_scoped
+            or (row.get("offer_id") and str(item.get("offer_id") or "") == str(row["offer_id"]))
+        ]
+        applied = [
+            item for item in exact_current
+            if str(item.get("status_raw") or "").lower() in APPLIED_STATUSES
+        ]
         existing = None
         if action == "enroll" and applied:
-            existing = next((item for item in applied if promotion["promotion_type"] == "MARKETPLACE_CAMPAIGN"
+            existing = next((item for item in applied if promotion["promotion_type"] in ({"MARKETPLACE_CAMPAIGN"} | OFFER_ENROLLMENT_TYPES)
                              or (_same_price(item.get("price"), row.get("deal_price"))
                                  and (not row.get("currency_id") or item.get("currency_id") == row["currency_id"]))), None)
             if existing is None:
                 raise ValueError("该商品已参与活动，请刷新后核对价格，勿重复报名")
-        previous = previous_results.get(str(row["item_id"]), {})
-        if action == "enroll" and existing is None and previous.get("status") == "unknown" and not row.get("requires_eligibility_check"):
-            verified = _verify_mutation(adapter, promotion, previous, "enroll")
-            if verified is None:
-                raise MercadoAPIError("上次报名结果未知，官方状态仍未确认；未重复提交，请同步活动后重试")
-            if row.get("deal_price") is not None and not _same_price(verified.get("price"), row["deal_price"]):
-                raise ValueError("上次报名已生效，但价格与本次不同，请刷新后核对")
-            existing = verified
+        previous = previous_results.get(_enrollment_identity(promotion, row), {})
+        if (
+            action == "enroll" and existing is None
+            and previous.get("status") in {"unknown", "succeeded"}
+            and not row.get("requires_eligibility_check")
+        ):
+            snapshot = next((
+                item for item in exact_current
+                if row.get("item_local_id") is not None
+                and int(item.get("id") or 0) == int(row["item_local_id"])
+            ), exact_current[0] if len(exact_current) == 1 else None)
+            snapshot_status = str(
+                (snapshot or {}).get("status_raw") or row.get("source_status") or ""
+            ).lower()
+            snapshot_at = (snapshot or {}).get("last_synced_at") or row.get("last_synced_at")
+            fresh_candidate = (
+                snapshot_status == "candidate"
+                and _timestamp_after(snapshot_at, previous.get("finished_at"))
+            )
+            if not fresh_candidate:
+                state, verified = _probe_enrollment(adapter, promotion, row)
+                if state == "applied":
+                    existing = verified
+                elif state == "applied_mismatch":
+                    raise ValueError("上次报名已生效，但价格与本次不同，请刷新后核对")
+                elif state == "candidate":
+                    raise MercadoAPIError("官方已只读核实为候选，当前结果未知；未重复提交，请同步活动后重试")
+                else:
+                    prefix = "上次报名结果未知" if previous.get("status") == "unknown" else "存在上次成功报名记录，当前结果未知"
+                    raise MercadoAPIError(prefix + "，官方状态仍未确认；未重复提交，请同步活动后重试")
         try:
             if existing is not None:
                 response = existing
@@ -698,6 +1272,7 @@ def _execute_item(store, job_id, adapter, promotion, row, action, previous_resul
                     promotion_type=str(promotion.get("promotion_type") or ""),
                     deal_price=row.get("deal_price"), start_date=row.get("start_date") or "",
                     finish_date=row.get("finish_date") or "",
+                    **({"offer_id": row.get("offer_id") or ""} if promotion["promotion_type"] in OFFER_ENROLLMENT_TYPES else {}),
                 )
             else:
                 response = adapter.withdraw_item(
@@ -735,21 +1310,47 @@ def _execute_item(store, job_id, adapter, promotion, row, action, previous_resul
             ) or (result.get("net_proceeds_before") if same_currency else None)
         try:
             if hasattr(store, "set_item_status"):
-                store.set_item_status(
+                response_status = _official_item_status(response or {})
+                local_item_id = row.get("item_local_id")
+                updated = store.set_item_status(
                     int(promotion.get("id") or 0),
                     str(row.get("item_id") or ""),
-                    "pending_approval" if action == "enroll" else "withdrawn",
-                    **({"offer_id": row["offer_id"]} if action == "withdraw" and row.get("offer_id") else {}),
+                    response_status if action == "enroll" and response_status in APPLIED_STATUSES
+                    else "pending_approval" if action == "enroll" else "withdrawn",
+                    item_local_id=local_item_id,
+                    **({"offer_id": row["offer_id"]} if row.get("offer_id") else {}),
                 )
+                if updated == 0 and hasattr(store, "item_rows"):
+                    refreshed = store.item_rows(
+                        int(promotion.get("id") or 0), str(row.get("item_id") or ""),
+                    )
+                    if row.get("offer_id"):
+                        refreshed = [item for item in refreshed if str(item.get("offer_id") or "") == str(row["offer_id"])]
+                    if len(refreshed) == 1:
+                        local_item_id = refreshed[0]["id"]
+                        updated = store.set_item_status(
+                            int(promotion.get("id") or 0), str(row.get("item_id") or ""),
+                            response_status if action == "enroll" and response_status in APPLIED_STATUSES
+                            else "pending_approval" if action == "enroll" else "withdrawn",
+                            item_local_id=local_item_id,
+                        )
+                if updated == 0:
+                    raise ValueError("活动商品快照已变化，未能写回最新数量")
             if action == "enroll" and hasattr(store, "record_item_submission"):
                 applied_response = dict(response or {})
                 if applied_response.get("price") is None and same_currency and promotion.get("promotion_type") in {"DEAL", "PRICE_DISCOUNT"}:
                     applied_response["price"] = row.get("deal_price")
-                store.record_item_submission(int(promotion.get("id") or 0), str(row.get("item_id") or ""), applied_response)
-        except Exception:
+                store.record_item_submission(
+                    int(promotion.get("id") or 0), str(row.get("item_id") or ""), applied_response,
+                    item_local_id=local_item_id,
+                    offer_id=str(row.get("offer_id") or "") if row.get("offer_id") else None,
+                )
+        except Exception as exc:
             # The remote mutation already succeeded; a stale local snapshot
             # must not report that operation as a failed enrollment.
-            pass
+            warning = "平台操作成功，但本地候选/参与数量更新失败，请同步活动：" + str(exc)
+            result["message"] = ((result.get("message") or "") + "；" + warning).lstrip("；")
+            result["local_sync_failed"] = True
     except MercadoAPIError as exc:
         message = str(exc)
         result.update(status="unknown" if "结果未知" in message else "failed", message=message)
@@ -762,15 +1363,25 @@ def _execute_item(store, job_id, adapter, promotion, row, action, previous_resul
 
 def _promotion_worker_count(total):
     try:
-        configured = int(os.environ.get("BIT_PROMOTION_WORKERS", "4"))
+        configured = int(os.environ.get("BIT_PROMOTION_WORKERS", "8"))
     except (TypeError, ValueError):
-        configured = 4
-    return max(1, min(8, configured, total or 1))
+        configured = 8
+    return max(1, min(16, configured, total or 1))
 
 
-def _execute_job(store, job_id, adapter, promotion, rows, action):
-    """Bounded independent workers; checkpoint every start and completion."""
-    previous_results = {entry["item_id"]: entry for entry in store.enrollment_results(int(promotion.get("id") or 0))}
+def _execute_job(store, job_id, adapter, promotion, rows, action, *, finish=True, prior_results=None):
+    """Bounded independent workers with compact, throttled progress checkpoints."""
+    selected_item_ids = [str(row.get("item_id") or "") for row in rows if row.get("item_id")]
+    result_loader = getattr(
+        store, "enrollment_submission_guards",
+        getattr(store, "unresolved_enrollment_results", store.enrollment_results),
+    )
+    previous_results = {
+        _enrollment_identity(promotion, entry): entry
+        for entry in result_loader(
+            int(promotion.get("id") or 0), item_ids=selected_item_ids,
+        )
+    } if action == "enroll" else {}
     groups = {}
     for index, row in enumerate(rows):
         # Multiple offers for one listing must never overlap remotely.
@@ -780,11 +1391,29 @@ def _execute_job(store, job_id, adapter, promotion, rows, action):
         pending.put(group)
     results_by_index = {}
     progress_lock = threading.Lock()
+    progress = {"saved": False, "completed": 0, "last_saved_at": 0.0}
 
-    def save(index, result):
+    def save(index, result, *, completed=False):
         with progress_lock:
             results_by_index[index] = result
-            store.save_job_progress(job_id, results=[results_by_index[key] for key in sorted(results_by_index)])
+            if completed:
+                progress["completed"] += 1
+            now = time.monotonic()
+            should_checkpoint = (
+                not progress["saved"]
+                or completed and (
+                    progress["completed"] % 64 == 0
+                    or now - progress["last_saved_at"] >= 2
+                )
+            )
+            if should_checkpoint:
+                store.save_job_progress(
+                    job_id,
+                    results=list(prior_results or [])
+                    + [results_by_index[key] for key in sorted(results_by_index)],
+                )
+                progress["saved"] = True
+                progress["last_saved_at"] = now
 
     def run_worker():
         worker_adapter = adapter
@@ -802,9 +1431,15 @@ def _execute_job(store, job_id, adapter, promotion, rows, action):
                     group = pending.get_nowait()
                 except queue.Empty:
                     return
+                uncertain_item = False
                 for index, row in group:
                     save(index, dict(_item_result(row), status="unknown", message="正在提交，平台结果尚未确认，请勿重复报名"))
-                    if initialization_error:
+                    if uncertain_item and action == "enroll":
+                        result = dict(
+                            _item_result(row), status="blocked",
+                            message="同一商品前一优惠报名结果未知，为避免重复提交，本优惠已自动屏蔽",
+                        )
+                    elif initialization_error:
                         result = dict(_item_result(row), message="授权初始化失败，未提交：" + initialization_error)
                     else:
                         try:
@@ -812,7 +1447,13 @@ def _execute_job(store, job_id, adapter, promotion, rows, action):
                         except Exception as exc:
                             # Unexpected failures cannot silently discard the rest of a batch.
                             result = dict(_item_result(row), status="unknown", message="执行异常，需核实官方状态：" + str(exc))
-                    save(index, result)
+                    if action == "enroll" and result.get("status") == "unknown":
+                        uncertain_item = True
+                    if action == "enroll" and result.get("status") in {"unknown", "succeeded"}:
+                        previous_results[_enrollment_identity(promotion, result)] = dict(
+                            result, finished_at=_now().isoformat(),
+                        )
+                    save(index, result, completed=True)
         finally:
             if owns_adapter and worker_adapter is not adapter:
                 try:
@@ -834,6 +1475,10 @@ def _execute_job(store, job_id, adapter, promotion, rows, action):
             if index not in results_by_index:
                 results_by_index[index] = dict(_item_result(row), status="blocked",
                     message="执行线程异常，该商品未提交：" + worker_errors[0])
-    results = [results_by_index[index] for index in sorted(results_by_index)]
-    store.finish_job(job_id, results=results)
+    completed_results = [results_by_index[index] for index in sorted(results_by_index)]
+    # Keep remotely submitted outcomes first so a bounded execution-log view
+    # does not get filled entirely by preflight exclusions.
+    results = completed_results + list(prior_results or []) if finish else completed_results
+    if finish:
+        store.finish_job(job_id, results=results)
     return {"job_id": job_id, "action": action, "results": results}

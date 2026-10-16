@@ -1,0 +1,17 @@
+泽顺 ERP 界面统一验收（2026-10-12，Asia/Shanghai）
+
+技能：figma-implement-design、figma-create-design-system-rules、playwright-interactive 已安装。
+覆盖：19 个主工作台/独立页面模板接入共享样式。未修改 Yandex 独立应用和浏览器插件。
+页面截图：使用真实模板与模拟数据离线渲染；截图中的服务、余额和公告错误属于模拟接口结果，不代表实际运行服务状态。
+视觉检查：总览、订单、产品列表在 1440/1024/390 px；登录与个人资料在 1440/390 px。13 个视图均无页面横向溢出。
+回归：33 passed, 7 deselected。手机订单页 373×844 的列表高度问题已修正，相关 3 个尺寸的固定视口测试通过。
+模板：19 个模板通过 Jinja 语法和样式加载顺序检查；git diff --check 通过。
+
+以下 7 项旧测试在修改前的 HEAD 模板/样式副本上同样失败，未作为本次视觉改动的通过项：
+- test_navigation_search_collapse_and_permissions：系统分组可见性断言超时。
+- test_mobile_navigation_focus_escape_and_backdrop：订单固定视口使用 overflow:hidden，与旧断言不符。
+- test_reputation_defaults_to_site_seven_day_orders_and_toggles_sort：现有声誉表格 16 列，旧断言要求 17 列。
+- test_standard_size_chart_library_download_and_measured_rows：旧选择器匹配两个折叠区。
+- test_standard_shoe_sizes_use_official_numeric_units_without_conversion：旧选择器匹配两个折叠区。
+- test_filled_builtin_download_save_and_upload_to_other_store：旧脚本未展开模板区域即尝试选择。
+- test_reputation_store_notices_appear_in_matching_warning_cell：现有告警内容与旧预期不符。

@@ -46,9 +46,10 @@ def agent_interface(monkeypatch, tmp_path):
     return user, store, bit_interface.app.test_client()
 
 
-def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch, tmp_path):
+def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch, tmp_path, subscribed_workbench_account):
     user, store, client = agent_interface
     (tmp_path / "local_agent.py").write_text("# test source", encoding="utf-8")
+    (tmp_path / "install-agent-forever.ps1").write_text("# offline install fixture", encoding="utf-8")
     monkeypatch.setattr(bit_interface, "PROJECT_ROOT", tmp_path)
     monkeypatch.delenv("BIT_LOCAL_AGENT_EXECUTABLE", raising=False)
     download = client.get("/api/local-agents/download")
@@ -56,7 +57,7 @@ def test_console_download_enroll_heartbeat_and_list(agent_interface, monkeypatch
     assert download.headers["X-Agent-Package-Format"] == "python-source"
     with zipfile.ZipFile(io.BytesIO(download.data)) as archive:
         config = json.loads(archive.read("local-agent.json"))
-    assert config["server_url"] == "https://wuhanzeshun.com"
+    assert config["server_url"] == "https://wuhanzeshun.cn"
 
     enrollment_token = config["enrollment_token"]
     enrolled = client.post(

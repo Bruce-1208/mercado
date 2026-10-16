@@ -1,0 +1,532 @@
+[
+  {
+    "file": "tests/test_1688_dimensions_browser.py",
+    "exit": 0,
+    "seconds": 16.87
+  },
+  {
+    "file": "tests/test_1688_product_management_browser.py",
+    "exit": 1,
+    "seconds": 53.37
+  },
+  {
+    "file": "tests/test_1688_sku_images_browser.py",
+    "exit": 0,
+    "seconds": 36.79
+  },
+  {
+    "file": "tests/test_account_billing.py",
+    "exit": 1,
+    "seconds": 2.52
+  },
+  {
+    "file": "tests/test_action_center_batch_browser.py",
+    "exit": 0,
+    "seconds": 3.03
+  },
+  {
+    "file": "tests/test_action_center_multi_filters_browser.py",
+    "exit": 0,
+    "seconds": 2.65
+  },
+  {
+    "file": "tests/test_agent_admin_browser.py",
+    "exit": 0,
+    "seconds": 9.48
+  },
+  {
+    "file": "tests/test_ai_billing_browser.py",
+    "exit": 0,
+    "seconds": 4.08
+  },
+  {
+    "file": "tests/test_ai_cost_visibility_browser.py",
+    "exit": 1,
+    "seconds": 51.07
+  },
+  {
+    "file": "tests/test_ai_original_autopublish_browser.py",
+    "exit": 1,
+    "seconds": 7.13
+  },
+  {
+    "file": "tests/test_ai_original_bulk_net_browser.py",
+    "exit": 0,
+    "seconds": 7.66
+  },
+  {
+    "file": "tests/test_ai_original_fixed_cards_browser.py",
+    "exit": 0,
+    "seconds": 8.41
+  },
+  {
+    "file": "tests/test_ai_original_net_save_browser.py",
+    "exit": 0,
+    "seconds": 11.94
+  },
+  {
+    "file": "tests/test_ai_original_platforms_browser.py",
+    "exit": 0,
+    "seconds": 6.69
+  },
+  {
+    "file": "tests/test_ai_original_sku_images_browser.py",
+    "exit": 0,
+    "seconds": 6.1
+  },
+  {
+    "file": "tests/test_ai_weight_price_browser.py",
+    "exit": 0,
+    "seconds": 84.02
+  },
+  {
+    "file": "tests/test_ai_weight_price_browser_dimensions.py",
+    "exit": 0,
+    "seconds": 4.23
+  },
+  {
+    "file": "tests/test_ai_weight_price_extension_verification_browser.py",
+    "exit": 0,
+    "seconds": 2.47
+  },
+  {
+    "file": "tests/test_ai_weight_price_slider.py",
+    "exit": 0,
+    "seconds": 21.85
+  },
+  {
+    "file": "tests/test_appeal_recent_failures.py",
+    "exit": 1,
+    "seconds": 3.42
+  },
+  {
+    "file": "tests/test_automation_center_browser.py",
+    "exit": 0,
+    "seconds": 2.97
+  },
+  {
+    "file": "tests/test_billing_print_browser.py",
+    "exit": 1,
+    "seconds": 44.42
+  },
+  {
+    "file": "tests/test_billing_print_wallet_browser.py",
+    "exit": 0,
+    "seconds": 3.68
+  },
+  {
+    "file": "tests/test_bit_ai_infringements_only.py",
+    "exit": 0,
+    "seconds": 1.57
+  },
+  {
+    "file": "tests/test_bit_appeal_stability.py",
+    "exit": 0,
+    "seconds": 2.87
+  },
+  {
+    "file": "tests/test_bit_browser_api_rate.py",
+    "exit": 0,
+    "seconds": 1.96
+  },
+  {
+    "file": "tests/test_bit_browser_lifecycle.py",
+    "exit": 0,
+    "seconds": 1.71
+  },
+  {
+    "file": "tests/test_bit_collection_localization.py",
+    "exit": 0,
+    "seconds": 2.41
+  },
+  {
+    "file": "tests/test_bit_collection_orchestration.py",
+    "exit": 1,
+    "seconds": 1.47
+  },
+  {
+    "file": "tests/test_bit_interface_mercado_collection.py",
+    "exit": 1,
+    "seconds": 1.67
+  },
+  {
+    "file": "tests/test_bit_mercado_limit.py",
+    "exit": 0,
+    "seconds": 1.31
+  },
+  {
+    "file": "tests/test_bit_mercado_reputation.py",
+    "exit": 1,
+    "seconds": 1.39
+  },
+  {
+    "file": "tests/test_bit_playwright_common.py",
+    "exit": 0,
+    "seconds": 1.25
+  },
+  {
+    "file": "tests/test_browser_extension_appeal.py",
+    "exit": 0,
+    "seconds": 1.4
+  },
+  {
+    "file": "tests/test_browser_extension_mail.py",
+    "exit": 0,
+    "seconds": 1.4
+  },
+  {
+    "file": "tests/test_browser_extension_management_categories.py",
+    "exit": 1,
+    "seconds": 1.49
+  },
+  {
+    "file": "tests/test_browser_extension_models.py",
+    "exit": 0,
+    "seconds": 1.3
+  },
+  {
+    "file": "tests/test_claim_chat_browser.py",
+    "exit": 0,
+    "seconds": 11.44
+  },
+  {
+    "file": "tests/test_client_update_browser.py",
+    "exit": 1,
+    "seconds": 13.27
+  },
+  {
+    "file": "tests/test_common_date_filters_browser.py",
+    "exit": 1,
+    "seconds": 17.45
+  },
+  {
+    "file": "tests/test_console_navigation.py",
+    "exit": 1,
+    "seconds": 38.13
+  },
+  {
+    "file": "tests/test_console_preload_browser.py",
+    "exit": 1,
+    "seconds": 12.15
+  },
+  {
+    "file": "tests/test_console_ui_browser.py",
+    "exit": 1,
+    "seconds": 68.67
+  },
+  {
+    "file": "tests/test_console_workflow_browser.py",
+    "exit": 0,
+    "seconds": 9.77
+  },
+  {
+    "file": "tests/test_customer_service_preload_browser.py",
+    "exit": 0,
+    "seconds": 3.45
+  },
+  {
+    "file": "tests/test_erp_density_browser.py",
+    "exit": 0,
+    "seconds": 12.04
+  },
+  {
+    "file": "tests/test_erp_mercadolibre_batch_collector.py",
+    "exit": 0,
+    "seconds": 7.08
+  },
+  {
+    "file": "tests/test_infringement_knowledge_browser.py",
+    "exit": 0,
+    "seconds": 19.22
+  },
+  {
+    "file": "tests/test_knowledge_product_collection_browser.py",
+    "exit": 0,
+    "seconds": 10.19
+  },
+  {
+    "file": "tests/test_local_agent_browser_rate_context.py",
+    "exit": 0,
+    "seconds": 1.32
+  },
+  {
+    "file": "tests/test_mercado_attribute_preflight_browser.py",
+    "exit": 1,
+    "seconds": 54.56
+  },
+  {
+    "file": "tests/test_mercado_category_filters_browser.py",
+    "exit": 0,
+    "seconds": 7.32
+  },
+  {
+    "file": "tests/test_mercado_click_delay.py",
+    "exit": 0,
+    "seconds": 1.71
+  },
+  {
+    "file": "tests/test_mercado_collection_detail_browser.py",
+    "exit": 0,
+    "seconds": 8.2
+  },
+  {
+    "file": "tests/test_mercado_collection_quality_browser.py",
+    "exit": 0,
+    "seconds": 6.54
+  },
+  {
+    "file": "tests/test_mercado_infringement_browser.py",
+    "exit": 1,
+    "seconds": 10.94
+  },
+  {
+    "file": "tests/test_mercado_page_facts.py",
+    "exit": 0,
+    "seconds": 2.46
+  },
+  {
+    "file": "tests/test_minimum_publish_net_browser.py",
+    "exit": 0,
+    "seconds": 6.64
+  },
+  {
+    "file": "tests/test_model_balance_browser.py",
+    "exit": 0,
+    "seconds": 4.19
+  },
+  {
+    "file": "tests/test_order_detail_browser.py",
+    "exit": 0,
+    "seconds": 15.33
+  },
+  {
+    "file": "tests/test_order_viewport_browser.py",
+    "exit": 0,
+    "seconds": 6.27
+  },
+  {
+    "file": "tests/test_order_warehouse_browser.py",
+    "exit": 1,
+    "seconds": 7.46
+  },
+  {
+    "file": "tests/test_pdd_orders_browser.py",
+    "exit": 1,
+    "seconds": 1.72
+  },
+  {
+    "file": "tests/test_pre_sale_products_browser.py",
+    "exit": 0,
+    "seconds": 7.1
+  },
+  {
+    "file": "tests/test_price_competition_browser.py",
+    "exit": 0,
+    "seconds": 4.85
+  },
+  {
+    "file": "tests/test_product_detail_drawers_browser.py",
+    "exit": 1,
+    "seconds": 9.19
+  },
+  {
+    "file": "tests/test_product_developer_filter_browser.py",
+    "exit": 0,
+    "seconds": 7.92
+  },
+  {
+    "file": "tests/test_product_diagnosis_browser.py",
+    "exit": 0,
+    "seconds": 12.29
+  },
+  {
+    "file": "tests/test_product_filter_layout_browser.py",
+    "exit": 0,
+    "seconds": 6.37
+  },
+  {
+    "file": "tests/test_product_source_browser.py",
+    "exit": 0,
+    "seconds": 4.61
+  },
+  {
+    "file": "tests/test_promotion_pagination_browser.py",
+    "exit": 0,
+    "seconds": 8.77
+  },
+  {
+    "file": "tests/test_promotion_results_browser.py",
+    "exit": 0,
+    "seconds": 12.35
+  },
+  {
+    "file": "tests/test_promotion_stop_browser.py",
+    "exit": 0,
+    "seconds": 5.34
+  },
+  {
+    "file": "tests/test_publish_record_salesperson_browser.py",
+    "exit": 0,
+    "seconds": 10.7
+  },
+  {
+    "file": "tests/test_purchase_net_proceeds_browser.py",
+    "exit": 0,
+    "seconds": 12.23
+  },
+  {
+    "file": "tests/test_purchase_tracking_query_browser.py",
+    "exit": 0,
+    "seconds": 43.68
+  },
+  {
+    "file": "tests/test_report_audit_browser.py",
+    "exit": 0,
+    "seconds": 15.48
+  },
+  {
+    "file": "tests/test_reputation_browser_sync.py",
+    "exit": 1,
+    "seconds": 1.82
+  },
+  {
+    "file": "tests/test_salesperson_stats_browser.py",
+    "exit": 0,
+    "seconds": 5.98
+  },
+  {
+    "file": "tests/test_standalone_preload_browser.py",
+    "exit": 0,
+    "seconds": 16.63
+  },
+  {
+    "file": "tests/test_store_link_enrollment_browser.py",
+    "exit": 0,
+    "seconds": 12.46
+  },
+  {
+    "file": "tests/test_store_link_metrics_browser.py",
+    "exit": 0,
+    "seconds": 12.9
+  },
+  {
+    "file": "tests/test_store_link_video_browser.py",
+    "exit": 0,
+    "seconds": 10.79
+  },
+  {
+    "file": "tests/test_unified_workbench_ui.py",
+    "exit": 0,
+    "seconds": 27.17
+  },
+  {
+    "file": "tests/test_video_upload_logs_browser.py",
+    "exit": 0,
+    "seconds": 8.86
+  },
+  {
+    "file": "tests/test_weight_dimensions_browser_recovery.py",
+    "exit": 1,
+    "seconds": 2.45
+  },
+  {
+    "file": "tests/test_workbench_audit_browser.py",
+    "exit": 0,
+    "seconds": 4.82
+  },
+  {
+    "file": "tests/test_workbench_profile_browser.py",
+    "exit": 0,
+    "seconds": 5.84
+  },
+  {
+    "file": "tests/test_yandex_unified_orders_browser.py",
+    "exit": 1,
+    "seconds": 13.8
+  },
+  {
+    "file": "tests/test_zeshun_1688_preferences_browser.py",
+    "exit": 0,
+    "seconds": 8.17
+  },
+  {
+    "file": "tests/test_zeshun_appeal_page_browser.py",
+    "exit": 0,
+    "seconds": 2.26
+  },
+  {
+    "file": "tests/test_zeshun_appeal_popup_browser.py",
+    "exit": 0,
+    "seconds": 4.5
+  },
+  {
+    "file": "tests/test_zeshun_batch_connection_browser.py",
+    "exit": 0,
+    "seconds": 26.01
+  },
+  {
+    "file": "tests/test_zeshun_browser_extension.py",
+    "exit": 1,
+    "seconds": 2.43
+  },
+  {
+    "file": "tests/test_zeshun_category_browser.py",
+    "exit": 0,
+    "seconds": 3.48
+  },
+  {
+    "file": "tests/test_zeshun_data_card_browser.py",
+    "exit": 0,
+    "seconds": 44.9
+  },
+  {
+    "file": "tests/test_zeshun_mercado_price_browser.py",
+    "exit": 0,
+    "seconds": 4.58
+  },
+  {
+    "file": "tests/test_zeshun_order_analysis_browser.py",
+    "exit": 0,
+    "seconds": 3.52
+  },
+  {
+    "file": "tests/test_zeshun_popup_browser.py",
+    "exit": 1,
+    "seconds": 167.52
+  },
+  {
+    "file": "tests/test_zeshun_popup_roles_browser.py",
+    "exit": 0,
+    "seconds": 23.26
+  },
+  {
+    "file": "tests/test_zeshun_runtime_recovery_browser.py",
+    "exit": 1,
+    "seconds": 48.2
+  },
+  {
+    "file": "tests/test_zeshun_usd_prices_browser.py",
+    "exit": 0,
+    "seconds": 16.21
+  },
+  {
+    "file": "tests/test_zying_order_extension_browser.py",
+    "exit": 0,
+    "seconds": 18.65
+  },
+  {
+    "file": "tests/test_zying_order_sync.py",
+    "exit": 1,
+    "seconds": 22.31
+  },
+  {
+    "file": "tests/test_zying_order_sync_browser.py",
+    "exit": 1,
+    "seconds": 14.67
+  },
+  {
+    "file": "tests/test_zying_order_sync_speed.py",
+    "exit": 0,
+    "seconds": 10.4
+  }
+]

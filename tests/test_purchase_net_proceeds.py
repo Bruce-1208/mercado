@@ -51,6 +51,8 @@ class Cursor:
             row.update(net_proceeds_usd=amount, profitability_source=source,
                        profitability_updated_at=checked_at, source_snapshot_json=snapshot,
                        updated_at=updated_at, profitability_error=None)
+            if "`review_status` = 'unreviewed'" in sql:
+                row["review_status"] = "unreviewed"
             self.rowcount = 1
         elif sql.startswith("UPDATE `erp_mercadolibre_store_links`"):
             amount, updated_at, row_id = params
@@ -291,6 +293,68 @@ def test_ai_original_and_zying_snapshot_overrides_are_preserved(run_save):
     assert saved["another_fact"] == "保留"
     assert saved["purchase_net_proceeds"]["net_proceeds_usd"] == "7.5000"
     assert json.loads(connection.products[1]["source_snapshot_json"])["zying_net_proceeds_usd"] == 7.5
+
+
+def test_changed_ai_original_net_proceeds_resets_all_reviews(run_save):
+    original = {
+        "marketplace_listings": {
+            "mercadolibre": {"review_status": "approved", "title": "Mercado 标题"},
+            "amazon": {"review_status": "approved", "title": "Amazon title"},
+            "yandex": {"review_status": "approved", "title": "Yandex title"},
+        },
+        "another_fact": "保留",
+    }
+    connection = Connection(products=[product(
+        source_type="ai_original", review_status="approved",
+        source_snapshot_json=json.dumps(original, ensure_ascii=False),
+    )])
+
+    result, connection, _ = run_save(
+        connection, purchase_cost="70", purchase_net_proceeds_ratio=150,
+    )
+
+    assert result["net_proceeds_sync"]["product_changed"] == 1
+    saved_row = connection.products[0]
+    saved = json.loads(saved_row["source_snapshot_json"])
+    assert saved_row["review_status"] == "unreviewed"
+    assert saved["marketplace_listings"]["amazon"]["review_status"] == "unreviewed"
+    assert saved["marketplace_listings"]["yandex"]["review_status"] == "unreviewed"
+    assert saved["marketplace_listings"]["mercadolibre"]["review_status"] == "approved"
+    assert saved["another_fact"] == "保留"
+    update_sql = next(
+        sql for sql, _ in connection.calls
+        if sql.startswith("UPDATE `erp_mercadolibre_products`")
+    )
+    assert "`review_status` = 'unreviewed'" in update_sql
+
+
+def test_unchanged_ai_original_net_proceeds_preserves_all_reviews(run_save):
+    original = {
+        "marketplace_listings": {
+            "amazon": {"review_status": "approved"},
+            "yandex": {"review_status": "approved"},
+        },
+    }
+    connection = Connection(products=[product(
+        source_type="ai_original", net_proceeds_usd=Decimal("7.5000"),
+        review_status="approved", source_snapshot_json=json.dumps(original),
+    )])
+
+    result, connection, _ = run_save(
+        connection, purchase_cost="70", purchase_net_proceeds_ratio=150,
+    )
+
+    assert result["net_proceeds_sync"]["product_changed"] == 0
+    saved_row = connection.products[0]
+    saved = json.loads(saved_row["source_snapshot_json"])
+    assert saved_row["review_status"] == "approved"
+    assert saved["marketplace_listings"]["amazon"]["review_status"] == "approved"
+    assert saved["marketplace_listings"]["yandex"]["review_status"] == "approved"
+    update_sql = next(
+        sql for sql, _ in connection.calls
+        if sql.startswith("UPDATE `erp_mercadolibre_products`")
+    )
+    assert "`review_status` = 'unreviewed'" not in update_sql
 
 
 def test_audit_failure_rolls_back_orders_products_and_links(run_save):

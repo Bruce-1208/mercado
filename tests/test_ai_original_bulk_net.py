@@ -1,6 +1,7 @@
 """Batch economics use current locked values and commit the whole selection."""
 from copy import deepcopy
 from decimal import Decimal
+import json
 
 import pytest
 
@@ -12,7 +13,13 @@ from flask import Flask
 
 class BatchDB:
     def __init__(self, amounts, stale=False):
-        self.rows = {i: {"id": i, "net_proceeds_usd": value} for i, value in amounts.items()}
+        self.rows = {i: {"id": i, "net_proceeds_usd": value,
+                         "review_status": "approved", "source_snapshot_json": json.dumps({
+                             "marketplace_listings": {
+                                 "amazon": {"review_status": "approved"},
+                                 "yandex": {"review_status": "approved"},
+                             },
+                         })} for i, value in amounts.items()}
         self.queries = []
         self.committed = self.rolled_back = self.closed = False
         self.stale = stale
@@ -24,8 +31,11 @@ class BatchDB:
     def execute(self, sql, params):
         self.queries.append((sql, params))
         if sql.startswith('UPDATE'):
-            amount, row_id = params
-            if not self.stale: self.rows[row_id]['net_proceeds_usd'] = amount
+            amount, snapshot, row_id = params
+            if not self.stale:
+                self.rows[row_id]['net_proceeds_usd'] = amount
+                self.rows[row_id]['source_snapshot_json'] = snapshot
+                self.rows[row_id]['review_status'] = 'unreviewed'
     def fetchall(self): return deepcopy(list(self.rows.values()))
     def fetchone(self): return deepcopy(self.rows[self.queries[-1][1][0]])
     def commit(self): self.committed = True
@@ -47,7 +57,14 @@ def test_ratio_multiplies_each_current_net_and_preserves_unselected():
     result = update(db, {'net_proceeds_ratio': 150}, ids=(2, 1, 1))
     assert db.rows[1]['net_proceeds_usd'] == Decimal('15.0000')
     assert db.rows[2]['net_proceeds_usd'] == Decimal('30.1851')
-    assert result == {'requested': 2, 'changed': 2, 'skipped': 0, 'updated_fields': ['net_proceeds_usd']}
+    assert {row['review_status'] for row in db.rows.values()} == {'unreviewed'}
+    assert all(
+        draft['review_status'] == 'unreviewed'
+        for row in db.rows.values()
+        for draft in json.loads(row['source_snapshot_json'])['marketplace_listings'].values()
+    )
+    assert result == {'requested': 2, 'changed': 2, 'skipped': 0,
+                      'updated_fields': ['net_proceeds_usd', 'review_status']}
     assert 'FOR UPDATE' in db.queries[0][0]
     assert db.committed and db.closed and not db.rolled_back
 

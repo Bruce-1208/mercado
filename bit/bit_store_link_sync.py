@@ -49,8 +49,8 @@ STORE_LINK_AUTO_CHECK_SECONDS = max(
 STORE_LINK_DETAIL_ATTRIBUTES = (
     "id", "site_id", "title", "permalink", "secure_thumbnail", "thumbnail",
     "pictures", "status", "sub_status", "deleted", "price", "currency_id", "available_quantity",
-    "sold_quantity", "seller_custom_field", "category_id", "listing_type_id",
-    "shipping", "attributes", "variations", "seller_id", "cbt_item_id",
+    "sold_quantity", "user_product_id", "seller_custom_field", "category_id", "listing_type_id",
+    "shipping", "attributes", "variations", "seller_id", "cbt_item_id", "family_id", "family_name",
     "net_proceeds", "start_time", "date_created",
 )
 STORE_LINK_STATUSES = ("active", "paused", "closed", "under_review")
@@ -287,7 +287,9 @@ def _marketplace_item_with_quality(client, item_id, *, attributes):
         return detail
     detail = dict(detail)
     try:
-        performance = client.request("GET", f"/item/{item_id}/performance")
+        up = str(detail.get("user_product_id") or "")
+        path = f"/user-product/{up}/performance" if up else f"/item/{item_id}/performance"
+        performance = client.request("GET", path)
         if isinstance(performance, dict):
             detail["listing_performance"] = {
                 key: performance.get(key) for key in ("score", "level", "calculated_at")
@@ -364,6 +366,7 @@ def _sync_store(record: dict) -> dict:
     refreshed_after_unauthorized = False
     while True:
         try:
+            scan_started_at = _now_text()
             marker = uuid.uuid4().hex
             batch_ids = []
             batch_items = []
@@ -465,7 +468,7 @@ def _sync_store(record: dict) -> dict:
                             batch_ids, batch_items = [], []
             if batch_ids:
                 write_batch(batch_ids, batch_items)
-            finalize_store_snapshot(token_id, marker)
+            finalize_store_snapshot(token_id, marker, scan_started_at=scan_started_at)
             return {
                 "store": store_name,
                 "token_id": token_id,

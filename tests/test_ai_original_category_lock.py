@@ -57,6 +57,27 @@ def test_manual_category_lock_syncs_draft_source_and_row_and_keeps_other_platfor
     assert saved["ai_original"]["status"] == "failed"
 
 
+def test_legacy_category_change_creates_invalidated_preparation_checkpoint(edit):
+    snapshot = {
+        "ai_original": {
+            "status": "completed", "category_id": "CBT1",
+            "attributes": [{"id": "MATERIAL", "value_name": "Steel"}],
+        },
+        "source": {"category_id": "CBT1"},
+    }
+
+    saved, _ = edit(snapshot, {
+        "category_id": "CBT123", "category_name": "Storage",
+        "category_locked": True,
+    })
+
+    assert saved["ai_original"]["preparation"] == {
+        "category_ready": False,
+        "variations_ready": False,
+        "required_ready": False,
+    }
+
+
 def test_copy_only_edit_preserves_locked_category_and_checkpoint(edit):
     checkpoint = {"image_ready": True, "copy_ready": True, "category_ready": True,
                   "variations_ready": True, "required_ready": False}
@@ -117,7 +138,8 @@ def test_manual_source_sku_override_keeps_original_and_unrelated_checkpoint(edit
     assert saved["ai_original"]["source_variations"] == edited_variations
     assert saved["source"]["variations"] == edited_variations
     assert saved["ai_original"]["preparation"] == {**checkpoint, "variations_ready": False, "required_ready": False}
-    assert saved["marketplace_listings"]["yandex"] == snapshot["marketplace_listings"]["yandex"]
+    assert saved["marketplace_listings"]["yandex"]["title"] == "Other draft"
+    assert saved["marketplace_listings"]["yandex"]["review_status"] == "unreviewed"
 
 
 def test_unchanged_editor_arrays_and_category_preserve_checkpoint(edit):

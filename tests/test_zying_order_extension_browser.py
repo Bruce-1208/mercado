@@ -110,10 +110,11 @@ def test_click_without_request_stops_instead_of_skipping_orders():
         assert page.evaluate("window.fetch.name") != "wrappedFetch"
 
 
-def test_popup_dates_login_progress_and_stop():
+@pytest.mark.parametrize("width", [390, 1440])
+def test_popup_dates_login_progress_and_stop(width):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page(viewport={"width": 440, "height": 900})
+        page = browser.new_page(viewport={"width": width, "height": 900})
         errors = []
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.route("https://extension.test/**", lambda route: route.fulfill(path=str(EXTENSION / route.request.url.rsplit("/", 1)[-1])))
@@ -128,6 +129,7 @@ def test_popup_dates_login_progress_and_stop():
               if(message.type==='GET_ZESHUN_CATEGORIES') return callback({ok:true,rows:[]});
               if(message.type==='START_ZYING_ORDER_SYNC') orderState={request_id:'run1',phase:'loading',running:true,
                 date_start:message.date_start,date_end:message.date_end,order_status:message.order_status,total:12,prepared:10,message:'正在准备订单，可先登录智赢'};
+              if(message.type==='CONFIRM_ZYING_ORDER_LOGIN' && window.confirmError) return setTimeout(() => callback({ok:false,error:window.confirmError}), 100);
               if(message.type==='CONFIRM_ZYING_ORDER_LOGIN') orderState={...orderState,phase:'syncing',message:'正在同步',completed:10,updated:8,skipped:1,failed:1};
               if(message.type==='STOP_ZYING_ORDER_SYNC') orderState={...orderState,phase:'stopped',running:false,message:'任务已结束'};
               callback({ok:true,state:structuredClone(orderState)});
@@ -155,14 +157,62 @@ def test_popup_dates_login_progress_and_stop():
         assert page.evaluate("messages.find(m => m.type === 'START_ZYING_ORDER_SYNC')") == {
             "type": "START_ZYING_ORDER_SYNC", "date_start": "2026-10-01", "date_end": "2026-10-08", "order_status": "@转运"}
         assert page.locator("#zying-order-order-status").is_disabled()
+        page.evaluate("window.confirmError='未检测到智赢订单列表，请登录后重试'")
+        page.locator("#zying-order-confirm").focus()
+        page.keyboard.press("Enter")
+        page.wait_for_function("document.getElementById('zying-order-status').textContent.includes('正在确认')")
+        page.wait_for_function("document.getElementById('zying-order-status').textContent.includes('未检测到')")
+        polls = page.evaluate("messages.filter(m => m.type === 'GET_ZYING_ORDER_STATUS').length")
+        page.wait_for_function("count => messages.filter(m => m.type === 'GET_ZYING_ORDER_STATUS').length > count", arg=polls)
+        assert "未检测到" in page.locator("#zying-order-status").inner_text()
+        assert page.locator("#zying-order-confirm").is_enabled()
+        page.evaluate("window.confirmError=null")
         page.locator("#zying-order-confirm").click()
         page.wait_for_function("document.getElementById('zying-order-summary').textContent.includes('10 / 12')")
-        artifact = ROOT / "artifacts/zying-order-extension-20261008"
+        artifact = ROOT / "artifacts/zying-order-login-20261012"
         artifact.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(artifact / "popup.png"), full_page=True)
+        page.screenshot(path=str(artifact / f"popup-{width}.png"), full_page=True)
         page.locator("#zying-order-stop").click()
         page.wait_for_function("!document.getElementById('zying-order-start').disabled")
         assert page.locator("#zying-order-confirm").is_disabled()
         assert page.locator("#zying-order-date-start").is_enabled()
         assert not errors, errors
         browser.close()
+
+
+def test_runner_confirms_ready_order_page_without_reload_or_complete_event():
+    with order_page(count=1) as (reader, _):
+        page = reader.page
+        page.add_script_tag(content=PAGE_SCRIPT)
+        page.add_script_tag(content=(EXTENSION / 'zying-order-runner.js').read_text())
+        outcome = page.evaluate("""async () => {
+            const state = {request_id:'offline',phase:'waiting_login',running:true};
+            const writes = [];
+            window.chrome = {
+                alarms:{create() {}},
+                tabs:{get:async () => ({id:42,status:'loading'}),
+                    update:async () => {throw new Error('unexpected navigation');},
+                    reload:async () => {throw new Error('unexpected reload');}},
+                scripting:{executeScript:async ({func,args=[]}) => [{result:await func(...args)}]}
+            };
+            ZeshunOrderSync.configure({
+                storageGet:async () => ({zyingOrderSyncSession:{request_id:'offline',tab_id:42}}),
+                waitTab:async () => {throw new Error('must not wait for all resources');},
+                apiRequest:async (path, options) => {
+                    const action = path.split('/').pop();
+                    if (action === 'confirm') state.phase = 'syncing';
+                    if (action === 'batch') return {...state, rows:[{id:'2000000'}]};
+                    if (action === 'results') {
+                        writes.push(...JSON.parse(options.body).rows);
+                        state.phase = 'completed'; state.running = false;
+                    }
+                    return {...state};
+                }
+            });
+            await ZeshunOrderSync.confirm();
+            await ZeshunOrderSync.resume();
+            return {state,writes};
+        }""")
+        assert outcome['state']['phase'] == 'completed'
+        assert outcome['writes'][0]['order_id'] == '2000000'
+        assert outcome['writes'][0]['detail']['root'][0]['order_id'] == '100'

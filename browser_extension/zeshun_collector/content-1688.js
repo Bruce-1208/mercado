@@ -5,7 +5,7 @@
   // extension is reloaded.  Expose a version marker so the background worker
   // can reload that tab before starting a new search instead of silently
   // running stale search logic alongside this copy.
-  const CONTENT_VERSION = "1.8.69";
+  const CONTENT_VERSION = "1.8.89";
   const previousListener = globalThis.__zeshun1688ContentListener;
   if (globalThis.__zeshun1688ContentVersion === CONTENT_VERSION && previousListener &&
       chrome.runtime.onMessage.hasListener?.(previousListener)) return;
@@ -68,12 +68,14 @@
     };
     document.querySelectorAll([
       "#gallery img.preview-img", "#gallery .thumbnail img", "#gallery img",
-      ".detail-gallery img", ".od-gallery img", ".mod-detail-gallery img"
+      ".detail-gallery img", ".od-gallery img", ".mod-detail-gallery img",
+      "#desc-lazyload-container img", "#desc-lazyload-detail img", "#detailDescription img",
+      "[data-module='od_product_desc'] img", "[data-module='od_product_description'] img"
     ].join(",")).forEach(image => {
       add(image.dataset.src || image.dataset.lazyloadSrc || image.currentSrc || image.src);
     });
     if (!result.length) add(document.querySelector("meta[property='og:image']")?.content);
-    return result.slice(0, 20);
+    return result;
   }
 
   function collectProperties() {
@@ -383,6 +385,14 @@
     return rows;
   }
 
+  function supplierSkuImages(item) {
+    const read = value => Array.isArray(value) ? value.flatMap(read) : value && typeof value === 'object'
+      ? read(value.secure_url || value.url || value.source || value.src || value.imageUrl || '')
+      : typeof value === 'string' ? [absoluteImage(value)] : [];
+    return [...new Set(['image_url', 'imageUrl', 'imgUrl', 'image', 'pictureUrl', 'skuImageUrl',
+      'skuImage', 'largeImageUrl', 'bigImageUrl', 'picture', 'images'].flatMap(key => read(item[key])).filter(Boolean))];
+  }
+
   function aiWeightPriceReactSkus(pageData) {
     const selection = document.querySelector("#skuSelection[data-module='od_sku_selection']")
       || document.querySelector("[data-module='od_sku_selection']");
@@ -394,7 +404,7 @@
         .map(value => ({raw: value, amount: supplierPrice(value)}))
         .find(entry => entry.amount !== null && entry.amount > 0);
       const stock = item.canBookCount ?? item.availableQuantity ?? item.stock ?? item.quantity;
-      const image = item.imageUrl ?? item.imgUrl ?? item.image ?? item.pictureUrl;
+      const images = supplierSkuImages(item);
       return {
         id: String(item.skuId || ""),
         seller_sku: String(item.skuCode ?? item.sku ?? item.sellerSku ?? ""),
@@ -405,7 +415,8 @@
           ? (typeof price.raw === "string" ? price.raw : `¥${price.amount}`)
           : "",
         available_quantity: stock !== undefined && stock !== null && stock !== "" && Number.isFinite(Number(stock)) ? Number(stock) : null,
-        image_url: typeof image === "string" ? absoluteImage(image) : "",
+        image_url: images[0] || '', images,
+        supplier_option_ids: String(item.pvs || item.skuAttr || item.specId || ''),
         label_weight: String(label).match(/(?:重量|毛重|净重)?[^\d]{0,8}(\d+(?:\.\d+)?)\s*(kg|公斤|千克|g|克|斤)\b/i)?.[0] || "",
         ...(aiWeightPriceStructuredMetrics(item) || {})
       };
@@ -419,7 +430,8 @@
       id: item.id, sku_id: item.id, seller_sku: item.seller_sku,
       label: item.label, attribute_combinations: item.attribute_combinations,
       price: item.price, price_text: item.price_text,
-      available_quantity: item.available_quantity, image_url: item.image_url,
+      available_quantity: item.available_quantity, image_url: item.image_url, images: item.images,
+      supplier_option_ids: item.supplier_option_ids,
       raw_weight: item.label_weight, raw_text: item.label,
       ...(aiWeightPriceResolveMetrics(normalized.flatMap(list => list.filter(candidate => candidate.id === item.id)
         .map(aiWeightPriceStructuredMetrics))) || {})
@@ -536,27 +548,31 @@
     const imageClaims = (pageData.sku_image_sets || []).flat();
     const selection = document.querySelector("#skuSelection, [data-module='od_sku_selection']");
     for (const img of selection?.querySelectorAll("img") || []) {
-      const name = img.getAttribute("alt") || img.getAttribute("title") || "";
+      const option = img.closest('[data-sku-id], [data-value], [data-value-name], [title]');
+      const name = img.getAttribute("alt") || img.getAttribute("title") || option?.getAttribute('data-value-name') || option?.getAttribute('title') || "";
       const image = img.getAttribute("data-src") || img.currentSrc || img.getAttribute("src");
-      if (name && image) imageClaims.push({name, image});
+      if (image) imageClaims.push({name, image, skuId: option?.getAttribute('data-sku-id'), valueId: option?.getAttribute('data-value')});
     }
     const merged = sourceRows.map(row => {
       const result = aiWeightPriceMergeMetrics(row, pack.byId.get(String(row.id)), pack.common);
       if (result.image_url) return result;
       const exactRows = domRows.filter(candidate => row.sku_id && candidate.sku_id === row.sku_id && candidate.image_url);
       const urls = exactRows.map(candidate => candidate.image_url);
-      const values = new Set((row.attribute_combinations || []).map(attr => attr.value_name));
+      const values = new Set((row.attribute_combinations || []).map(attr => aiWeightPriceDecode(attr.value_name).trim()));
+      const optionIds = new Set(String(row.supplier_option_ids || '').split(/[;>,]/).map(value => value.trim()).filter(Boolean));
       for (const claim of imageClaims) {
         const matches = claim.skuId ? String(claim.skuId) === String(row.sku_id)
           : claim.specAttrs ? aiWeightPriceDecode(claim.specAttrs) === row.label
-          : [claim.name, claim.value, claim.valueName].some(value => typeof value === "string" && values.has(value.trim()));
+          : [claim.name, claim.value, claim.valueName, claim.specValue, claim.label].some(value => typeof value === "string" && values.has(aiWeightPriceDecode(value).trim()))
+            || [claim.valueId, claim.propValueId, claim.vid].some(value => value != null &&
+              (optionIds.has(String(value)) || optionIds.has(`${claim.propId || claim.fid}:${value}`)));
         if (!matches) continue;
-        const url = [claim.imageUrl, claim.imgUrl, claim.image, claim.pictureUrl, claim.image_url]
-          .filter(value => typeof value === "string").map(absoluteImage).find(Boolean);
+        const url = supplierSkuImages(claim)[0];
         if (url) urls.push(url);
       }
       const unique = [...new Set(urls)];
-      if (unique.length === 1) result.image_url = unique[0];
+      if (unique.length === 1) { result.image_url = unique[0]; result.images = unique; }
+      else if (unique.length > 1) result.image_candidates = unique;
       return result;
     });
     const commonMetric = key => {
@@ -675,6 +691,13 @@
     const pageData = await readPageData();
     const detailFacts = aiWeightPriceDetailFacts(pageData);
     const variations = detailFacts.skus;
+    for (const sku of variations) {
+      sku.images = [...new Set([sku.image_url, ...(sku.images || [])].filter(Boolean))];
+      sku.image_status = sku.image_url ? 'confirmed' : sku.image_candidates?.length ? 'ambiguous' : 'missing';
+      sku.net_proceeds_usd = sku.price > 0 ? Math.ceil((sku.price + 5) / 6.7 - 1e-10) : null;
+      sku.domestic_freight_cny = 5;
+      sku.net_exchange_rate = 6.7;
+    }
     if (!images.length) throw new Error("1688商品主图尚未加载，已停止采集");
     if (document.querySelector("#skuSelection") && !variations.length) throw new Error("1688商品规格尚未加载，已停止采集");
     if (sourceItemId !== itemId()) throw new Error("1688页面商品已切换，请重新采集");
@@ -687,6 +710,7 @@
     const allDimensionsComplete = dimensionsComplete || (variations.length > 0 && variations.every(row =>
       [row.package_length_cm, row.package_width_cm, row.package_height_cm].every(value => value > 0)));
     const errors = [];
+    if (variations.some(row => !row.image_url)) errors.push('部分 SKU 主图未确定，请在 1688 产品区逐 SKU 选择主图');
     const price = numericPrice(variations, pageData);
     if (price === null) errors.push("1688采购价无法确认，已留空，请核实后填写或重新采集");
     if (variations.some(row => !(row.price > 0))) errors.push("未读取到完整的1688规格采购价，部分规格价格缺失");
@@ -1276,32 +1300,76 @@
       } catch (error) { status.textContent = `分类保存失败：${error.message || error}`; }
     });
     refresh.addEventListener('click', update);
-    preferencesFocusListener = update;
-    window.addEventListener('focus', update);
+    preferencesFocusListener = () => { collectionStates.clear(); void update(); void refreshCollectionStates(); };
+    window.addEventListener('focus', preferencesFocusListener);
     await update();
+  }
+
+  const collectionStates = new Map();
+  let collectionStatusBusy = false;
+
+  function renderCollectionStates() {
+    document.querySelectorAll('[data-zeshun-offer-id]').forEach(button => {
+      if (button.disabled) return;
+      const state = collectionStates.get(button.dataset.zeshunOfferId);
+      const label = state?.collected ? '已采集' : state?.queued ? '已待传' : button.dataset.collectLabel;
+      if (label && button.textContent !== label) button.textContent = label;
+    });
+  }
+
+  async function refreshCollectionStates() {
+    renderCollectionStates();
+    if (collectionStatusBusy) return;
+    const ids = [...new Set([...document.querySelectorAll('[data-zeshun-offer-id]')]
+      .map(button => button.dataset.zeshunOfferId))]
+      .filter(id => Date.now() - (collectionStates.get(id)?.checkedAt || 0) > 30000).slice(0, 200);
+    if (!ids.length) return;
+    const startedAt = Date.now();
+    collectionStatusBusy = true;
+    try {
+      const response = await sendRuntimeMessage({type: 'GET_1688_COLLECTED', offer_ids: ids});
+      if (!response?.ok || !Array.isArray(response.collected_ids)) return;
+      const collected = new Set(response.collected_ids);
+      ids.forEach(id => {
+        const previous = collectionStates.get(id);
+        // A collection finishing during this read takes precedence over its snapshot.
+        if (previous?.checkedAt >= startedAt) return;
+        collectionStates.set(id, {collected: collected.has(id), queued: previous?.queued, checkedAt: Date.now()});
+      });
+    } catch (_) {
+      // A failed status check must not prevent collection.
+    } finally {
+      ids.forEach(id => {
+        const previous = collectionStates.get(id);
+        collectionStates.set(id, {...previous, checkedAt: Date.now()});
+      });
+      collectionStatusBusy = false;
+      renderCollectionStates();
+      if (ids.length === 200) void refreshCollectionStates();
+    }
   }
 
   async function collectFromPage(button) {
     button.disabled = true;
     const original = button.textContent;
     button.textContent = "正在采集…";
+    const collectedId = button.dataset.zeshunOfferId;
     try {
       const response = await sendRuntimeMessage({type: "SUBMIT_PRODUCT", product: await extractProduct()});
       if (!response?.ok) throw new Error(response?.error || "采集失败");
       showToast(response.queued ? "控制台暂不可用，商品已加入待传队列" : "已采集到 AI 原创产品", response.queued ? "warning" : "success");
-      button.textContent = "采集成功 ✓";
-      window.setTimeout(() => { button.textContent = original; }, 1800);
+      collectionStates.set(collectedId, {collected: !response.queued, queued: !!response.queued, checkedAt: Date.now()});
     } catch (error) {
       showToast(error.message || String(error), "error");
       button.textContent = original;
     } finally {
       button.disabled = false;
+      renderCollectionStates();
     }
   }
 
   async function collectFromList(button, product) {
     button.disabled = true;
-    const original = button.textContent;
     button.textContent = "采集中…";
     try {
       const response = await sendRuntimeMessage({type: "COLLECT_1688_URL", product});
@@ -1310,26 +1378,31 @@
         response.queued ? "控制台暂不可用，商品已加入待传队列" : "商品已采集到 AI 原创产品",
         response.queued ? "warning" : "success"
       );
-      button.textContent = response.queued ? "已待传" : "已采集 ✓";
+      collectionStates.set(String(product.source_item_id), {collected: !response.queued, queued: !!response.queued, checkedAt: Date.now()});
     } catch (error) {
       showToast(error.message || String(error), "error");
       button.textContent = "重试";
     } finally {
-      window.setTimeout(() => {
-        button.disabled = false;
-        button.textContent = original;
-      }, 1800);
+      button.disabled = false;
+      renderCollectionStates();
     }
   }
 
   function mountCollectorButton() {
-    if (!itemId() || document.querySelector(".zeshun-collector-floating")) return;
+    if (!itemId()) return;
+    const existing = document.querySelector(".zeshun-collector-floating button");
+    if (existing) {
+      existing.dataset.zeshunOfferId = itemId();
+      return;
+    }
     const host = document.createElement("div");
     host.className = "zeshun-collector-floating";
     const button = document.createElement("button");
     button.type = "button";
     button.className = "zeshun-collector-primary";
     button.textContent = "采集到泽顺";
+    button.dataset.collectLabel = button.textContent;
+    button.dataset.zeshunOfferId = itemId();
     button.addEventListener("click", () => collectFromPage(button));
     host.appendChild(button);
     document.documentElement.appendChild(host);
@@ -1344,14 +1417,20 @@
     });
     // Prefer the innermost product card, never a whole results container.
     [...cards].filter(card => ![...cards].some(other => other !== card && card.contains(other))).forEach(card => {
-      if (card.querySelector(".zeshun-card-collect")) return;
       const product = listCardCandidate(card);
       if (!product) return;
+      const existing = card.querySelector(".zeshun-card-collect");
+      if (existing) {
+        existing.dataset.zeshunOfferId = String(product.source_item_id);
+        return;
+      }
       card.classList.add("zeshun-collector-card-host");
       const button = document.createElement("button");
       button.type = "button";
       button.className = "zeshun-card-collect";
       button.textContent = "采集";
+      button.dataset.collectLabel = button.textContent;
+      button.dataset.zeshunOfferId = String(product.source_item_id);
       button.title = "后台自动采集详情，完成后关闭详情页，当前页面保持不变";
       button.addEventListener("click", event => {
         event.preventDefault();
@@ -1369,6 +1448,7 @@
     if (typeof globalThis.chrome?.runtime?.sendMessage !== "function") return;
     mountCollectorButton();
     mountListButtons();
+    void refreshCollectionStates();
   }
 
   const contentListener = (message, _sender, sendResponse) => {

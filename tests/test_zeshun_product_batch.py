@@ -167,6 +167,17 @@ async function waitDone() { while(productBatchRun) await pause(5); return getPro
   assert.equal(activations.length,0);
   assert.equal(createdWindows.length,closedWindows.length);
   lists.page1.items=[item(1)];
+  const originalPage4=lists.page4;
+  lists.page4={ok:true,page:4,international_selected:true,next_url:origin+'page5',next_url_synthesized:true,items:[item(1),item(7)]};
+  reads=[]; uploads=[];
+  await startProductBatch({tab_id:99,params:{...params,max_items:20}});
+  const exhausted=await waitDone();
+  assert.equal(exhausted.phase,'completed');
+  assert.equal(exhausted.completed_count,5);
+  assert(reads.some(url=>url.includes('page4')));
+  assert(!reads.some(url=>url.includes('page5')));
+  assert.equal(new Set(uploads).size,uploads.length);
+  lists.page4=originalPage4;
   failUpload=true;
   await startProductBatch({tab_id:99,params:{...params,max_items:1}});
   const failed=await waitDone();

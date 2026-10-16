@@ -23,6 +23,10 @@ def amazon_stack(tmp_path, monkeypatch):
     saved = store.save_amazon_store(ORGANIZATION, {**CREDS, "label": "Integration Amazon US"})
     transport = Transport()
     records = {7: {**amazon_row(), "source_type": "ai_original", "review_status": "safe"}}
+    records[7].update(weight_g=250, package_length_cm=20, package_width_cm=10,
+                      package_height_cm=5, net_proceeds_usd=8,
+                      weight_basis="ai_original_manual")
+    records[7]["source_snapshot_json"]["marketplace_listings"]["amazon"]["review_status"] = "approved"
 
     def factory(platform, store_id, organization):
         assert platform == "amazon"
@@ -190,6 +194,9 @@ def test_same_sku_cannot_be_reassigned_to_another_source_product(amazon_stack):
 def test_yandex_real_adapter_service_preview_submit_and_status(tmp_path, yandex_fixture):
     publisher, client, source, settings = yandex_fixture
     source["source_type"] = "ai_original"
+    source.update(weight_g=250, package_length_cm=10, package_width_cm=11,
+                  package_height_cm=12, net_proceeds_usd=8,
+                  weight_basis="ai_original_manual")
     store = PublicationStore(tmp_path / "yandex-publish.sqlite3", secret_key="key")
     service = PublicationService(store, lambda ids: [deepcopy(source)] if source["id"] in ids else [],
         publisher_factory=lambda *_: (publisher, "Yandex integration"), start_thread=lambda function: function())

@@ -134,7 +134,7 @@ def test_product_matches_are_exact_include_translations_and_update_every_match(m
     result = persistence.mark_products_infringing("Product", connection_factory=lambda: db)
     assert result["matched"] == 3 and result["changed"] == 2
     assert result["product_ids"] == [1, 2, 3]
-    query, params = next((sql, params) for sql, params in db.queries if "SELECT id FROM" in sql)
+    query, params = next((sql, params) for sql, params in db.queries if "MAX_EXECUTION_TIME" in sql)
     assert "FOR UPDATE" not in query
     assert "LIKE" not in query and "BINARY" in query
     assert "title_es" in query and "title_pt" in query and "JSON_VALID" in query
@@ -150,7 +150,7 @@ def test_link_scope_excludes_other_companies_and_includes_known_deleted_history(
     monkeypatch.setattr(persistence.links, "ensure_store_link_table", lambda _: None)
     db = Connection()
     persistence.same_title_links("Product", "company-a", connection_factory=lambda: db)
-    query, params = db.queries[0]
+    query, params = next((sql, params) for sql, params in db.queries if "SELECT /*+ MAX_EXECUTION_TIME" in sql)
     assert "BINARY TRIM(links.`title`) = BINARY %s" in query
     assert "organization_key" in query
     assert "<> 'deleted'" not in query
@@ -203,3 +203,42 @@ def test_page_snapshot_hook_is_also_connected(monkeypatch):
     infractions.replace_pppi_snapshot({"id": 1}, "MLM", [], connection_factory=lambda: db)
     hook.assert_called_once_with({"id": 1}, [])
     assert db.committed and db.closed
+
+
+def test_indexed_titles_recheck_full_values_and_scope_under_lock(monkeypatch):
+    monkeypatch.setattr(persistence.product_title_index, 'available', lambda _: True)
+    cursor = Mock()
+    cursor.fetchall.side_effect = [[{'id': 9}, {'id': 2}, {'id': 9}], [{'id': 2}]]
+    result = persistence.lock_matching_products(cursor, 'company-a', 'Exact title', 'id')
+    discovery, locked = cursor.execute.call_args_list
+    assert discovery.args[0].count('UNION ALL') == 2
+    assert discovery.args[0].count('FORCE INDEX') == 3
+    assert 'source_snapshot_json' not in discovery.args[0]
+    assert discovery.args[1] == ('company-a', 'Exact title') * 3
+    assert locked.args[1] == (2, 9, 'company-a', 'Exact title', 'Exact title', 'Exact title')
+    assert 'BINARY TRIM' in locked.args[0] and 'FOR UPDATE' in locked.args[0]
+    assert result == [{'id': 2}]
+
+
+def test_product_failure_preserves_original_error_when_rollback_fails(monkeypatch):
+    monkeypatch.setattr(persistence.products, 'ensure_collection_tables', lambda _: None)
+    db = Connection()
+    original = RuntimeError(2013, 'query timed out')
+    monkeypatch.setattr(persistence, 'short_transaction', Mock(side_effect=original))
+    db.rollback = Mock(side_effect=RuntimeError(0, ''))
+    with pytest.raises(RuntimeError) as error:
+        persistence.mark_products_infringing('Product', connection_factory=lambda: db)
+    assert error.value is original
+    assert db.closed
+
+
+def test_indexed_links_keep_full_title_and_enterprise_checks(monkeypatch):
+    monkeypatch.setattr(persistence.links, 'ensure_store_link_table', lambda _: None)
+    monkeypatch.setattr(persistence.product_title_index, 'links_available', lambda _: True)
+    db = Connection()
+    persistence.same_title_links('商品 À', 'company-b', connection_factory=lambda: db)
+    sql, params = db.queries[0]
+    assert 'FORCE INDEX' in sql and 'rights_title_hash' in sql
+    assert 'BINARY TRIM(links.`title`) = BINARY %s' in sql
+    assert 'tokens.`organization_key`' in sql
+    assert params == ('商品 À', '商品 À', 'company-b')

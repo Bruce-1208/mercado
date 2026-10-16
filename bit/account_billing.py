@@ -113,7 +113,12 @@ def billing_local(payload, connect=None):
     """Internal API only. Resolve the actor's privileges again at the database."""
     if connect is None:
         from bit import bit_mysql
-        connect = lambda: bit_mysql.pymysql.connect(**bit_mysql.config)
+        # Live subscription checks share the reserved authorization slot so
+        # slow business queries cannot consume their entire connection budget.
+        # Billing management and writes continue through ordinary admission.
+        connect = lambda: bit_mysql.pymysql.connect(
+            **bit_mysql.config, _pool_priority=payload.get("action") == "get"
+        )
     actor_id = integer(payload.get("actor_id"), "操作账号", 1, 2**63 - 1)
     action = payload.get("action")
     data = payload.get("data") or {}

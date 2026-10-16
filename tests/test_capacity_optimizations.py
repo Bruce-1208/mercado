@@ -484,3 +484,33 @@ def test_hundred_agent_heartbeats_over_http_with_four_workers(tmp_path, monkeypa
         stopping.set(); thread.join(timeout=2)
         server.task_dispatcher.shutdown(); server.close()
         for channel in list(server_map.values()): channel.close()
+
+
+def test_store_budget_timeout_and_stop_remove_waiters():
+    budget = SyncBudget(1, 0)
+    with budget.slot("infractions", 1):
+        with pytest.raises(TimeoutError, match="同步名额超时"):
+            with budget.slot("infractions", 1, timeout=0.01):
+                pytest.fail("busy slot was acquired")
+        stop = threading.Event()
+        stop.set()
+        with pytest.raises(RuntimeError, match="已停止"):
+            with budget.slot("infractions", 2, stop_event=stop):
+                pytest.fail("cancelled slot was acquired")
+        assert budget.snapshot()["waiting"] == 0
+        assert budget.snapshot()["active"] == 1
+    with budget.slot("infractions", 1, timeout=1):
+        assert budget.snapshot()["active"] == 1
+
+
+def test_foreground_store_read_uses_reserved_capacity_without_bypassing_store_lock():
+    budget = SyncBudget(2, 1)
+    with budget.slot("infractions", 1):
+        with budget.slot("infractions", 2, foreground=True):
+            assert budget.snapshot()["active"] == 2
+            with pytest.raises(TimeoutError, match="同步名额超时"):
+                with budget.slot("links", 3, timeout=0.01):
+                    pytest.fail("background task used reserved capacity")
+        with pytest.raises(TimeoutError, match="同步名额超时"):
+            with budget.slot("infractions", 1, timeout=0.01, foreground=True):
+                pytest.fail("foreground task bypassed same-store serialization")

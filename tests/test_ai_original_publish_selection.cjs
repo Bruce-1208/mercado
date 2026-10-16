@@ -9,6 +9,7 @@ function setup() {
   const requests = [];
   const confirmations = [];
   const context = vm.createContext({
+    clearTimeout() {}, setTimeout() { return 0; },
     document: {
       addEventListener() {}, querySelectorAll() { return []; },
       getElementById(id) {
@@ -16,7 +17,7 @@ function setup() {
         return nodes.get(id);
       },
     },
-    window: {confirm(message) { confirmations.push(message); return true; }},
+    window: {catalogOperationMarkup(_row, markup) { return markup; }, confirm(message) { confirmations.push(message); return true; }},
     fetch: async (url, options) => {
       requests.push({url, body: JSON.parse(options.body)});
       return {ok: true, json: async () => ({status: 'success', data: {
@@ -25,6 +26,8 @@ function setup() {
     },
   });
   const run = code => vm.runInContext(code, context);
+  run(fs.readFileSync(path.join(__dirname, '../bit/static/sku-matrix.js'), 'utf8'));
+  run('globalThis.ZeshunSku = window.ZeshunSku');
   for (const file of ['ai-original-products.js', 'ai-original-workbench.js']) {
     run(fs.readFileSync(path.join(__dirname, '../bit/static', file), 'utf8'));
   }
@@ -35,7 +38,8 @@ function setup() {
       main_image_url: '/product-ai-white.jpg', weight_g: 100, net_proceeds_usd: 2,
       package_length_cm: 10, package_width_cm: 10, package_height_cm: 10,
       weight_basis: 'ai_original_manual', ai_original: {
-        attributes: [{id: 'MATERIAL', value_name: 'Plastic'}], image_generation_method: 'ai_image_edit'
+        category_id: 'CBT123', attributes: [{id: 'MATERIAL', value_name: 'Plastic'}], image_generation_method: 'ai_image_edit',
+        validation: {errors: [], warnings: []}
       }};
     aiOriginalRows = [ready, {...ready, id: 2, review_status: 'unreviewed'},
       {...ready, id: 3, review_status: 'unreviewed', net_proceeds_usd: null}];
@@ -43,6 +47,10 @@ function setup() {
     aiOriginalSelectedSiteIds = () => ['MLM'];
     loadAiOriginalPublishStatus = () => {};
     document.getElementById('ai-original-stores').selectedOptions = [{value: '7'}];
+    for (const row of aiOriginalRows) {
+      for (const [prefix,field] of [['weight','weight_g'],['net','net_proceeds_usd'],['length','package_length_cm'],['width','package_width_cm'],['height','package_height_cm'],['category','category_id']])
+        document.getElementById('ai-original-'+prefix+'-'+row.id).value=String(row[field] ?? '');
+    }
   `);
   return {run, nodes, requests, confirmations};
 }
@@ -114,7 +122,7 @@ test('status filtering removes hidden selections, including after switching back
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [1]);
 });
 
-test('bulk approval saves current inputs and review status atomically', async () => {
+test('bulk approval saves inputs as pending review before the separate manual approval', async () => {
   const {run, requests} = setup();
   run(`aiOriginalSelected = new Set([1]);
     aiOriginalRows[0].weight_g = null;
@@ -124,9 +132,10 @@ test('bulk approval saves current inputs and review status atomically', async ()
     document.getElementById('ai-original-review-status').value = 'approved';
     loadAiOriginalProducts = async () => {};`);
   await run('updateSelectedAiOriginalReviewStatus()');
-  assert.equal(requests.length, 1);
+  assert.equal(requests.length, 2);
   assert.equal(requests[0].url, '/api/ai-original-products/1');
-  assert.deepEqual(requests[0].body, {weight_g: 250, net_proceeds_usd: 3.25, category_id: '', review_status: 'approved'});
+  assert.deepEqual(requests[0].body, {weight_g: 250, net_proceeds_usd: 3.25, review_status: 'unreviewed'});
+  assert.deepEqual(requests[1].body, {review_status: 'approved'});
 });
 
 test('cleared input prevents approval even when saved data is valid', async () => {
@@ -152,7 +161,7 @@ test('parameter save failure prevents bulk approval', async () => {
   assert.equal(run('aiOriginalReviewRunning'), false);
 });
 
-test('five page states do not alter the AI generation result', () => {
+test('listing check failures do not alter the AI generation result', () => {
   const {run} = setup();
   assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'approved');
   assert.equal(run('aiOriginalProductStatus(aiOriginalRows[1])'), 'unreviewed');
@@ -165,18 +174,19 @@ test('five page states do not alter the AI generation result', () => {
     assert.equal(run('aiOriginalListingChecks(changed).every(check => check.ok)'), true, field);
   }
   assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', weight_g:null, review_status:'unreviewed'})`), 'failed');
-  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'processing', review_status:'unreviewed'})`), 'unreviewed');
+  assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'processing', review_status:'unreviewed'})`), 'processing');
   for (const review of ['suspected', 'infringing', 'risk']) {
     assert.equal(run(`aiOriginalProductStatus({...original, ai_status:'failed', review_status:'${review}'})`), 'suspected');
   }
 });
 
-test('counts, filter and selection agree on the same five statuses', () => {
+test('counts, filter and selection agree on the same listing statuses', () => {
   const {run, nodes} = setup();
-  run(`aiOriginalRows.push({...aiOriginalRows[0], id:4, ai_status:'failed', review_status:'unreviewed'},
+  run(`aiOriginalRows[2].net_proceeds_usd = 2; aiOriginalRows[2].weight_g = null;
+    aiOriginalRows.push({...aiOriginalRows[0], id:4, ai_status:'failed', review_status:'unreviewed'},
       {...aiOriginalRows[0], id:5, review_status:'suspected'});
     decorateAiOriginalWorkbench();`);
-  for (const status of ['approved', 'unreviewed', 'failed', 'incomplete', 'suspected']) {
+  for (const status of ['approved', 'unreviewed', 'incomplete', 'failed', 'suspected']) {
     assert.equal(nodes.get('ai-original-count-' + status).textContent, 1);
     run(`document.getElementById('ai-original-status-filter').value = '${status}';
       aiOriginalSelected.clear(); toggleAllAiOriginalProducts(true);`);
@@ -193,7 +203,56 @@ test('generated content omissions are failures even after approval and with miss
   }
   assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, attributes: []}})`), 'failed');
   assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, missing_required_attributes:[{id:'GENDER'}]}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, category_id:'CBT999'}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, preparation:{required_ready:false}}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_original: {...aiOriginalRows[0].ai_original, validation:undefined}})`), 'failed');
   assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], ai_status:'failed'})`), 'failed');
+});
+
+test('generated attributes require values and accept populated multivalue attributes', () => {
+  const {run} = setup();
+  assert.equal(run(`aiOriginalProductStatus({...ready, review_status:'unreviewed',
+    ai_original:{...ready.ai_original, attributes:[{id:'MATERIAL'}]}})`), 'failed');
+  assert.equal(run(`aiOriginalProductStatus({...ready, review_status:'unreviewed',
+    ai_original:{...ready.ai_original, attributes:[{id:'COLOR', values:['Red']}],
+      missing_required_attributes:[{id:'COLOR'}]}})`), 'unreviewed');
+});
+
+test('target-platform cards require shared manual facts and keep generation failures failed', () => {
+  const {run} = setup();
+  run(`var amazonReady = {...ready, marketplace_listings:{amazon:{status:'completed', review_status:'approved',
+    title:'Desktop organizer', description:'Storage for a desktop.', main_image_url:'https://cdn.example.com/a.jpg',
+    validation:{errors:[]}}}};`);
+  assert.equal(run(`aiOriginalProductStatus({...amazonReady, weight_g:null}, 'amazon')`), 'incomplete');
+  assert.equal(run(`aiOriginalProductStatus(amazonReady, 'amazon')`), 'approved');
+  assert.equal(run(`aiOriginalProductStatus({...amazonReady,
+    marketplace_listings:{amazon:{...amazonReady.marketplace_listings.amazon, status:'failed'}}}, 'amazon')`), 'failed');
+});
+
+test('legacy manual-field failures move from pending completion to review after facts are filled', async () => {
+  const {run, requests} = setup();
+  run(`var legacyManualFailure = {...ready, ai_status:'failed', review_status:'unreviewed', weight_g:null,
+    ai_original:{...ready.ai_original, status:'failed', failed_step:'manual_fields'}};`);
+  assert.equal(run('aiOriginalProductStatus(legacyManualFailure)'), 'incomplete');
+  assert.equal(run('aiOriginalProductStatus({...legacyManualFailure, weight_g:100})'), 'unreviewed');
+  run(`aiOriginalRows = [{...legacyManualFailure, weight_g:100}]; renderAiOriginalProducts = () => {};
+    document.getElementById('ai-original-review-1').value='approved';`);
+  await run('updateAiOriginalReviewStatus(1)');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body, {review_status:'approved'});
+});
+
+test('unattempted and running rows keep their status; saved facts recover without regenerating', () => {
+  const {run} = setup();
+  for (const status of ['pending', 'processing', 'waiting_off_peak']) {
+    assert.equal(run(`aiOriginalProductStatus({...ready, ai_status:'${status}', weight_g:null, title_es:''})`), status);
+  }
+  run(`var repaired = {...ready, weight_g:null}; var before = JSON.stringify(repaired);`);
+  assert.equal(run('aiOriginalProductStatus(repaired)'), 'incomplete');
+  assert.equal(run('JSON.stringify(repaired) === before'), true);
+  assert.equal(run('aiOriginalProductStatus({...repaired, weight_g:100})'), 'approved');
+  assert.equal(run('aiOriginalProductStatus({...repaired, review_status:"suspected"})'), 'suspected');
+  assert.equal(run('aiOriginalProductStatus({...repaired, weight_g:100, review_status:"suspected"})'), 'suspected');
 });
 
 
@@ -203,4 +262,51 @@ test('unfinished or missing SKU mappings cannot be pending manual fields', () =>
     original_1688:{variations:[{id:'one'}]}})`), 'failed');
   assert.equal(run(`aiOriginalProductStatus({...aiOriginalRows[0], weight_g:null,
     ai_original:{...aiOriginalRows[0].ai_original, preparation:{variations_ready:false}}})`), 'failed');
+});
+
+test('saving complete parameters waits for a separate manual approval', async () => {
+  const {run, requests, nodes} = setup();
+  run(`aiOriginalRows = [{...ready, review_status:'unreviewed'}];
+    renderAiOriginalProducts = () => {};
+    for (const [prefix, value] of Object.entries({weight:100,net:2,length:10,width:10,height:10,category:'CBT123'}))
+      document.getElementById('ai-original-'+prefix+'-1').value=String(value);`);
+  await run('saveAiOriginalProduct(1)');
+  assert.equal(requests[0].body.review_status, 'unreviewed');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'unreviewed');
+  nodes.get('ai-original-review-1');
+  run(`document.getElementById('ai-original-review-1').value='approved'`);
+  await run('updateAiOriginalReviewStatus(1)');
+  assert.equal(requests[1].body.review_status, 'approved');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'approved');
+  assert.equal(run('aiOriginalSelected.size'), 3);
+});
+
+test('unchanged Mercado approval preserves source weight basis and other platform approvals', async () => {
+  const {run, requests} = setup();
+  run(`aiOriginalRows = [{...ready, review_status:'unreviewed', weight_basis:'1688_source',
+    marketplace_listings:{amazon:{status:'completed', review_status:'approved'}}}];
+    renderAiOriginalProducts = () => {};
+    document.getElementById('ai-original-review-1').value='approved';`);
+  await run('updateAiOriginalReviewStatus(1)');
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].body, {review_status:'approved'});
+  assert.equal(run('aiOriginalRows[0].weight_basis'), '1688_source');
+  assert.equal(run('aiOriginalRows[0].marketplace_listings.amazon.review_status'), 'approved');
+});
+
+test('manual review changes only one product and rejects missing facts or unauthorized rows', async () => {
+  const {run, requests} = setup();
+  run(`renderAiOriginalProducts = () => {};
+    document.getElementById('ai-original-review-3').value='approved';`);
+  await run('updateAiOriginalReviewStatus(3)');
+  assert.equal(requests.length, 0);
+  run(`document.getElementById('ai-original-review-1').value='suspected'`);
+  await run('updateAiOriginalReviewStatus(1)');
+  assert.equal(requests.length, 1);
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'suspected');
+  assert.equal(run('aiOriginalRows[1].review_status'), 'unreviewed');
+  run(`aiOriginalRows[0].can_operate=false;
+    document.getElementById('ai-original-review-1').value='failed'`);
+  await run('updateAiOriginalReviewStatus(1)');
+  assert.equal(requests.length, 1);
 });

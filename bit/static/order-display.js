@@ -97,3 +97,36 @@ for (const selector of ['.topbar', '.workspace-tabs', '#model-balance-alert']) {
 window.addEventListener('resize', resizeOrderViewport);
 window.addEventListener('scroll', resizeOrderViewport, {passive: true});
 resizeOrderViewport();
+
+// Preserve filters and selected orders while lending their screen space to the list.
+function setOrderListFocus(enabled, persist = true) {
+    orderViewportTab.classList.toggle('order-list-focus', enabled);
+    const button = document.getElementById('order-list-focus-toggle');
+    button.setAttribute('aria-pressed', String(enabled));
+    button.setAttribute('aria-expanded', String(!enabled));
+    button.textContent = enabled ? '展开筛选与状态' : '收起筛选与状态';
+    if (enabled) {
+        document.querySelectorAll('#order-filter-region details[open]').forEach(el => { el.open = false; });
+        if (document.activeElement?.closest('#order-filter-region, #order-summary-region')) button.focus();
+    }
+    if (persist) {
+        try { localStorage.setItem('zeshun-order-list-focus', String(enabled)); } catch (_) {}
+    }
+    resizeOrderViewport();
+}
+function initializeOrderListFocus() {
+    let saved = null;
+    try { saved = localStorage.getItem('zeshun-order-list-focus'); } catch (_) {}
+    setOrderListFocus(saved === null ? matchMedia('(max-width: 760px), (max-height: 900px)').matches : saved === 'true', false);
+    // A selection must always expose its existing batch actions.
+    const bulk = document.getElementById('order-bulk-bar');
+    new MutationObserver(() => {
+        if (bulk.classList.contains('active') && orderViewportTab.classList.contains('order-list-focus')) {
+            window.setOrderRowsOnly?.(false);
+            setOrderListFocus(false, false);
+            bulk.closest('details')?.setAttribute('open', '');
+        }
+    }).observe(bulk, {attributes: true, attributeFilter: ['class']});
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeOrderListFocus);
+else initializeOrderListFocus();

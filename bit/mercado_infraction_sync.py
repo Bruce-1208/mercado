@@ -9,7 +9,7 @@ import re
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
@@ -1186,6 +1186,11 @@ def _sync_rights_holder_todo_store(record: dict) -> dict[str, Any]:
 
 def _refresh_rights_holder_todos_once() -> dict[str, Any]:
     """Refresh open rights-holder cases once, preserving snapshots on incomplete reads."""
+    # The hourly job used to take the overview lock for every store on startup,
+    # starving the overdue 12-hour snapshot. Dispatch due snapshots first.
+    due = start_due_official_infraction_sync()
+    if due.get("started") or due.get("due_token_ids") or _sync_state.get("running"):
+        return {"started": False, "message": "优先执行到期的 12 小时总览同步，待办稍后重试"}
     if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
         return {"started": False, "message": "官方侵权数据正在同步，稍后重试"}
     task_lock = InterProcessLock(
@@ -1264,8 +1269,10 @@ def _collect_live_detection_target(
         }
 
     refreshed_after_unauthorized = False
+    deadline = time.monotonic() + LIVE_INFRACTION_STORE_TIMEOUT_SECONDS
     while True:
         try:
+            print(f"{_now_text()} {store_name} 正在检查授权并读取 Marketplace 账号", flush=True)
             client, current_record = _client_and_token(
                 record,
                 timeout=LIVE_INFRACTION_REQUEST_TIMEOUT_SECONDS,
@@ -1300,7 +1307,7 @@ def _collect_live_detection_target(
                     "message": "已停止",
                 }
 
-            deadline = time.monotonic() + LIVE_INFRACTION_STORE_TIMEOUT_SECONDS
+            print(f"{_now_text()} {store_name} 开始读取 {len(accounts)} 个站点的侵权分页", flush=True)
             records, scanned, capped, site_errors, successful_accounts = (
                 _collect_live_detection_records(
                     client,
@@ -1313,6 +1320,10 @@ def _collect_live_detection_target(
             )
             prohibited_records = []
             try:
+                if _stop_requested(stop_event):
+                    raise RuntimeError("已停止")
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("单店侵权 API 读取超过最长等待时间")
                 prohibited_records = _prohibited_snapshot_records(
                     current_record,
                     date_created_since=date_created_since,
@@ -1455,6 +1466,7 @@ def collect_live_detection_infractions(
         f"{worker_count} 线程并发读取 {len(normalized_targets)} 家店铺"
     )
     results = []
+    collection_stop = threading.Event()
 
     def collect_one(target: dict) -> dict:
         token_id = int(target["token_id"])
@@ -1474,7 +1486,10 @@ def collect_live_detection_infractions(
                 record,
                 target,
                 date_created_since=date_created_since,
-                stop_event=stop_event,
+                stop_event=collection_stop,
+                capacity_stop_event=collection_stop,
+                capacity_timeout=LIVE_INFRACTION_STORE_TIMEOUT_SECONDS,
+                capacity_foreground=True,
             )
         except Exception as exc:
             return {
@@ -1498,23 +1513,43 @@ def collect_live_detection_infractions(
         executor.submit(collect_one, target): target
         for target in normalized_targets
     }
+    pending = set(future_map)
+    # Include admission, token refresh and snapshot reads in the outer bound.
+    # A blocked worker must not keep the caller (or the Stop action) waiting.
+    waves = (len(normalized_targets) + worker_count - 1) // worker_count
+    deadline = time.monotonic() + LIVE_INFRACTION_STORE_TIMEOUT_SECONDS * waves
+    next_report = time.monotonic() + 15
     try:
-        for future in as_completed(future_map):
-            result = future.result()
-            results.append(result)
-            print(
-                f"{_now_text()} {result['store']} API侵权读取"
-                f"{result['status']}：命中 {len(result.get('rows') or [])} 条，"
-                f"扫描 {result.get('scanned') or 0} 条"
-                + (f"；{result['message']}" if result.get("message") else "")
-            )
-            if _stop_requested(stop_event):
-                for pending in future_map:
-                    if not pending.done():
-                        pending.cancel()
+        while pending:
+            if _stop_requested(stop_event) or time.monotonic() >= deadline:
+                collection_stop.set()
+                for future in pending:
+                    future.cancel()
+                    target = future_map[future]
+                    results.append({
+                        "store": str(target.get("name") or target["token_id"]),
+                        "token_id": target["token_id"],
+                        "status": "stopped" if _stop_requested(stop_event) else "error",
+                        "rows": [], "scanned": 0,
+                        "message": "已停止" if _stop_requested(stop_event) else "侵权 API 读取超时（含排队、授权和快照读取）",
+                    })
                 break
+            done, pending = wait(pending, timeout=0.5, return_when=FIRST_COMPLETED)
+            if time.monotonic() >= next_report:
+                print(f"{_now_text()} 侵权 API 读取仍在进行，剩余 {len(pending)} 家店铺", flush=True)
+                next_report = time.monotonic() + 15
+            for future in done:
+                result = future.result()
+                results.append(result)
+                print(
+                    f"{_now_text()} {result['store']} API侵权读取"
+                    f"{result['status']}：命中 {len(result.get('rows') or [])} 条，"
+                    f"扫描 {result.get('scanned') or 0} 条"
+                    + (f"；{result['message']}" if result.get("message") else ""),
+                    flush=True,
+                )
     finally:
-        executor.shutdown(wait=not _stop_requested(stop_event), cancel_futures=True)
+        executor.shutdown(wait=not collection_stop.is_set(), cancel_futures=True)
 
     rows = [
         row
@@ -1883,18 +1918,8 @@ def start_official_infraction_sync(
 
 
 def start_due_official_infraction_sync() -> dict[str, Any]:
-    try:
-        auto_sync = get_overview_sync_settings(OFFICIAL_INFRACTIONS_SCOPE)
-    except Exception as exc:
-        _append_log(f"读取全量更新开关失败，保持自动更新：{exc}")
-        auto_sync = {"enabled": True}
-    if not auto_sync.get("enabled", True):
-        return {
-            "started": False,
-            "disabled": True,
-            "due_token_ids": [],
-            "state": official_infraction_sync_status(),
-        }
+    # Per-enterprise switches are applied by the due-store query. A global
+    # early return would let one enterprise disable every other enterprise.
     if get_lock_owner(INFRACTION_SYNC_LOCK_KEY):
         return {
             "started": False,

@@ -231,7 +231,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
     @bp.get("/api/ai-weight-price/tasks")
     def tasks():
         return jsonify(service.store.list(request.args.get("status", ""), request.args.get("search", ""),
-                                          max(1, int(request.args.get("page", 1))), 50))
+                                          max(1, int(request.args.get("page", 1))), 50, newest_first=True))
 
     @bp.get("/api/ai-weight-price/run-items")
     def run_items():
@@ -241,7 +241,7 @@ def create_blueprint(service, authorize=None, agent_dispatch=None, server_execut
             return jsonify(run={}, total=0, rows=[])
         data = service.store.run_items(run_id, request.args.get("status", ""),
                                        request.args.get("search", ""),
-                                       max(1, int(request.args.get("page", 1))), 50)
+                                       max(1, int(request.args.get("page", 1))), 50, newest_first=True)
         if not service.status()["running"]:
             for row in data["rows"]:
                 if row.get("execution_result") == "执行中" and row.get("status") == "pending":

@@ -312,18 +312,23 @@ def _load_bit_browser_snapshot(stop_event=None):
     return None
 
 
-def _resolve_appeal_plan_window_ids(plan, stop_event=None):
+def _resolve_appeal_plan_window_ids(plan, stop_event=None, browser_provider="bitbrowser"):
     """在父进程用同一份授权和窗口快照解析整轮计划。"""
+    browser_label = "紫鸟" if browser_provider == "ziniao" else "BitBrowser"
     if not plan:
         return plan
     try:
         token_data = list_mercado_store_tokens() or {}
-        browsers = _load_bit_browser_snapshot(stop_event)
+        if browser_provider == "ziniao":
+            from bit.ziniao_browser import list_browsers
+            browsers = list_browsers()
+        else:
+            browsers = _load_bit_browser_snapshot(stop_event)
         if browsers is None:
             return None
     except Exception as exc:
         error = str(exc)
-        print(f"{get_now_time()} 批量读取 BitBrowser 窗口失败：{error}<br>")
+        print(f"{get_now_time()} 批量读取 {browser_label} 窗口失败：{error}<br>")
         for shop in plan:
             shop["window_id"] = ""
             shop["window_lookup_error"] = error
@@ -345,7 +350,7 @@ def _resolve_appeal_plan_window_ids(plan, stop_event=None):
             shop["window_id"] = ""
             shop["window_lookup_error"] = str(exc)
     print(
-        f"{get_now_time()} 已用 1 次 BitBrowser 窗口列表快照批量解析 "
+        f"{get_now_time()} 已用 1 次 {browser_label} 窗口列表快照批量解析 "
         f"{len(plan)} 家店铺，成功 {resolved_count} 家，"
         f"未匹配 {len(plan) - resolved_count} 家<br>"
     )
@@ -487,7 +492,7 @@ def _setting_flag_enabled(value):
     return bool(value)
 
 
-def _load_authorized_appeal_shop_site_data(salespeople=None, group_names=None):
+def _load_authorized_appeal_shop_site_data(salespeople=None, group_names=None, store_ids=None):
     """返回申诉授权的别名范围及用于浏览器遍历的规范店铺范围。"""
     selected_salespeople, selected_group_names = _normalize_appeal_scope_filters(
         salespeople,
@@ -496,7 +501,10 @@ def _load_authorized_appeal_shop_site_data(salespeople=None, group_names=None):
     token_data = list_mercado_store_tokens() or {}
     alias_scope = {}
     collection_targets = {}
+    selected_store_ids = {int(value) for value in store_ids or ()}
     for token in token_data.get("rows") or ():
+        if selected_store_ids and int(token.get("id") or 0) not in selected_store_ids:
+            continue
         if not bool(token.get("enabled", True)):
             continue
         settings = [dict(setting or {}) for setting in (token.get("site_settings") or ())]
@@ -530,25 +538,27 @@ def _load_authorized_appeal_shop_site_data(salespeople=None, group_names=None):
     return alias_scope, collection_targets
 
 
-def load_authorized_appeal_shop_site_config(salespeople=None, group_names=None):
+def load_authorized_appeal_shop_site_config(salespeople=None, group_names=None, store_ids=None):
     """从店铺授权读取允许申诉的店铺/站点，并按业务员、店铺组缩小范围。"""
     scope, _targets = _load_authorized_appeal_shop_site_data(
         salespeople,
         group_names,
+        **({"store_ids": store_ids} if store_ids else {}),
     )
     return scope
 
 
-def load_authorized_appeal_collection_targets(salespeople=None, group_names=None):
+def load_authorized_appeal_collection_targets(salespeople=None, group_names=None, store_ids=None):
     """返回实时侵权 API 读取使用的规范店铺名和站点码。"""
     _scope, targets = _load_authorized_appeal_shop_site_data(
         salespeople,
         group_names,
+        **({"store_ids": store_ids} if store_ids else {}),
     )
     return targets
 
 
-def load_authorized_appeal_api_targets(salespeople=None, group_names=None):
+def load_authorized_appeal_api_targets(salespeople=None, group_names=None, store_ids=None):
     """Return token-backed stores/sites selected by the appeal authorization switches."""
 
     selected_salespeople, selected_group_names = _normalize_appeal_scope_filters(
@@ -557,7 +567,10 @@ def load_authorized_appeal_api_targets(salespeople=None, group_names=None):
     )
     token_data = list_mercado_store_tokens() or {}
     targets = []
+    selected_store_ids = {int(value) for value in store_ids or ()}
     for token in token_data.get("rows") or ():
+        if selected_store_ids and int(token.get("id") or 0) not in selected_store_ids:
+            continue
         if not bool(token.get("enabled", True)):
             continue
         site_ids = set()
@@ -598,9 +611,9 @@ def load_authorized_appeal_api_targets(salespeople=None, group_names=None):
     return targets
 
 
-def _appeal_scope(only_active=None, salespeople=None, group_names=None):
+def _appeal_scope(only_active=None, salespeople=None, group_names=None, store_ids=None):
     """旧参数只保留调用兼容性，站点范围始终由店铺授权开关决定。"""
-    return load_authorized_appeal_shop_site_config(salespeople, group_names)
+    return load_authorized_appeal_shop_site_config(salespeople, group_names, **({"store_ids": store_ids} if store_ids else {}))
 
 
 def _appeal_site_is_enabled(scope, shop_name, site_code):
@@ -917,6 +930,7 @@ def build_latest_infraction_appeal_plan(
     max_workers=DEFAULT_DAILY_MAX_WORKERS,
     log_path=None,
     stop_event=None,
+    store_ids=None,
 ):
     """通过官方 API 遍历申诉授权站点，再按各站点侵权数量生成计划。
 
@@ -930,6 +944,7 @@ def build_latest_infraction_appeal_plan(
     api_targets = load_authorized_appeal_api_targets(
         salespeople,
         group_names,
+        **({"store_ids": store_ids} if store_ids else {}),
     )
     if not api_targets:
         print(f"{get_now_time()} 店铺授权中没有符合筛选条件的申诉站点<br>")
@@ -1079,12 +1094,13 @@ def build_latest_prohibited_appeal_plan(
     salespeople=None,
     group_names=None,
     min_infraction_count=0,
+    store_ids=None,
     **_kwargs,
 ):
     """从当前禁限售列表生成申诉计划，不再混用普通侵权话术。"""
     del only_active
     threshold = _parse_nonnegative_count(min_infraction_count)
-    api_targets = load_authorized_appeal_api_targets(salespeople, group_names)
+    api_targets = load_authorized_appeal_api_targets(salespeople, group_names, **({"store_ids": store_ids} if store_ids else {}))
     if not api_targets:
         print(f"{get_now_time()} 店铺授权中没有符合筛选条件的禁限售申诉站点<br>")
         return []
@@ -1161,6 +1177,7 @@ def build_latest_reputation_appeal_plan(
     salespeople=None,
     group_names=None,
     reputation_data=None,
+    store_ids=None,
 ):
     """按最新声誉批次生成延误率、取消率或投诉申诉计划。
 
@@ -1175,7 +1192,7 @@ def build_latest_reputation_appeal_plan(
     threshold = max(0, _parse_rate(min_rate))
     data = get_latest_reputation_info() if reputation_data is None else reputation_data
     rows = data.get("rows") or []
-    enabled_scope = _appeal_scope(only_active, salespeople, group_names)
+    enabled_scope = _appeal_scope(only_active, salespeople, group_names, **({"store_ids": store_ids} if store_ids else {}))
     shop_map = {}
 
     for row in rows:
@@ -1240,6 +1257,7 @@ def build_algorithm_appeal_plan(
     log_path=None,
     stop_event=None,
     appeal_types=None,
+    store_ids=None,
 ):
     """合并所选申诉内容的授权计划，以归一化指标总分安排店铺顺序和站点频率。
 
@@ -1249,7 +1267,7 @@ def build_algorithm_appeal_plan(
     """
     if _stop_requested(stop_event):
         return []
-    scope = dict(only_active=only_active, salespeople=salespeople, group_names=group_names)
+    scope = dict(only_active=only_active, salespeople=salespeople, group_names=group_names, **({"store_ids": store_ids} if store_ids else {}))
     selected = normalize_appeal_types(appeal_types) if appeal_types is not None else (APPEAL_TYPE_ALGORITHM,)
     if selected in ((APPEAL_TYPE_ALGORITHM,), (APPEAL_TYPE_MIXED,)):
         selected = tuple(dict.fromkeys(MIXED_APPEAL_SEQUENCE))
@@ -1339,6 +1357,7 @@ def build_appeal_plan(
     log_path=None,
     stop_event=None,
     algorithm_appeal_types=None,
+    store_ids=None,
 ):
     """按申诉类型分发到侵权计划或声誉比率计划。"""
     normalized_type = normalize_appeal_type(appeal_type)
@@ -1353,6 +1372,7 @@ def build_appeal_plan(
             group_names=group_names, max_workers=max_workers, log_path=log_path,
             stop_event=stop_event,
             appeal_types=algorithm_appeal_types,
+            **({"store_ids": store_ids} if store_ids else {}),
         )
     if normalized_type == APPEAL_TYPE_INFRACTION:
         return build_latest_infraction_appeal_plan(
@@ -1365,6 +1385,7 @@ def build_appeal_plan(
             max_workers=max_workers,
             log_path=log_path,
             stop_event=stop_event,
+            **({"store_ids": store_ids} if store_ids else {}),
         )
     if normalized_type == APPEAL_TYPE_PROHIBITED:
         return build_latest_prohibited_appeal_plan(
@@ -1373,6 +1394,7 @@ def build_appeal_plan(
             salespeople=salespeople,
             group_names=group_names,
             min_infraction_count=min_infraction_count,
+            **({"store_ids": store_ids} if store_ids else {}),
         )
     task_rate_thresholds = {
         APPEAL_TYPE_DELAY: min_delay_rate,
@@ -1389,6 +1411,7 @@ def build_appeal_plan(
         min_rate=task_min_rate,
         salespeople=salespeople,
         group_names=group_names,
+        **({"store_ids": store_ids} if store_ids else {}),
     )
 
 
@@ -1502,6 +1525,7 @@ def _appeal_one_shop_locked(
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     dashscope_api_key="",
 ):
+    screenshot_mode = bool(shop_plan.get("screenshot_mode"))
     normalized_type = normalize_appeal_type(appeal_type)
     appeal_label = _appeal_type_label(normalized_type)
     name = shop_plan["name"]
@@ -1572,6 +1596,8 @@ def _appeal_one_shop_locked(
                     f"限频重试 {rate_retry_count}/{rate_limit_retries}<br>"
                 )
                 appeal_kwargs = {"validate_open": True}
+                if screenshot_mode:
+                    appeal_kwargs["screenshot_mode"] = True
                 appeal_kwargs["window_id"] = window_id
                 if stop_event is not None:
                     appeal_kwargs["stop_event"] = stop_event
@@ -1609,6 +1635,11 @@ def _appeal_one_shop_locked(
                 result = f"执行异常：{e}"
                 traceback.print_exc()
 
+            if screenshot_mode and (_is_login_required_result(result) or _is_failed_appeal_result(result)
+                                    or _is_rate_limited_result(result) or _is_retryable_site_result(result)):
+                results.append({"site": site_code, "appeal_type": site_appeal_label, "count": count, "result": result})
+                exit_shop = True
+                break
             if _is_login_required_result(result):
                 if not (
                     isinstance(result, dict)
@@ -1829,6 +1860,7 @@ def appeal_one_shop(
     # 单次申诉内部会在检测到未登录时执行共享自动登录流程；如果自动登录已经
     # 明确失败（验证码、人机验证、密码失败等），不再从任务层重复提交登录表单。
     del login_retry_attempts, login_retry_seconds
+    screenshot_mode = bool(shop_plan.get("screenshot_mode"))
     normalized_type = normalize_appeal_type(appeal_type)
     appeal_label = _appeal_type_label(normalized_type)
     name = shop_plan["name"]
@@ -1884,7 +1916,7 @@ def appeal_one_shop(
             "results": [],
             "exit_reason": "窗口被其他任务占用",
         }
-    if owned_window_ids is not None:
+    if owned_window_ids is not None and not screenshot_mode:
         try:
             owned_window_ids[str(window_id)] = name
         except Exception as exc:
@@ -1917,13 +1949,14 @@ def appeal_one_shop(
             dashscope_api_key=dashscope_api_key,
         )
     finally:
-        # shensu 会关闭当前标签页，但不会关闭比特浏览器窗口。bit_main 会连续
-        # 跑多轮申诉，如果这里不关窗口，Chromium 主进程和渲染进程会跨轮累积。
-        close_result = _close_ai_appeal_browser(
-            window_id,
-            lease,
-            name,
-            "店铺 AI 申诉任务结束",
+        # 常规任务回收窗口；截图模式交还用户并保留客服会话。
+        if screenshot_mode:
+            try:
+                bit_appeal_ai.releaseBrowserLease(window_id)
+            except Exception as exc:
+                print(f"{get_now_time()} {name} 保留截图窗口时更新占用状态失败：{exc}<br>")
+        close_result = {"success": True, "preserved": True} if screenshot_mode else _close_ai_appeal_browser(
+            window_id, lease, name, "店铺 AI 申诉任务结束",
         )
         if owned_window_ids is not None and _browser_close_succeeded(close_result):
             try:
@@ -2161,6 +2194,9 @@ def _run_ai_appeal_once_locked(
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     dashscope_api_key="",
     task_strategy="normal",
+    screenshot_mode=False,
+    browser_provider="bitbrowser",
+    store_ids=None,
 ):
     """用多进程并发处理已开启的任务；店铺内部按站点指标降序串行处理。"""
     selected_types = normalize_appeal_types(appeal_type)
@@ -2211,6 +2247,9 @@ def _run_ai_appeal_once_locked(
                     appeal_copy_mode=appeal_copy_mode,
                     dashscope_api_key=dashscope_api_key,
                     task_strategy=task_strategy,
+                    **({"screenshot_mode": True} if screenshot_mode else {}),
+                    **({"browser_provider": browser_provider} if browser_provider != "bitbrowser" else {}),
+                    **({"store_ids": store_ids} if store_ids else {}),
                 ),
             })
         print(f"{get_now_time()} 多任务一轮执行完成<br>")
@@ -2240,6 +2279,7 @@ def _run_ai_appeal_once_locked(
         log_path=log_path,
         stop_event=stop_event,
         **plan_options,
+        **({"store_ids": store_ids} if store_ids else {}),
     )
     if not plan:
         print(f"{get_now_time()} 没有找到可处理的{appeal_label}店铺<br>")
@@ -2248,7 +2288,10 @@ def _run_ai_appeal_once_locked(
         print(f"{get_now_time()} 已收到停止请求，{appeal_label}任务不再启动<br>")
         return []
 
-    plan = _resolve_appeal_plan_window_ids(plan, stop_event=stop_event)
+    plan = _resolve_appeal_plan_window_ids(
+        plan, stop_event=stop_event,
+        **({"browser_provider": browser_provider} if browser_provider != "bitbrowser" else {}),
+    )
     if plan is None or _stop_requested(stop_event):
         print(f"{get_now_time()} 已收到停止请求，{appeal_label}任务不再解析窗口<br>")
         return []
@@ -2294,7 +2337,7 @@ def _run_ai_appeal_once_locked(
         executor = ProcessPoolExecutor(max_workers=worker_count)
         for index, shop in enumerate(plan):
             worker_args = [
-                {**shop, "_ai_usage_context": current_usage_context()},
+                {**shop, "_ai_usage_context": current_usage_context(), "screenshot_mode": screenshot_mode},
                 normalized_type,
                 site_pause,
                 message,
@@ -2428,6 +2471,9 @@ def run_ai_appeal_once(
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     dashscope_api_key="",
     task_strategy="normal",
+    screenshot_mode=False,
+    browser_provider="bitbrowser",
+    store_ids=None,
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -2465,6 +2511,9 @@ def run_ai_appeal_once(
             appeal_copy_mode=appeal_copy_mode,
             dashscope_api_key=dashscope_api_key,
             task_strategy=task_strategy,
+            **({"screenshot_mode": True} if screenshot_mode else {}),
+            **({"browser_provider": browser_provider} if browser_provider != "bitbrowser" else {}),
+            **({"store_ids": store_ids} if store_ids else {}),
         )
     finally:
         if owned_lock is not None:
@@ -2575,6 +2624,9 @@ def _loop_ai_appeal_locked(
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     dashscope_api_key="",
     task_strategy="normal",
+    screenshot_mode=False,
+    browser_provider="bitbrowser",
+    store_ids=None,
 ):
     """循环执行已开启的店铺 AI 客服申诉任务。"""
     selected_types = normalize_appeal_types(appeal_type)
@@ -2650,6 +2702,9 @@ def _loop_ai_appeal_locked(
                 appeal_copy_mode=appeal_copy_mode,
                 dashscope_api_key=dashscope_api_key,
                 task_strategy=task_strategy,
+                **({"screenshot_mode": True} if screenshot_mode else {}),
+                **({"browser_provider": browser_provider} if browser_provider != "bitbrowser" else {}),
+                **({"store_ids": store_ids} if store_ids else {}),
             )
             for key, count in task_execution_counts(round_result).items():
                 execution_counts[key] = execution_counts.get(key, 0) + count
@@ -2769,6 +2824,9 @@ def loop_ai_appeal(
     appeal_copy_mode=APPEAL_COPY_MODE_NORMAL,
     dashscope_api_key="",
     task_strategy="normal",
+    screenshot_mode=False,
+    browser_provider="bitbrowser",
+    store_ids=None,
 ):
     selected_types = normalize_appeal_types(appeal_type)
     appeal_label = "、".join(_appeal_type_label(item) for item in selected_types)
@@ -2810,6 +2868,9 @@ def loop_ai_appeal(
             appeal_copy_mode=appeal_copy_mode,
             dashscope_api_key=dashscope_api_key,
             task_strategy=task_strategy,
+            **({"screenshot_mode": True} if screenshot_mode else {}),
+            **({"browser_provider": browser_provider} if browser_provider != "bitbrowser" else {}),
+            **({"store_ids": store_ids} if store_ids else {}),
         )
     finally:
         if owned_lock is not None:

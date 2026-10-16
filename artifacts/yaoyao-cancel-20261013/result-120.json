@@ -1,0 +1,36 @@
+{
+  "id": 120,
+  "name": "遥遥领先5号店",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3500051077",
+      "before": 0,
+      "local_id": 1336,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3500051077",
+      "before": 0,
+      "local_id": 1339,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site": "MLB",
+      "seller_id": "3502181856",
+      "before": 0,
+      "local_id": 1341,
+      "jobs": [],
+      "remaining": 0
+    }
+  ]
+}

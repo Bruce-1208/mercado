@@ -1,0 +1,728 @@
+[
+  {
+    "module": "employee_tasks",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "employee_tasks",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "employee_tasks",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "mercado_action_center",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "mercado_action_center",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "mercado_action_center",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "integration_settings",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "integration_settings",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "integration_settings",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "A",
+        "cls": "",
+        "id": "",
+        "width": 91
+      }
+    ]
+  },
+  {
+    "module": "ai_billing",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "ai_billing",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "ai_billing",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "ai_weight_price",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "ai_weight_price",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "ai_weight_price",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "BUTTON",
+        "cls": "",
+        "id": "",
+        "width": 106
+      }
+    ]
+  },
+  {
+    "module": "ai_video_details",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "ai_video_details",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "ai_video_details",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "TABLE",
+        "cls": "",
+        "id": "",
+        "width": 860
+      },
+      {
+        "tag": "THEAD",
+        "cls": "",
+        "id": "",
+        "width": 860
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "id": "",
+        "width": 860
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 89
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 159
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 106
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 106
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 106
+      }
+    ]
+  },
+  {
+    "module": "account_profile",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "account_profile",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "account_profile",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "account_billing",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "account_billing",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "account_billing",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "print_wallet",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "print_wallet",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "print_wallet",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "clearance_alerts",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "clearance_alerts",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": [
+      {
+        "tag": "TABLE",
+        "cls": "ca-table",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "THEAD",
+        "cls": "",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 215
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 66
+      },
+      {
+        "tag": "TBODY",
+        "cls": "",
+        "id": "ca-rows",
+        "width": 1130
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "TD",
+        "cls": "ca-empty",
+        "id": "",
+        "width": 1130
+      }
+    ]
+  },
+  {
+    "module": "clearance_alerts",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "TABLE",
+        "cls": "ca-table",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "THEAD",
+        "cls": "",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "id": "",
+        "width": 1130
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 97
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 121
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 271
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 215
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 66
+      }
+    ]
+  },
+  {
+    "module": "size_charts",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "size_charts",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "size_charts",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "TABLE",
+        "cls": "sc-grid sc-builtin-grid",
+        "id": "",
+        "width": 600
+      },
+      {
+        "tag": "THEAD",
+        "cls": "",
+        "id": "sc-builtin-head",
+        "width": 600
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "id": "",
+        "width": 600
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 108
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 108
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "id": "",
+        "width": 108
+      },
+      {
+        "tag": "TBODY",
+        "cls": "",
+        "id": "sc-builtin-rows",
+        "width": 600
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "id": "",
+        "width": 600
+      }
+    ]
+  },
+  {
+    "module": "mercado_promotions",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "mercado_promotions",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "mercado_promotions",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "infraction_dashboard",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "infraction_dashboard",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "infraction_dashboard",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "login",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "login",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "login",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "register",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "register",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "register",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "yandex",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "module": "yandex",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "module": "yandex",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "module": "yandex-ordersView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-ordersView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-ordersView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-listingsView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-listingsView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-listingsView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-inventoryView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-inventoryView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-inventoryView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-returnsView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-returnsView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-returnsView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-chatsView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-chatsView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-chatsView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-todoView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-todoView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-todoView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-settlementView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-settlementView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-settlementView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-feedbackView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-feedbackView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-feedbackView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-productsView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-productsView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-productsView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  },
+  {
+    "module": "yandex-storesView",
+    "viewport": 1440,
+    "overflow": false,
+    "width": 1440
+  },
+  {
+    "module": "yandex-storesView",
+    "viewport": 1024,
+    "overflow": false,
+    "width": 1024
+  },
+  {
+    "module": "yandex-storesView",
+    "viewport": 390,
+    "overflow": false,
+    "width": 390
+  }
+]

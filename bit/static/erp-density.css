@@ -193,3 +193,168 @@ body.zs-standalone:not(.zs-auth) :is(.stat strong, .metric strong, .pd-metric st
     /* Let the list yield space to the persistent summary when a notice grows. */
     body.zs-console #order-board > .order-table-wrap { min-height: 40px; }
 }
+
+/* Ordinary filters occupy exactly one row. Expanded conditions have their own row.
+   Specific overrides here retire historical per-page spans and mobile wrapping. */
+body .zs-compact-filters.zs-compact-filters {
+    display: grid;
+    align-items: end;
+    gap: var(--zs-space-2);
+    min-width: 0;
+}
+body .zs-compact-filters > .zs-compact-item {
+    grid-row: 1;
+    grid-column: auto !important; /* Legacy field spans include inline declarations. */
+    min-width: 0;
+    width: auto;
+    max-width: 100%;
+    margin: 0;
+}
+body .zs-compact-filters > .zs-advanced-filters,
+body .zs-compact-filters > .zs-advanced-filters::details-content { display: contents; }
+body .zs-compact-filters > .zs-advanced-filters > summary {
+    grid-row: 1;
+    align-self: end;
+    white-space: nowrap;
+    max-width: 104px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: var(--zs-height-compact);
+    box-sizing: border-box;
+    padding: var(--zs-space-1) 0;
+    cursor: pointer;
+    color: var(--zs-brand);
+}
+body .zs-compact-filters > .zs-advanced-filters > .zs-advanced-grid {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: var(--zs-space-2);
+    margin: 0;
+    padding: var(--zs-space-2) 0 0;
+    border-top: 1px solid var(--zs-stroke);
+}
+body .zs-compact-filters > .zs-advanced-filters:not([open]) > .zs-advanced-grid { display: none; }
+body .zs-compact-filters .zs-advanced-grid > .zs-compact-item {
+    min-width: 0;
+    max-width: 100%;
+    width: auto;
+    grid-column: auto !important;
+}
+body .zs-compact-filters .zs-compact-item :is(input:not([type="checkbox"]), select) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+}
+body .zs-compact-filters > .zs-compact-item > :is(label, span:first-child) {
+    white-space: nowrap;
+}
+@media (max-width: 760px) {
+    body .zs-compact-filters > .zs-advanced-filters > summary { min-height: var(--zs-height-touch); }
+    body .zs-compact-filters > .zs-advanced-filters > .zs-advanced-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* Legacy period shortcuts remain usable when revealed on narrow screens. */
+body .zs-compact-filters .zs-advanced-grid > .range-switch {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+body .header-actions.zs-compact-filters { max-width: 100%; }
+@media (max-width: 760px) {
+    body .header-actions.zs-compact-filters { width: 100%; }
+}
+
+/* Eight ordinary single-product orders fit a laptop viewport in focused compact mode. */
+body.zs-console #tab-orders.order-list-focus #order-board.order-density-compact .order-table td { height: 48px; padding: 2px var(--zs-space-1); line-height: 14px; }
+body.zs-console #tab-orders.order-list-focus #order-board.order-density-compact .order-cell-stack { gap: 0; line-height: 14px; }
+body.zs-console #tab-orders.order-list-focus #order-board.order-density-compact .order-product { grid-template-columns: var(--zs-height-compact) minmax(0,1fr); gap: var(--zs-space-1); }
+body.zs-console #tab-orders.order-list-focus #order-board.order-density-compact :is(.order-product-media,.order-product-image,.order-product-placeholder) { width: var(--zs-height-compact); height: var(--zs-height-compact); }
+body.zs-console #tab-orders.order-list-focus #order-board > .order-pagination { padding: var(--zs-space-1); }
+@media (max-width: 760px) {
+    /* Mobile rows use content-sized grid cells instead of desktop table-cell heights. */
+    body.zs-console #tab-orders #order-board.order-density-compact #order-table-body > tr > td { height: auto; padding: 0; line-height: 16px; }
+}
+
+/* Product workspaces: more columns on desktop; retain readable single cards on phones. */
+@media (min-width: 651px) {
+    body.zs-console #products-1688-body,
+    body.zs-console #mercado-list-module #mercado-list-body,
+    body.zs-console #tab-ai-original-products #ai-original-grid {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+        gap: var(--zs-space-2);
+    }
+}
+body.zs-console #products-1688-body > tr,
+body.zs-console #mercado-list-module.collection-mode #mercado-list-body > .market-collection-row {
+    padding: var(--zs-space-2);
+    gap: var(--zs-space-2);
+}
+body.zs-console #mercado-list-module :is(.market-card-header, .market-card-footer, .market-card-main) {
+    padding: var(--zs-space-2);
+    gap: var(--zs-space-2);
+}
+body.zs-console #mercado-list-module.collection-mode .market-product-title { min-height: 2.8em; }
+body.zs-console #products-1688-body td[data-label]::before,
+body.zs-console #mercado-list-module.collection-mode td[data-label]::before { margin-bottom: var(--zs-space-1); }
+@media (max-width: 650px) {
+    body.zs-console #products-1688-body .p1688-row-actions :is(button, a),
+    body.zs-console #products-1688-body select,
+    body.zs-console #tab-ai-original-products .ai-original-fields > label input {
+        min-height: var(--zs-height-touch);
+    }
+}
+
+/* Catalog chrome has the same rhythm; editor cards retain room for their fields. */
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) > .zs-catalog-heading {
+    padding: 0 0 var(--zs-space-4); margin: 0 0 var(--zs-space-4);
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading h2 { margin: 0 0 var(--zs-space-1); }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading p { margin: 0; line-height: 1.6; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-filters {
+    padding: var(--zs-space-3); margin: 0 0 var(--zs-space-3);
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-selection,
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-pagination { padding: var(--zs-space-3); }
+body.zs-console .zs-catalog-selection .zs-bulk-menu > .market-selection-tools { padding: var(--zs-space-3) 0 0; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-bulk-menu, .zs-catalog-help) > summary {
+    box-sizing: border-box; min-height: var(--zs-height-compact); padding: var(--zs-space-2) var(--zs-space-3);
+}
+@media (max-width: 760px) {
+    body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-bulk-menu, .zs-catalog-help) > summary { min-height: var(--zs-height-touch); }
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-catalog-filters, .zs-catalog-selection, .zs-catalog-heading) :is(button, a.primary, input:not([type=checkbox]), select) {
+    height: auto; min-height: var(--zs-height-compact); padding-block: var(--zs-space-1);
+    font-size: var(--zs-text-body); line-height: 1.5;
+}
+
+/* Filter actions and disclosures remain one line at the shared control height. */
+body:is(.zs-console, .zs-standalone) .zs-compact-filters button { white-space: nowrap; }
+/* The activity store picker is anchored inside a padded filter panel. */
+body.zs-standalone .store-box .store-menu {
+    min-width: min(320px, calc(100vw - 4 * var(--zs-space-4)));
+    max-width: calc(100vw - 4 * var(--zs-space-4));
+    top: calc(100% + var(--zs-space-1));
+    overscroll-behavior: contain;
+}
+body:is(.zs-console, .zs-standalone) .zs-compact-filters > .zs-advanced-filters > summary {
+    line-height: calc(var(--zs-height-compact) - 2px);
+    padding: 0 var(--zs-space-1);
+}
+@media (max-width: 760px) {
+    body:is(.zs-console, .zs-standalone) .zs-compact-filters > .zs-advanced-filters > summary {
+        line-height: calc(var(--zs-height-touch) - 2px);
+    }
+    body.zs-console #tab-orders .zs-compact-filters > .zs-advanced-filters > summary {
+        min-height: var(--zs-height-compact);
+        line-height: calc(var(--zs-height-compact) - 2px);
+    }
+    body:is(.zs-console, .zs-standalone) :is(.detail-button, .detail-sections a) { min-height: var(--zs-height-touch); }
+}
+@media (max-width: 760px) {
+    body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) :is(.zs-catalog-filters, .zs-catalog-selection, .zs-catalog-heading) :is(button, a.primary, input:not([type=checkbox]), select) { min-height: var(--zs-height-touch); }
+}

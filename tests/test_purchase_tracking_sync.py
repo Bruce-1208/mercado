@@ -190,6 +190,7 @@ def test_plugin_direct_start_and_result_routes(monkeypatch, tmp_path):
     user = {'id': 7, 'username': 'collector', 'access_version': 0}
     monkeypatch.setattr(workbench.bit_db_api, 'account_billing', lambda _: {'status': 'active'})
     monkeypatch.setattr(workbench, 'get_current_workbench_user', lambda: user)
+    monkeypatch.setattr(workbench, 'workbench_user_has_permission', lambda user, permission: True)
     monkeypatch.setattr(workbench, '_authorized_token_ids_for_user', lambda _: None)
     token = workbench.create_browser_extension_token(user)
     headers = {'Authorization': f'Bearer {token}'}
@@ -344,3 +345,89 @@ def test_upgrade_preserves_legacy_log_and_releases_stuck_task(tmp_path):
     assert '更新泽顺插件' in result['message']
     new = restored.create(7, platform='pdd', orders=state['orders'])
     assert new['query_version'] == 2
+
+
+def test_tracking_query_combines_status_salesperson_group_and_authorized_stores(monkeypatch):
+    from bit import bit_mysql
+    queries = []
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def execute(self, sql, params): queries.append((sql, params))
+        def fetchall(self): return []
+    class Connection:
+        def cursor(self): return Cursor()
+        def commit(self): pass
+        def close(self): pass
+    monkeypatch.setattr(bit_mysql.pymysql, 'connect', lambda **kwargs: Connection())
+    for name in ('_ensure_mercado_synced_orders_table', '_ensure_mercado_store_tokens_table', '_ensure_mercado_store_site_settings_table'):
+        monkeypatch.setattr(bit_mysql, name, lambda cursor: None)
+    malicious = "小王' OR 1=1 --"
+    bit_mysql.get_mercado_purchase_tracking_orders([], all_orders=True, status='@找货',
+        allowed_token_ids=[11], salesperson=malicious, group_name='一组')
+    sql, params = queries[0]
+    assert 'site_settings.`site_id` = synced.`site_id`' in sql
+    assert 'site_settings.`salesperson` = %s' in sql
+    assert 'site_settings.`group_name` = %s' in sql
+    assert malicious not in sql
+    assert params[-3:] == [11, malicious, '一组']
+    queries.clear()
+    bit_mysql.get_mercado_purchase_tracking_orders([], all_orders=True,
+        salesperson='__unassigned__', group_name='__ungrouped__')
+    assert "TRIM(COALESCE(site_settings.`salesperson`, '')) = ''" in queries[0][0]
+    assert "TRIM(COALESCE(site_settings.`group_name`, '')) = ''" in queries[0][0]
+
+
+def test_plugin_filter_options_and_task_scope_are_scoped_and_persisted(tmp_path, monkeypatch):
+    from bit import bit_interface as workbench
+    from bit.purchase_tracking_sync import PluginPurchaseTrackingManager
+    manager = PluginPurchaseTrackingManager(tmp_path / 'tracking.sqlite3')
+    monkeypatch.setattr(workbench, 'plugin_purchase_tracking_manager', manager)
+    user = {'id': 7, 'username': 'alice', 'display_name': '小王', 'organization_key': 'tenant-a',
+            'role_key': 'enterprise_admin', 'access_version': 1}
+    monkeypatch.setattr(workbench, '_browser_extension_user_from_token', lambda _: user)
+    monkeypatch.setattr(workbench, 'workbench_user_has_permission', lambda *_: True)
+    monkeypatch.setattr(workbench, '_workbench_billing_blocked', lambda _: None)
+    monkeypatch.setattr(workbench, '_authorized_token_ids_for_user', lambda _: {11})
+    monkeypatch.setattr(workbench.bit_db_api, 'list_mercado_store_tokens', lambda: {'rows': [
+        {'id': 11, 'organization_key': 'tenant-a', 'site_settings': [
+            {'site_id': 'MLM', 'salesperson': '小王', 'salesperson_user_id': 7, 'group_name': '一组'},
+            {'site_id': 'MLB', 'salesperson': '小李', 'salesperson_user_id': 8, 'group_name': '二组'}]},
+        {'id': 22, 'organization_key': 'tenant-b', 'site_settings': [{'salesperson': '外部', 'group_name': '外部组'}]}]})
+    reads = []
+    monkeypatch.setattr(workbench.bit_db_api, 'get_purchase_tracking_orders', lambda ids, **kwargs:
+        reads.append(kwargs) or [{'order_id': '1', 'purchase_order': '5127480146121008319'}])
+    client = workbench.app.test_client()
+    headers = {'Authorization': 'Bearer test'}
+    opts = client.get('/api/browser-extension/purchase-tracking/options', headers=headers)
+    assert opts.status_code == 200
+    assert opts.json['data']['salespeople'] == ['小李', '小王']
+    assert opts.json['data']['groups'] == ['一组', '二组']
+    user['role_key'] = 'member'
+    opts = client.get('/api/browser-extension/purchase-tracking/options', headers=headers)
+    assert opts.json['data']['salespeople'] == ['小王']
+    assert opts.json['data']['groups'] == ['一组']
+    response = client.post('/api/browser-extension/purchase-tracking/start', headers=headers, json={
+        'platform': '1688', 'date_start': '2026-10-01', 'date_end': '2026-10-03',
+        'order_status': '@找货', 'salesperson': '小李', 'group_name': '一组'})
+    assert response.status_code == 202, response.json
+    assert reads[0]['salesperson'] == '小王'
+    assert reads[0]['group_name'] == '一组'
+    assert reads[0]['status'] == '@找货'
+    assert reads[0]['allowed_token_ids'] == [11]
+    restored = PluginPurchaseTrackingManager(tmp_path / 'tracking.sqlite3').status(7)
+    for field, expected in {'date_start': '2026-10-01', 'date_end': '2026-10-03', 'order_status': '@找货',
+                            'salesperson': '小王', 'group_name': '一组'}.items():
+        assert restored[field] == expected
+
+
+def test_database_api_bridge_forwards_tracking_filter_fields(monkeypatch):
+    from bit import bit_db_api
+    calls = []
+    monkeypatch.setattr(bit_db_api, 'DB_MODE', 'api')
+    monkeypatch.setattr(bit_db_api, '_request', lambda method, path, **kwargs: calls.append((method, path, kwargs)) or [])
+    bit_db_api.get_purchase_tracking_orders([], all_orders=True, date_start='2026-10-01', date_end='2026-10-03',
+        missing_tracking=True, status='@找货', salesperson='小王', group_name='一组', allowed_token_ids=[11])
+    assert calls == [('POST', '/api/db/orders/purchase-tracking', {'json': {
+        'order_ids': [], 'all_orders': True, 'date_start': '2026-10-01', 'date_end': '2026-10-03',
+        'missing_tracking': True, 'status': '@找货', 'salesperson': '小王', 'group_name': '一组', 'allowed_token_ids': [11]}})]

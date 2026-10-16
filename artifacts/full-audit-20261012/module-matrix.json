@@ -1,0 +1,1218 @@
+[
+  {
+    "module": "overview",
+    "label": "总览",
+    "test_counts": {
+      "passed": 156
+    },
+    "files": [
+      "tests/test_action_center_batch_browser.py",
+      "tests/test_action_center_batch_status.py",
+      "tests/test_action_center_claims.py",
+      "tests/test_action_center_multi_filters.py",
+      "tests/test_action_center_multi_filters_browser.py",
+      "tests/test_action_center_order_alerts.py",
+      "tests/test_action_center_order_storage.py",
+      "tests/test_action_center_post_sale.py",
+      "tests/test_action_center_preload.py",
+      "tests/test_action_center_procurement.py",
+      "tests/test_action_center_rights_holder.py"
+    ],
+    "1440": {
+      "max_switch_ms": 0.9,
+      "max_paint_ms": 17.5,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 0.8,
+      "max_paint_ms": 15.6,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "orders",
+    "label": "订单管理",
+    "test_counts": {
+      "passed": 579,
+      "failure": 34
+    },
+    "files": [
+      "tests/test_action_center_order_alerts.py",
+      "tests/test_action_center_order_storage.py",
+      "tests/test_bit_mysql_orders.py",
+      "tests/test_bit_order_labels.py",
+      "tests/test_bit_order_management.py",
+      "tests/test_bit_order_split.py",
+      "tests/test_bit_order_sync.py",
+      "tests/test_bit_update_orders.py",
+      "tests/test_infringement_borderline.py",
+      "tests/test_order_autoprint_candidates.py",
+      "tests/test_order_autoprint_recovery.py",
+      "tests/test_order_detail_browser.py",
+      "tests/test_order_display_rates.py",
+      "tests/test_order_freight_filters.py",
+      "tests/test_order_print_range.py",
+      "tests/test_order_product_detail_routes.py",
+      "tests/test_order_product_details.py",
+      "tests/test_order_product_translation.py",
+      "tests/test_order_purchase_platform.py",
+      "tests/test_order_viewport_browser.py",
+      "tests/test_order_warehouse_access.py",
+      "tests/test_order_warehouse_browser.py",
+      "tests/test_pdd_orders_browser.py",
+      "tests/test_pdd_orders_export.py",
+      "tests/test_purchase_tracking_query_browser.py",
+      "tests/test_purchase_tracking_sync.py",
+      "tests/test_reputation_listing_orders.py",
+      "tests/test_yandex_unified_order_routes.py",
+      "tests/test_yandex_unified_orders.py",
+      "tests/test_yandex_unified_orders_browser.py",
+      "tests/test_zeshun_order_analysis.py",
+      "tests/test_zeshun_order_analysis_browser.py",
+      "tests/test_zying_order_excel.py",
+      "tests/test_zying_order_extension.py",
+      "tests/test_zying_order_extension_browser.py",
+      "tests/test_zying_order_sync.py",
+      "tests/test_zying_order_sync_browser.py",
+      "tests/test_zying_order_sync_speed.py"
+    ],
+    "1440": {
+      "max_switch_ms": 14.6,
+      "max_paint_ms": 32.7,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 12.1,
+      "max_paint_ms": 29.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "inventory",
+    "label": "库存管理",
+    "test_counts": {
+      "passed": 64,
+      "failure": 4
+    },
+    "files": [
+      "tests/test_bit_inventory.py",
+      "tests/test_order_warehouse_access.py",
+      "tests/test_order_warehouse_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.2,
+      "max_paint_ms": 29.8,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.8,
+      "max_paint_ms": 30.1,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "1688-products",
+    "label": "1688产品区",
+    "test_counts": {
+      "passed": 124
+    },
+    "files": [
+      "tests/test_1688_dimensions_browser.py",
+      "tests/test_1688_product_management_backend.py",
+      "tests/test_1688_product_management_browser.py",
+      "tests/test_1688_purchase_price.py",
+      "tests/test_1688_purchase_price_backend.py",
+      "tests/test_1688_sku_images_browser.py",
+      "tests/test_zeshun_1688_preferences_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.3,
+      "max_paint_ms": 29,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 5,
+      "max_paint_ms": 30.3,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "ai-original-products",
+    "label": "AI原创产品",
+    "test_counts": {
+      "passed": 668,
+      "failure": 17
+    },
+    "files": [
+      "tests/test_ai_cost_visibility.py",
+      "tests/test_ai_cost_visibility_browser.py",
+      "tests/test_ai_original_account_failures.py",
+      "tests/test_ai_original_amazon_publish.py",
+      "tests/test_ai_original_attribute_completeness.py",
+      "tests/test_ai_original_autopublish_browser.py",
+      "tests/test_ai_original_batch_isolation.py",
+      "tests/test_ai_original_budget_routes.py",
+      "tests/test_ai_original_budget_store.py",
+      "tests/test_ai_original_bulk_net.py",
+      "tests/test_ai_original_bulk_net_browser.py",
+      "tests/test_ai_original_category.py",
+      "tests/test_ai_original_category_best_fit.py",
+      "tests/test_ai_original_category_catalog.py",
+      "tests/test_ai_original_category_lock.py",
+      "tests/test_ai_original_category_recovery.py",
+      "tests/test_ai_original_category_state.py",
+      "tests/test_ai_original_cost_control.py",
+      "tests/test_ai_original_fixed_cards_browser.py",
+      "tests/test_ai_original_generation_reliability.py",
+      "tests/test_ai_original_list_speed.py",
+      "tests/test_ai_original_low_cost.py",
+      "tests/test_ai_original_manual_fields.py",
+      "tests/test_ai_original_net_persistence.py",
+      "tests/test_ai_original_net_repair.py",
+      "tests/test_ai_original_net_save_browser.py",
+      "tests/test_ai_original_platform_filters.py",
+      "tests/test_ai_original_platform_routes.py",
+      "tests/test_ai_original_platforms.py",
+      "tests/test_ai_original_platforms_browser.py",
+      "tests/test_ai_original_preparation_recovery.py",
+      "tests/test_ai_original_products.py",
+      "tests/test_ai_original_publish.py",
+      "tests/test_ai_original_publish_integration.py",
+      "tests/test_ai_original_publish_routes.py",
+      "tests/test_ai_original_review_save.py",
+      "tests/test_ai_original_sku_images.py",
+      "tests/test_ai_original_sku_images_browser.py",
+      "tests/test_ai_original_source_model.py",
+      "tests/test_ai_original_variation_recovery.py",
+      "tests/test_ai_original_yandex_publish.py"
+    ],
+    "1440": {
+      "max_switch_ms": 8.7,
+      "max_paint_ms": 28.9,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 7.7,
+      "max_paint_ms": 28.8,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "mercado-collection",
+    "label": "美客多跟卖采集",
+    "test_counts": {
+      "passed": 197,
+      "failure": 8
+    },
+    "files": [
+      "tests/test_bit_interface_mercado_collection.py",
+      "tests/test_common_date_filters_browser.py",
+      "tests/test_erp_mercadolibre_collection_store.py",
+      "tests/test_mercado_collection_detail.py",
+      "tests/test_mercado_collection_detail_browser.py",
+      "tests/test_mercado_collection_profitability_repair.py",
+      "tests/test_mercado_collection_quality.py",
+      "tests/test_mercado_collection_quality_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 7.3,
+      "max_paint_ms": 31.3,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 8.8,
+      "max_paint_ms": 28.4,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "mercado-products",
+    "label": "产品列表",
+    "test_counts": {
+      "passed": 135,
+      "failure": 36
+    },
+    "files": [
+      "tests/test_catalog_visibility.py",
+      "tests/test_catalog_visibility_routes.py",
+      "tests/test_mercado_product_developers.py",
+      "tests/test_order_product_detail_routes.py",
+      "tests/test_order_product_details.py",
+      "tests/test_product_detail_drawers_browser.py",
+      "tests/test_product_developer_filter_browser.py",
+      "tests/test_product_developer_service_routing.py",
+      "tests/test_product_list_query_routing.py",
+      "tests/test_product_list_scoped_page.py",
+      "tests/test_product_list_service_routing.py",
+      "tests/test_product_list_transport.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4,
+      "max_paint_ms": 30.6,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.1,
+      "max_paint_ms": 32.7,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "weight-dimensions-records",
+    "label": "重量尺寸变更记录",
+    "test_counts": {
+      "passed": 148,
+      "failure": 2
+    },
+    "files": [
+      "tests/test_package_update_weight.py",
+      "tests/test_weight_dimensions_agent_queue.py",
+      "tests/test_weight_dimensions_audit.py",
+      "tests/test_weight_dimensions_browser_recovery.py",
+      "tests/test_weight_dimensions_execution_lifecycle.py",
+      "tests/test_weight_dimensions_import_enrichment.py",
+      "tests/test_weight_dimensions_preflight.py",
+      "tests/test_weight_dimensions_refresh.py",
+      "tests/test_weight_dimensions_same_title.py",
+      "tests/test_weight_dimensions_service_lifecycle.py",
+      "tests/test_weight_dimensions_startup_recovery.py",
+      "tests/test_weight_dimensions_stop.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.6,
+      "max_paint_ms": 29.2,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.5,
+      "max_paint_ms": 29.4,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "mercado-shipping-standards",
+    "label": "美客多运费标准",
+    "test_counts": {
+      "passed": 3
+    },
+    "files": [
+      "tests/test_erp_mercadolibre_shipping_rate_cards.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.8,
+      "max_paint_ms": 28.7,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.9,
+      "max_paint_ms": 33.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "mercado-publish-records",
+    "label": "产品上架记录",
+    "test_counts": {
+      "passed": 2
+    },
+    "files": [
+      "tests/test_publish_record_salesperson_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 5.3,
+      "max_paint_ms": 29,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.1,
+      "max_paint_ms": 30.1,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "appeal",
+    "label": "自动化 AI 申诉",
+    "test_counts": {
+      "passed": 254,
+      "failure": 41,
+      "skipped": 1
+    },
+    "files": [
+      "tests/test_ai_appeal_repair_routes.py",
+      "tests/test_algorithm_appeal.py",
+      "tests/test_appeal_guest_help.py",
+      "tests/test_appeal_polling.py",
+      "tests/test_appeal_polling_frontend.py",
+      "tests/test_appeal_recent_failures.py",
+      "tests/test_bit_ai_appeal_copy.py",
+      "tests/test_bit_appeal_ai_messages.py",
+      "tests/test_bit_appeal_phrases.py",
+      "tests/test_bit_appeal_report.py",
+      "tests/test_bit_appeal_stability.py",
+      "tests/test_bit_appeal_summary.py",
+      "tests/test_bit_interface_appeal.py",
+      "tests/test_browser_extension_appeal.py",
+      "tests/test_infraction_appeal_api_only.py",
+      "tests/test_zeshun_appeal_page_browser.py",
+      "tests/test_zeshun_appeal_popup_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 6.9,
+      "max_paint_ms": 29.4,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 7.8,
+      "max_paint_ms": 29.7,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "tasks",
+    "label": "任务模块",
+    "test_counts": {
+      "passed": 119,
+      "failure": 5
+    },
+    "files": [
+      "tests/test_background_task_routes.py",
+      "tests/test_bit_daily_task.py",
+      "tests/test_durable_tasks.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.5,
+      "max_paint_ms": 31,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.6,
+      "max_paint_ms": 28.2,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "salesperson-stats",
+    "label": "业务员量统计",
+    "test_counts": {
+      "passed": 9
+    },
+    "files": [
+      "tests/test_salesperson_stats.py",
+      "tests/test_salesperson_stats_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.9,
+      "max_paint_ms": 31.2,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.1,
+      "max_paint_ms": 32.6,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "store-analysis",
+    "label": "店铺分析",
+    "test_counts": {
+      "passed": 10
+    },
+    "files": [
+      "tests/test_store_analysis.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.5,
+      "max_paint_ms": 31.2,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.6,
+      "max_paint_ms": 30.1,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "order-analysis",
+    "label": "订单分析",
+    "test_counts": {
+      "passed": 8,
+      "failure": 1
+    },
+    "files": [
+      "tests/test_zeshun_order_analysis.py",
+      "tests/test_zeshun_order_analysis_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.9,
+      "max_paint_ms": 30.4,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 5,
+      "max_paint_ms": 28.9,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "ai-video",
+    "label": "AI视频生成",
+    "test_counts": {
+      "passed": 39
+    },
+    "files": [
+      "tests/test_bit_ai_video.py",
+      "tests/test_video_reviews.py",
+      "tests/test_video_upload_logs.py",
+      "tests/test_video_upload_logs_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 7.2,
+      "max_paint_ms": 30,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 6.7,
+      "max_paint_ms": 32.2,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "store-operations",
+    "label": "店铺操作记录",
+    "test_counts": {
+      "passed": 20,
+      "failure": 1
+    },
+    "files": [
+      "tests/test_store_link_audit.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.3,
+      "max_paint_ms": 31.5,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4,
+      "max_paint_ms": 30.6,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "store-links",
+    "label": "店铺链接",
+    "test_counts": {
+      "passed": 198,
+      "failure": 9
+    },
+    "files": [
+      "tests/test_bit_store_link_ads.py",
+      "tests/test_bit_store_link_video.py",
+      "tests/test_bit_store_links.py",
+      "tests/test_optimize_store_link_indexes.py",
+      "tests/test_store_link_audit.py",
+      "tests/test_store_link_closed_stores.py",
+      "tests/test_store_link_dates.py",
+      "tests/test_store_link_enrollment_browser.py",
+      "tests/test_store_link_item_lock.py",
+      "tests/test_store_link_metadata_loading.py",
+      "tests/test_store_link_metrics.py",
+      "tests/test_store_link_metrics_browser.py",
+      "tests/test_store_link_promotion_details.py",
+      "tests/test_store_link_quality.py",
+      "tests/test_store_link_remote_delete.py",
+      "tests/test_store_link_remote_update_restart.py",
+      "tests/test_store_link_sync_restart.py",
+      "tests/test_store_link_video_browser.py",
+      "tests/test_store_link_visit_scheduler.py",
+      "tests/test_store_link_visits.py"
+    ],
+    "1440": {
+      "max_switch_ms": 6.3,
+      "max_paint_ms": 29.9,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 6.5,
+      "max_paint_ms": 28.7,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "size-charts",
+    "label": "尺码表管理",
+    "test_counts": {
+      "passed": 74
+    },
+    "files": [
+      "tests/test_size_chart_routes.py",
+      "tests/test_size_charts_backend.py"
+    ],
+    "1440": {
+      "max_switch_ms": 1.8,
+      "max_paint_ms": 30.6,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 1.9,
+      "max_paint_ms": 31.9,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "automation-center",
+    "label": "自动化执行中心",
+    "test_counts": {
+      "passed": 80
+    },
+    "files": [
+      "tests/test_automation_center.py",
+      "tests/test_automation_center_browser.py",
+      "tests/test_durable_tasks.py",
+      "tests/test_service_topology.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.1,
+      "max_paint_ms": 31.2,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.2,
+      "max_paint_ms": 28.8,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "clearance-alerts",
+    "label": "半托管清退告警",
+    "test_counts": {
+      "passed": 149
+    },
+    "files": [
+      "tests/test_clearance_jobs.py",
+      "tests/test_clearance_routes.py",
+      "tests/test_clearance_rules.py",
+      "tests/test_clearance_sources.py",
+      "tests/test_clearance_store.py"
+    ],
+    "1440": {
+      "max_switch_ms": 1.9,
+      "max_paint_ms": 31,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 1.9,
+      "max_paint_ms": 29.9,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "product-diagnosis",
+    "label": "商品经营诊断",
+    "test_counts": {
+      "passed": 33
+    },
+    "files": [
+      "tests/test_product_diagnosis.py",
+      "tests/test_product_diagnosis_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.2,
+      "max_paint_ms": 32.3,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2,
+      "max_paint_ms": 29.8,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "promotions",
+    "label": "活动管理",
+    "test_counts": {
+      "passed": 138
+    },
+    "files": [
+      "tests/test_mercado_promotions.py",
+      "tests/test_promotion_bulk_stop.py",
+      "tests/test_promotion_concurrency.py",
+      "tests/test_promotion_item_pagination.py",
+      "tests/test_promotion_link_lifecycle.py",
+      "tests/test_promotion_pagination_browser.py",
+      "tests/test_promotion_product_metadata.py",
+      "tests/test_promotion_reliability.py",
+      "tests/test_promotion_results_browser.py",
+      "tests/test_promotion_stop_browser.py",
+      "tests/test_store_link_promotion_details.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2,
+      "max_paint_ms": 34.4,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2,
+      "max_paint_ms": 32.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "price-competition",
+    "label": "价格竞争中心",
+    "test_counts": {
+      "passed": 51
+    },
+    "files": [
+      "tests/test_price_competition.py",
+      "tests/test_price_competition_browser.py",
+      "tests/test_price_competition_routes.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.1,
+      "max_paint_ms": 30.1,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.4,
+      "max_paint_ms": 27.9,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "ad-analysis",
+    "label": "广告分析",
+    "test_counts": {
+      "passed": 37,
+      "failure": 1
+    },
+    "files": [
+      "tests/test_ad_profit.py",
+      "tests/test_bit_ad_analysis.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.7,
+      "max_paint_ms": 31,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.6,
+      "max_paint_ms": 30.2,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "prohibited-listings",
+    "label": "禁限售列表",
+    "test_counts": {
+      "passed": 5,
+      "failure": 5
+    },
+    "files": [
+      "tests/test_bit_prohibited_listings.py"
+    ],
+    "1440": {
+      "max_switch_ms": 7.4,
+      "max_paint_ms": 30.4,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 6.8,
+      "max_paint_ms": 31.6,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "store-tokens",
+    "label": "店铺授权",
+    "test_counts": {
+      "passed": 132,
+      "failure": 7
+    },
+    "files": [
+      "tests/test_billing_login_schema.py",
+      "tests/test_bit_login_remember.py",
+      "tests/test_bit_mercado_login.py",
+      "tests/test_bit_mercado_tokens.py",
+      "tests/test_mercado_token_read_pressure.py",
+      "tests/test_mercado_token_refresh_timeout.py"
+    ],
+    "1440": {
+      "max_switch_ms": 5,
+      "max_paint_ms": 27.7,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.5,
+      "max_paint_ms": 29.6,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "pre-sale",
+    "label": "售前问答",
+    "test_counts": {
+      "passed": 14,
+      "failure": 1
+    },
+    "files": [
+      "tests/test_pre_sale_products.py",
+      "tests/test_pre_sale_products_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.1,
+      "max_paint_ms": 30.4,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.9,
+      "max_paint_ms": 29.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "customer-service",
+    "label": "售后处理",
+    "test_counts": {
+      "passed": 67,
+      "failure": 15
+    },
+    "files": [
+      "tests/test_action_center_post_sale.py",
+      "tests/test_claim_chat_browser.py",
+      "tests/test_claim_chat_workflow.py",
+      "tests/test_mercado_communications.py"
+    ],
+    "1440": {
+      "max_switch_ms": 9.4,
+      "max_paint_ms": 31.7,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 5.9,
+      "max_paint_ms": 31.1,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "funds",
+    "label": "资金管理",
+    "test_counts": {
+      "passed": 176,
+      "failure": 11
+    },
+    "files": [
+      "tests/test_account_billing.py",
+      "tests/test_ai_billing_browser.py",
+      "tests/test_ai_billing_routes.py",
+      "tests/test_ai_usage_billing.py",
+      "tests/test_billing_login_schema.py",
+      "tests/test_billing_print_browser.py",
+      "tests/test_billing_print_integration.py",
+      "tests/test_billing_print_wallet_browser.py",
+      "tests/test_bit_funds.py",
+      "tests/test_print_wallet.py",
+      "tests/test_print_wallet_routes.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.3,
+      "max_paint_ms": 28.9,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.1,
+      "max_paint_ms": 29.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "ai-weight-price",
+    "label": "AI核重核价",
+    "test_counts": {
+      "passed": 498,
+      "failure": 2
+    },
+    "files": [
+      "tests/test_ai_weight_price.py",
+      "tests/test_ai_weight_price_browser.py",
+      "tests/test_ai_weight_price_browser_dimensions.py",
+      "tests/test_ai_weight_price_client.py",
+      "tests/test_ai_weight_price_credentials.py",
+      "tests/test_ai_weight_price_exception_transport.py",
+      "tests/test_ai_weight_price_exclusivity.py",
+      "tests/test_ai_weight_price_extension_verification_browser.py",
+      "tests/test_ai_weight_price_image_first.py",
+      "tests/test_ai_weight_price_mysql.py",
+      "tests/test_ai_weight_price_network.py",
+      "tests/test_ai_weight_price_performance.py",
+      "tests/test_ai_weight_price_pipeline.py",
+      "tests/test_ai_weight_price_pricing.py",
+      "tests/test_ai_weight_price_reliability.py",
+      "tests/test_ai_weight_price_slider.py",
+      "tests/test_ai_weight_price_sorting.py",
+      "tests/test_ai_weight_price_supplier_dimensions.py",
+      "tests/test_ai_weight_price_verification_pause.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.3,
+      "max_paint_ms": 31.3,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.2,
+      "max_paint_ms": 31.6,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "risk-check",
+    "label": "侵权检测",
+    "test_counts": {
+      "passed": 203,
+      "failure": 8
+    },
+    "files": [
+      "tests/test_bit_ai_infringements_only.py",
+      "tests/test_bit_check_risk.py",
+      "tests/test_bit_infringement_knowledge.py",
+      "tests/test_bit_interface_risk_check.py",
+      "tests/test_bit_risk.py",
+      "tests/test_bit_zying_infringement.py",
+      "tests/test_infringement_borderline.py",
+      "tests/test_infringement_knowledge_browser.py",
+      "tests/test_infringement_knowledge_routes.py",
+      "tests/test_infringement_knowledge_scopes.py",
+      "tests/test_infringement_result_page.py",
+      "tests/test_infringement_screening.py",
+      "tests/test_mercado_infringement_browser.py",
+      "tests/test_mercado_infringement_routes.py",
+      "tests/test_mercado_infringement_service.py",
+      "tests/test_reputation_api_risk.py",
+      "tests/test_risk_memory_bounds.py"
+    ],
+    "1440": {
+      "max_switch_ms": 6,
+      "max_paint_ms": 29.9,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 6.8,
+      "max_paint_ms": 31.1,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "infringement-knowledge",
+    "label": "侵权知识库",
+    "test_counts": {
+      "passed": 292,
+      "failure": 3
+    },
+    "files": [
+      "tests/test_bit_ai_infringements_only.py",
+      "tests/test_bit_infringement_knowledge.py",
+      "tests/test_bit_zying_infringement.py",
+      "tests/test_infringement_borderline.py",
+      "tests/test_infringement_knowledge_browser.py",
+      "tests/test_infringement_knowledge_routes.py",
+      "tests/test_infringement_knowledge_scopes.py",
+      "tests/test_infringement_result_page.py",
+      "tests/test_infringement_screening.py",
+      "tests/test_knowledge_organization.py",
+      "tests/test_knowledge_product_collection.py",
+      "tests/test_knowledge_product_collection_browser.py",
+      "tests/test_knowledge_product_collection_routes.py",
+      "tests/test_mercado_infringement_browser.py",
+      "tests/test_mercado_infringement_routes.py",
+      "tests/test_mercado_infringement_service.py",
+      "tests/test_wipo_blacklist_policy.py",
+      "tests/test_wipo_http.py",
+      "tests/test_wipo_interface.py",
+      "tests/test_wipo_knowledge_store.py",
+      "tests/test_wipo_madrid.py",
+      "tests/test_wipo_sync.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.9,
+      "max_paint_ms": 30.7,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.7,
+      "max_paint_ms": 28.8,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "infractions",
+    "label": "违规商品总览",
+    "test_counts": {
+      "passed": 48,
+      "failure": 6
+    },
+    "files": [
+      "tests/test_infraction_appeal_api_only.py",
+      "tests/test_mercado_infraction_dashboard.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.2,
+      "max_paint_ms": 30.1,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.3,
+      "max_paint_ms": 32.7,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "ip-rights",
+    "label": "侵权和权利人总览",
+    "test_counts": {
+      "passed": 101,
+      "failure": 6
+    },
+    "files": [
+      "tests/test_action_center_rights_holder.py",
+      "tests/test_infraction_appeal_api_only.py",
+      "tests/test_mercado_infraction_dashboard.py",
+      "tests/test_rights_holder_policy.py",
+      "tests/test_rights_holder_reply.py"
+    ],
+    "1440": {
+      "max_switch_ms": 2.1,
+      "max_paint_ms": 33.3,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.1,
+      "max_paint_ms": 30.4,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "reputation",
+    "label": "声誉数据",
+    "test_counts": {
+      "passed": 161,
+      "failure": 4
+    },
+    "files": [
+      "tests/test_bit_mercado_reputation.py",
+      "tests/test_bit_reputation_sorting.py",
+      "tests/test_bit_reputation_traffic.py",
+      "tests/test_reputation_api_risk.py",
+      "tests/test_reputation_browser_sync.py",
+      "tests/test_reputation_listing_orders.py",
+      "tests/test_reputation_warning_latest.py"
+    ],
+    "1440": {
+      "max_switch_ms": 5.1,
+      "max_paint_ms": 30.6,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.7,
+      "max_paint_ms": 30.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "api-reputation",
+    "label": "API 声誉",
+    "test_counts": {
+      "passed": 161,
+      "failure": 4
+    },
+    "files": [
+      "tests/test_bit_mercado_reputation.py",
+      "tests/test_bit_reputation_sorting.py",
+      "tests/test_bit_reputation_traffic.py",
+      "tests/test_reputation_api_risk.py",
+      "tests/test_reputation_browser_sync.py",
+      "tests/test_reputation_listing_orders.py",
+      "tests/test_reputation_warning_latest.py"
+    ],
+    "1440": {
+      "max_switch_ms": 4.5,
+      "max_paint_ms": 29.9,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 4.4,
+      "max_paint_ms": 32.1,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "ai-appeals",
+    "label": "自动化申诉记录",
+    "test_counts": {
+      "passed": 254,
+      "failure": 41,
+      "skipped": 1
+    },
+    "files": [
+      "tests/test_ai_appeal_repair_routes.py",
+      "tests/test_algorithm_appeal.py",
+      "tests/test_appeal_guest_help.py",
+      "tests/test_appeal_polling.py",
+      "tests/test_appeal_polling_frontend.py",
+      "tests/test_appeal_recent_failures.py",
+      "tests/test_bit_ai_appeal_copy.py",
+      "tests/test_bit_appeal_ai_messages.py",
+      "tests/test_bit_appeal_phrases.py",
+      "tests/test_bit_appeal_report.py",
+      "tests/test_bit_appeal_stability.py",
+      "tests/test_bit_appeal_summary.py",
+      "tests/test_bit_interface_appeal.py",
+      "tests/test_browser_extension_appeal.py",
+      "tests/test_infraction_appeal_api_only.py",
+      "tests/test_zeshun_appeal_page_browser.py",
+      "tests/test_zeshun_appeal_popup_browser.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.6,
+      "max_paint_ms": 29.6,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.6,
+      "max_paint_ms": 29.5,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "access",
+    "label": "人员与权限",
+    "test_counts": {
+      "passed": 219,
+      "failure": 9
+    },
+    "files": [
+      "tests/test_account_billing.py",
+      "tests/test_account_integrations.py",
+      "tests/test_agent_admin_access.py",
+      "tests/test_ai_original_account_failures.py",
+      "tests/test_bit_access_control.py",
+      "tests/test_enterprise_permission_isolation.py",
+      "tests/test_order_warehouse_access.py",
+      "tests/test_shop_status_access.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.1,
+      "max_paint_ms": 28.4,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 3.3,
+      "max_paint_ms": 30,
+      "errors": 0,
+      "overflow": false
+    }
+  },
+  {
+    "module": "yandex",
+    "label": "Yandex 店铺",
+    "test_counts": {
+      "passed": 64,
+      "failure": 11
+    },
+    "files": [
+      "tests/test_ai_original_yandex_publish.py",
+      "tests/test_yandex_unified_order_routes.py",
+      "tests/test_yandex_unified_orders.py",
+      "tests/test_yandex_unified_orders_browser.py",
+      "tests/test_yandex_workbench_integration.py",
+      "tests/test_zeshun_yandex_extension.py"
+    ],
+    "1440": {
+      "max_switch_ms": 3.5,
+      "max_paint_ms": 30.8,
+      "errors": 0,
+      "overflow": false
+    },
+    "390": {
+      "max_switch_ms": 2.6,
+      "max_paint_ms": 31,
+      "errors": 0,
+      "overflow": false
+    }
+  }
+]

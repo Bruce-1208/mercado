@@ -1,0 +1,1 @@
+[{"id": 2000015463826337, "buyer": {"id": 54767568}, "config": {"items": [{"id": "MLA3358143290"}]}, "orders": [{"id": 2000018914954930, "items": null, "feedback": {"purchase": null, "sale": null}, "payments": [{"id": 182529751697}], "mediations": [], "seller": {"id": 2667177295}}], "shipment": {"id": 48227809620, "payments": []}}]

@@ -511,7 +511,7 @@ class PluginPurchaseTrackingManager:
                 self._save(state)
             return self._public_state(self._states.get(key) or self._idle_state())
 
-    def create(self, user_id, *, platform, orders, order_status=""):
+    def create(self, user_id, *, platform, orders, order_status="", date_start="", date_end="", salesperson="", group_name=""):
         key = self._normalize_user_id(user_id)
         if platform not in PLATFORMS:
             raise ValueError("请选择 1688、淘宝、拼多多或闲鱼")
@@ -533,6 +533,10 @@ class PluginPurchaseTrackingManager:
                 "message": "请打开泽顺插件接收同步任务",
                 "platform": platform,
                 "order_status": order_status,
+                "date_start": date_start,
+                "date_end": date_end,
+                "salesperson": salesperson,
+                "group_name": group_name,
                 "query_version": 2,
                 "total": len(normalized),
                 "orders": normalized,

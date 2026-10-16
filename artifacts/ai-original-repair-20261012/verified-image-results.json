@@ -1,0 +1,12 @@
+[
+  {
+    "product_id": 17318193,
+    "restored_skus": 2,
+    "remaining_error": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。"
+  },
+  {
+    "product_id": 17318196,
+    "restored_skus": 4,
+    "remaining_error": "AI 文案账户没有调用权限（HTTP 403）。请检查当前账户的模型访问权限。"
+  }
+]

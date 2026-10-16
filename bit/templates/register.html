@@ -119,8 +119,9 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261012-system">
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
-    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261016-module-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261016-module-ui">
+    <script defer src="{{ url_for('static', filename='compact-filters.js') }}?v=20261016-module-ui"></script>
 </head>
 <body class="zs-standalone zs-auth">
     <section class="panel">
@@ -178,6 +179,7 @@
         </form>
         <div class="foot">已有账号？<a href="/login">返回登录</a></div>
     </section>
+    {% include 'icp_footer.html' %}
     <script>
         const form = document.getElementById("register-form");
         const message = document.getElementById("form-message");

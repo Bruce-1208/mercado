@@ -27,7 +27,7 @@ def test_authorized_remote_console_can_save_erp_writeback_setting(tmp_path):
 
     response = app.test_client().put(
         "/api/ai-weight-price/config",
-        base_url="https://wuhanzeshun.com",
+        base_url="https://wuhanzeshun.cn",
         json=config,
         headers={"X-AWP-Request": "1"},
     )

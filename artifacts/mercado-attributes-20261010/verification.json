@@ -1,0 +1,29 @@
+{
+  "root_causes": [
+    "Native TITLE_STRIPED attribute sections were treated as variations by scanning every array.",
+    "Backends wrote variations=[] and extracted attributes only from rendered tables.",
+    "Some saved detail-page attempts timed out after 15 seconds."
+  ],
+  "historical_records_repaired": 158,
+  "remaining_false_variants_at_verification": 0,
+  "web": {
+    "reloaded": true,
+    "login_http": 200
+  },
+  "worker_restarted": false,
+  "validation": {
+    "focused_python_passed": 99,
+    "node_passed": 30,
+    "final_browser_regression_passed": 8,
+    "broader_suite_passed": 154,
+    "broader_suite_failed": 10,
+    "broader_failures": "Product listing SQL expectations, 1688 selectors, AI weight/price routes, unrelated extension workflow expectations."
+  },
+  "limitations": [
+    "Existing records with no detail data need recollection.",
+    "Historical false-variant records retain needs_recollection status because actual variants cannot be recovered from saved attribute tables.",
+    "Install/reload extension 1.8.70 and refresh Mercado tabs.",
+    "Backend browser collector changes require restarting worker after its active tasks finish."
+  ],
+  "package": "artifacts/zeshun-collector-extension-1.8.70-mercado-attributes.zip"
+}

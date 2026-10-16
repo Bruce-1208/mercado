@@ -1,0 +1,1 @@
+{"query_success": true, "innodb_force_recovery": 0, "innodb_flush_log_at_trx_commit": 1, "sync_binlog": 1, "innodb_doublewrite": "ON", "binlog_expire_logs_seconds": 604800}

@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="6" skipped="0" tests="109" time="11.044" timestamp="2026-10-16T15:03:30.528660+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_capacity_optimizations" name="test_store_budget_reserves_orders_and_releases_after_failure" time="0.005" /><testcase classname="tests.test_capacity_optimizations" name="test_mixed_store_tasks_respect_global_limit_and_same_store_serialization" time="0.080" /><testcase classname="tests.test_capacity_optimizations" name="test_network_slots_are_released_on_timeout_and_limit_accounts" time="0.074" /><testcase classname="tests.test_capacity_optimizations" name="test_auto_dispatch_is_bounded_without_discarding_input" time="0.001" /><testcase classname="tests.test_capacity_optimizations" name="test_idle_and_running_claims_do_not_take_write_transactions" time="0.007" /><testcase classname="tests.test_capacity_optimizations" name="test_concurrent_claims_deliver_job_once" time="0.048" /><testcase classname="tests.test_capacity_optimizations" name="test_bundle_unchanged_skips_file_content_reads_and_detects_same_size_edit" time="0.005" /><testcase classname="tests.test_capacity_optimizations" name="test_bundle_version_changes_when_browser_extension_changes" time="0.005" /><testcase classname="tests.test_capacity_optimizations" name="test_scoped_count_cache_invalidation_cannot_resurrect_old_value" time="0.001" /><testcase classname="tests.test_capacity_optimizations" name="test_export_queue_coalesces_duplicate_requests_and_bounds_user_backlog" time="0.015" /><testcase classname="tests.test_capacity_optimizations" name="test_export_status_and_download_require_same_owner_and_current_scope" time="0.026" /><testcase classname="tests.test_capacity_optimizations" name="test_worker_requires_signed_request_and_preserves_original_remote_address" time="0.006" /><testcase classname="tests.test_capacity_optimizations" name="test_unavailable_worker_never_retries_post" time="0.023" /><testcase classname="tests.test_capacity_optimizations" name="test_shared_browser_extension_and_executor_tasks_follow_same_worker" time="0.019" /><testcase classname="tests.test_capacity_optimizations" name="test_old_agent_heartbeats_coalesce_writes_but_cancel_and_session_change_are_immediate" time="0.038" /><testcase classname="tests.test_capacity_optimizations" name="test_profit_refresh_sql_can_be_bound_by_real_pymysql" time="0.002" /><testcase classname="tests.test_capacity_optimizations" name="test_split_child_environments_share_role_but_have_separate_pool_budgets" time="0.007" /><testcase classname="tests.test_capacity_optimizations" name="test_web_mode_does_not_start_central_background_services" time="0.002" /><testcase classname="tests.test_capacity_optimizations" name="test_background_export_runs_existing_view_with_current_permissions" time="0.029" /><testcase classname="tests.test_capacity_optimizations" name="test_private_forwarding_does_not_grant_public_db_request_loopback_access" time="0.012" /><testcase classname="tests.test_capacity_optimizations" name="test_hop_signature_survives_normal_url_encoding" time="0.002" /><testcase classname="tests.test_capacity_optimizations" name="test_busy_sync_persists_other_store_request[bit.bit_prohibited_listing_sync-start_prohibited_listing_sync-request_prohibited_sync-prohibited_listing_sync_status]" time="0.002" /><testcase classname="tests.test_capacity_optimizations" name="test_busy_sync_persists_other_store_request[bit.mercado_infraction_sync-start_official_infraction_sync-request_infraction_sync-official_infraction_sync_status]" time="0.001" /><testcase classname="tests.test_capacity_optimizations" name="test_web_and_private_worker_roundtrip_over_real_http" time="0.363" /><testcase classname="tests.test_capacity_optimizations" name="test_hundred_agent_heartbeats_over_http_with_four_workers" time="0.347" /><testcase classname="tests.test_capacity_optimizations" name="test_store_budget_timeout_and_stop_remove_waiters" time="0.014" /><testcase classname="tests.test_capacity_optimizations" name="test_foreground_store_read_uses_reserved_capacity_without_bypassing_store_lock" time="0.027" /><testcase classname="tests.test_db_pool" name="test_pool_reuses_one_bounded_pool_for_matching_config" time="0.001" /><testcase classname="tests.test_db_pool" name="test_default_pool_budget_is_conservative" time="0.002" /><testcase classname="tests.test_db_pool" name="test_pool_capacity_warning_is_rate_limited" time="0.002" /><testcase classname="tests.test_db_pool" name="test_pool_can_be_disabled_for_diagnostics" time="0.001" /><testcase classname="tests.test_db_pool" name="test_process_budget_includes_different_configs_and_idle_sockets" time="0.436" /><testcase classname="tests.test_db_pool" name="test_exhaustion_times_out_without_opening_extra_connection" time="1.004" /><testcase classname="tests.test_db_pool" name="test_prewarming_respects_remaining_process_budget" time="0.001" /><testcase classname="tests.test_db_pool" name="test_failed_connect_does_not_consume_budget" time="0.002" /><testcase classname="tests.test_db_pool" name="test_waiting_for_another_checkout_has_a_deadline" time="1.005" /><testcase classname="tests.test_db_pool" name="test_legacy_interface_import_does_not_connect" time="0.004" /><testcase classname="tests.test_db_pool" name="test_server_operational_errors_are_not_replayed[3024]" time="0.003" /><testcase classname="tests.test_db_pool" name="test_server_operational_errors_are_not_replayed[1205]" time="0.002" /><testcase classname="tests.test_db_pool" name="test_server_operational_errors_are_not_replayed[1213]" time="0.002" /><testcase classname="tests.test_db_pool" name="test_server_operational_errors_are_not_replayed[1040]" time="0.002" /><testcase classname="tests.test_db_pool" name="test_server_operational_errors_are_not_replayed[1045]" time="0.002" /><testcase classname="tests.test_db_pool" name="test_lost_connection_during_execute_is_recovered" time="0.002" /><testcase classname="tests.test_db_pool" name="test_checkout_ping_recovers_an_idle_lost_connection" time="0.001" /><testcase classname="tests.test_db_pool" name="test_lost_connection_in_transaction_does_not_replay_statement" time="0.002" /><testcase classname="tests.test_db_pool" name="test_cursor_iteration_and_common_attributes_are_preserved" time="0.001" /><testcase classname="tests.test_db_pool" name="test_cursor_iteration_errors_are_classified_without_sql_replay[3024]" time="0.002" /><testcase classname="tests.test_db_pool" name="test_cursor_iteration_errors_are_classified_without_sql_replay[2013]" time="0.002" /><testcase classname="tests.test_db_pool" name="test_auth_can_acquire_reserved_slot_while_business_waits" time="1.007" /><testcase classname="tests.test_http_performance" name="test_gzip_preserves_private_html_cache_policy_and_vary" time="0.006" /><testcase classname="tests.test_http_performance" name="test_compression_obeys_negotiation[]" time="0.005" /><testcase classname="tests.test_http_performance" name="test_compression_obeys_negotiation[identity]" time="0.007" /><testcase classname="tests.test_http_performance" name="test_compression_obeys_negotiation[gzip;q=0, br]" time="0.006" /><testcase classname="tests.test_http_performance" name="test_compression_obeys_negotiation[gzip;q=0, *;q=1]" time="0.010" /><testcase classname="tests.test_http_performance" name="test_versioned_static_caches_and_compresses_with_conditional_validation" time="0.006" /><testcase classname="tests.test_http_performance" name="test_unversioned_assets_keep_existing_cache_policy_and_binary_not_compressed" time="0.009" /><testcase classname="tests.test_http_performance" name="test_transport_leaves_stream_encoded_and_no_transform_responses[/stream]" time="0.135" /><testcase classname="tests.test_http_performance" name="test_transport_leaves_stream_encoded_and_no_transform_responses[/encoded]" time="0.016" /><testcase classname="tests.test_http_performance" name="test_transport_leaves_stream_encoded_and_no_transform_responses[/no-transform]" time="0.007" /><testcase classname="tests.test_http_performance" name="test_range_and_head_do_not_compress" time="0.003" /><testcase classname="tests.test_page_query_optimization" name="test_live_scan_and_status_use_same_background_owner[/api/db/official-infractions/live-0]" time="0.002" /><testcase classname="tests.test_page_query_optimization" name="test_live_scan_and_status_use_same_background_owner[/api/db/official-infractions/live-1]" time="0.002" /><testcase classname="tests.test_page_query_optimization" name="test_live_scan_and_status_use_same_background_owner[/api/db/official-infractions/live/jobs-0]" time="0.001" /><testcase classname="tests.test_page_query_optimization" name="test_live_scan_and_status_use_same_background_owner[/api/db/official-infractions/live/jobs-1]" time="0.001" /><testcase classname="tests.test_page_query_optimization" name="test_live_scan_and_status_use_same_background_owner[/api/db/official-infractions/live/jobs/test-0]" time="0.001" /><testcase classname="tests.test_page_query_optimization" name="test_live_scan_and_status_use_same_background_owner[/api/db/official-infractions/live/jobs/test-1]" time="0.001" /><testcase classname="tests.test_page_query_optimization" name="test_lookup_separates_index_paths_and_keeps_exact_pack_match" time="0.002" /><testcase classname="tests.test_page_query_optimization" name="test_inventory_options_group_before_fetching_names" time="0.003" /><testcase classname="tests.test_page_query_optimization" name="test_index_inspection_reuses_equivalent_and_rejects_collision" time="0.006" /><testcase classname="tests.test_page_query_optimization" name="test_live_scans_obey_configured_budget" time="0.003" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_can_skip_all_product_cost_scan[-1-super_admin]" time="0.553" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_can_skip_all_product_cost_scan[-1-enterprise_admin]" time="0.511" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_can_skip_all_product_cost_scan[-1-member]" time="0.392" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_can_skip_all_product_cost_scan[?include_cost_summary=0-0-super_admin]" time="0.919" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_can_skip_all_product_cost_scan[?include_cost_summary=0-0-enterprise_admin]" time="0.636" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_can_skip_all_product_cost_scan[?include_cost_summary=0-0-member]" time="0.471" /><testcase classname="tests.test_ai_original_list_speed" name="test_fast_list_skips_count_and_removes_only_duplicate_snapshot" time="0.539" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_returns_connection_before_decoding_supplier_snapshots[False]" time="0.016" /><testcase classname="tests.test_ai_original_list_speed" name="test_list_returns_connection_before_decoding_supplier_snapshots[True]" time="0.004" /><testcase classname="tests.test_ai_weight_price_performance" name="test_visual_progress_uses_one_rpc_and_preserves_history" time="0.034" /><testcase classname="tests.test_ai_weight_price_performance" name="test_candidate_logs_use_one_transaction_with_owner_and_order" time="0.009" /><testcase classname="tests.test_ai_weight_price_performance" name="test_execution_snapshot_is_one_rpc_with_fresh_controls" time="0.017" /><testcase classname="tests.test_ai_weight_price_performance" name="test_status_reuses_single_database_connection" time="0.028"><failure message="assert 15 == 1&#10; +  where 15 = len([True, True, True, True, True, True, ...])">tmp_path = PosixPath('/private/var/folders/bl/tjvzqw4s2lx10s4pclxd4kgh0000gn/T/pytest-of-a11/pytest-36/test_status_reuses_single_data0')
+monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x14294c920&gt;
+
+    def test_status_reuses_single_database_connection(tmp_path, monkeypatch):
+        from erp.ai_weight_price.service import Service
+        service = Service(tmp_path)
+        service.bind_actor({'id': 7})
+        connect = service.store.connect
+        opened = []
+        @contextmanager
+        def counted():
+            if getattr(service.store._transaction_local, 'db', None) is None:
+                opened.append(True)
+            with connect() as db:
+                yield db
+        monkeypatch.setattr(service.store, 'connect', counted)
+        assert service.status()['login'] == {'confirmed': False}
+&gt;       assert len(opened) == 1
+E       assert 15 == 1
+E        +  where 15 = len([True, True, True, True, True, True, ...])
+
+tests/test_ai_weight_price_performance.py:107: AssertionError</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user0]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user1]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user2]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user3]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user4]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_shared_settings_permissions_and_roundtrip" time="0.006"><failure message="AssertionError: assert 401 == 403&#10; +  where 401 = &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt; = get('/api/publish-concurrency')&#10; +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x14291d550&gt;
+
+    def test_shared_settings_permissions_and_roundtrip(monkeypatch):
+        user = {'role_key': 'super_admin', 'permissions': ['*'], 'access_version': 1}
+        monkeypatch.setattr(web, 'get_current_workbench_user', lambda: user)
+        state = {'workers': 16}
+        def setting(value=None):
+            if value is not None:
+                state['workers'] = value
+            return state['workers']
+        monkeypatch.setattr(bit_db_api, 'publish_workers', setting)
+        client = web.app.test_client()
+        assert client.put('/api/publish-concurrency', json={'worker_count': 7}).get_json()['data']['worker_count'] == 7
+        assert client.get('/api/publish-concurrency').get_json()['data']['worker_count'] == 7
+        user['role_key'] = 'admin'
+        assert client.put('/api/publish-concurrency', json={'worker_count': 9}).status_code == 403
+&gt;       assert client.get('/api/publish-concurrency').status_code == 403
+E       AssertionError: assert 401 == 403
+E        +  where 401 = &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt;.status_code
+E        +    where &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt; = get('/api/publish-concurrency')
+E        +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get
+
+tests/test_publish_concurrency.py:28: AssertionError</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_ui_status_hides_capacity_without_mutating_task_commands" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_client_uses_central_settings" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[super_admin]" time="0.040"><failure message="KeyError: 'data'">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x142a28710&gt;
+role = 'super_admin'
+
+    @pytest.mark.parametrize('role', ['super_admin', 'admin', 'member', 'custom'])
+    def test_all_roles_publish_with_shared_default(monkeypatch, role):
+        import test_bit_interface_mercado_collection as existing
+        monkeypatch.setattr(web, 'get_current_workbench_user', lambda: {
+            'id': 9, 'username': 'tester', 'role_key': role, 'permissions': ['*'],
+            'access_version': 1, 'is_platform_admin': True,
+        })
+        shared = Mock(return_value=7)
+        monkeypatch.setattr(bit_db_api, 'publish_workers', shared)
+&gt;       existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+
+tests/test_publish_concurrency.py:69: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def test_group_publish_endpoint_applies_strategy_and_historical_account_ownership():
+        _reset_publish_state()
+        rows = [{
+            "id": value,
+            "source_item_id": f"MLM{value}",
+            "review_status": "approved",
+            "weight_g": 350,
+            **_actual_shipping(350),
+            "net_proceeds_usd": 8,
+        } for value in range(1, 24)]
+        tokens = {"rows": [
+            {
+                "id": 5,
+                "display_name": "跨境店",
+                "site_id": "CBT",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 90},
+                    {"site_id": "MLB", "group_name": "精品组", "discount_rate": 95},
+                ],
+            },
+            {
+                "id": 6,
+                "display_name": "墨西哥店",
+                "site_id": "MLM",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 88},
+                ],
+            },
+        ]}
+        with patch.object(
+            workbench, "db_get_mercado_product_items_by_ids", return_value=rows
+        ), patch.object(
+            workbench, "db_get_published_mercado_product_account_ids", return_value={1: 5, 2: 99}
+        ), patch.object(
+            workbench.bit_db_api, "list_mercado_store_tokens", return_value=tokens
+        ), patch.object(workbench.threading, "Thread") as thread_class:
+            response = _client().post("/api/mercado-products/publish", json={
+                "product_item_ids": list(range(1, 24)),
+                "selection_mode": "groups",
+                "group_names": ["精品组"],
+                "group_publish_mode": "polling",
+                "site_ids": ["MLM", "MLB"],
+            })
+    
+&gt;       payload = response.get_json()["data"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'data'
+
+tests/test_bit_interface_mercado_collection.py:1730: KeyError</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[admin]" time="0.007"><failure message="KeyError: 'data'">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x1429fd160&gt;
+role = 'admin'
+
+    @pytest.mark.parametrize('role', ['super_admin', 'admin', 'member', 'custom'])
+    def test_all_roles_publish_with_shared_default(monkeypatch, role):
+        import test_bit_interface_mercado_collection as existing
+        monkeypatch.setattr(web, 'get_current_workbench_user', lambda: {
+            'id': 9, 'username': 'tester', 'role_key': role, 'permissions': ['*'],
+            'access_version': 1, 'is_platform_admin': True,
+        })
+        shared = Mock(return_value=7)
+        monkeypatch.setattr(bit_db_api, 'publish_workers', shared)
+&gt;       existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+
+tests/test_publish_concurrency.py:69: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def test_group_publish_endpoint_applies_strategy_and_historical_account_ownership():
+        _reset_publish_state()
+        rows = [{
+            "id": value,
+            "source_item_id": f"MLM{value}",
+            "review_status": "approved",
+            "weight_g": 350,
+            **_actual_shipping(350),
+            "net_proceeds_usd": 8,
+        } for value in range(1, 24)]
+        tokens = {"rows": [
+            {
+                "id": 5,
+                "display_name": "跨境店",
+                "site_id": "CBT",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 90},
+                    {"site_id": "MLB", "group_name": "精品组", "discount_rate": 95},
+                ],
+            },
+            {
+                "id": 6,
+                "display_name": "墨西哥店",
+                "site_id": "MLM",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 88},
+                ],
+            },
+        ]}
+        with patch.object(
+            workbench, "db_get_mercado_product_items_by_ids", return_value=rows
+        ), patch.object(
+            workbench, "db_get_published_mercado_product_account_ids", return_value={1: 5, 2: 99}
+        ), patch.object(
+            workbench.bit_db_api, "list_mercado_store_tokens", return_value=tokens
+        ), patch.object(workbench.threading, "Thread") as thread_class:
+            response = _client().post("/api/mercado-products/publish", json={
+                "product_item_ids": list(range(1, 24)),
+                "selection_mode": "groups",
+                "group_names": ["精品组"],
+                "group_publish_mode": "polling",
+                "site_ids": ["MLM", "MLB"],
+            })
+    
+&gt;       payload = response.get_json()["data"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'data'
+
+tests/test_bit_interface_mercado_collection.py:1730: KeyError</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[member]" time="0.012"><failure message="KeyError: 'data'">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x14278db20&gt;
+role = 'member'
+
+    @pytest.mark.parametrize('role', ['super_admin', 'admin', 'member', 'custom'])
+    def test_all_roles_publish_with_shared_default(monkeypatch, role):
+        import test_bit_interface_mercado_collection as existing
+        monkeypatch.setattr(web, 'get_current_workbench_user', lambda: {
+            'id': 9, 'username': 'tester', 'role_key': role, 'permissions': ['*'],
+            'access_version': 1, 'is_platform_admin': True,
+        })
+        shared = Mock(return_value=7)
+        monkeypatch.setattr(bit_db_api, 'publish_workers', shared)
+&gt;       existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+
+tests/test_publish_concurrency.py:69: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def test_group_publish_endpoint_applies_strategy_and_historical_account_ownership():
+        _reset_publish_state()
+        rows = [{
+            "id": value,
+            "source_item_id": f"MLM{value}",
+            "review_status": "approved",
+            "weight_g": 350,
+            **_actual_shipping(350),
+            "net_proceeds_usd": 8,
+        } for value in range(1, 24)]
+        tokens = {"rows": [
+            {
+                "id": 5,
+                "display_name": "跨境店",
+                "site_id": "CBT",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 90},
+                    {"site_id": "MLB", "group_name": "精品组", "discount_rate": 95},
+                ],
+            },
+            {
+                "id": 6,
+                "display_name": "墨西哥店",
+                "site_id": "MLM",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 88},
+                ],
+            },
+        ]}
+        with patch.object(
+            workbench, "db_get_mercado_product_items_by_ids", return_value=rows
+        ), patch.object(
+            workbench, "db_get_published_mercado_product_account_ids", return_value={1: 5, 2: 99}
+        ), patch.object(
+            workbench.bit_db_api, "list_mercado_store_tokens", return_value=tokens
+        ), patch.object(workbench.threading, "Thread") as thread_class:
+            response = _client().post("/api/mercado-products/publish", json={
+                "product_item_ids": list(range(1, 24)),
+                "selection_mode": "groups",
+                "group_names": ["精品组"],
+                "group_publish_mode": "polling",
+                "site_ids": ["MLM", "MLB"],
+            })
+    
+&gt;       payload = response.get_json()["data"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'data'
+
+tests/test_bit_interface_mercado_collection.py:1730: KeyError</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[custom]" time="0.007"><failure message="KeyError: 'data'">monkeypatch = &lt;_pytest.monkeypatch.MonkeyPatch object at 0x1429d4860&gt;
+role = 'custom'
+
+    @pytest.mark.parametrize('role', ['super_admin', 'admin', 'member', 'custom'])
+    def test_all_roles_publish_with_shared_default(monkeypatch, role):
+        import test_bit_interface_mercado_collection as existing
+        monkeypatch.setattr(web, 'get_current_workbench_user', lambda: {
+            'id': 9, 'username': 'tester', 'role_key': role, 'permissions': ['*'],
+            'access_version': 1, 'is_platform_admin': True,
+        })
+        shared = Mock(return_value=7)
+        monkeypatch.setattr(bit_db_api, 'publish_workers', shared)
+&gt;       existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+
+tests/test_publish_concurrency.py:69: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    def test_group_publish_endpoint_applies_strategy_and_historical_account_ownership():
+        _reset_publish_state()
+        rows = [{
+            "id": value,
+            "source_item_id": f"MLM{value}",
+            "review_status": "approved",
+            "weight_g": 350,
+            **_actual_shipping(350),
+            "net_proceeds_usd": 8,
+        } for value in range(1, 24)]
+        tokens = {"rows": [
+            {
+                "id": 5,
+                "display_name": "跨境店",
+                "site_id": "CBT",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 90},
+                    {"site_id": "MLB", "group_name": "精品组", "discount_rate": 95},
+                ],
+            },
+            {
+                "id": 6,
+                "display_name": "墨西哥店",
+                "site_id": "MLM",
+                "site_settings": [
+                    {"site_id": "MLM", "group_name": "精品组", "discount_rate": 88},
+                ],
+            },
+        ]}
+        with patch.object(
+            workbench, "db_get_mercado_product_items_by_ids", return_value=rows
+        ), patch.object(
+            workbench, "db_get_published_mercado_product_account_ids", return_value={1: 5, 2: 99}
+        ), patch.object(
+            workbench.bit_db_api, "list_mercado_store_tokens", return_value=tokens
+        ), patch.object(workbench.threading, "Thread") as thread_class:
+            response = _client().post("/api/mercado-products/publish", json={
+                "product_item_ids": list(range(1, 24)),
+                "selection_mode": "groups",
+                "group_names": ["精品组"],
+                "group_publish_mode": "polling",
+                "site_ids": ["MLM", "MLB"],
+            })
+    
+&gt;       payload = response.get_json()["data"]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'data'
+
+tests/test_bit_interface_mercado_collection.py:1730: KeyError</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_setting_persists_across_connections" time="0.006" /><testcase classname="tests.test_promotion_concurrency" name="test_slow_product_does_not_block_later_items_or_progress_and_pool_is_bounded" time="0.086" /><testcase classname="tests.test_promotion_concurrency" name="test_multiple_offers_for_same_product_stay_serial_and_one_failure_does_not_stop_queue" time="0.011" /><testcase classname="tests.test_promotion_concurrency" name="test_real_clients_get_independent_worker_sessions_and_close_them" time="0.016" /><testcase classname="tests.test_promotion_concurrency" name="test_worker_setting_is_capped_and_invalid_values_are_safe" time="0.001" /><testcase classname="tests.test_promotion_concurrency" name="test_default_pool_uses_eight_simultaneous_workers" time="0.031" /><testcase classname="tests.test_risk_memory_bounds" name="test_candidates_page_past_completed_rows_and_apply_global_limit" time="0.002" /><testcase classname="tests.test_risk_memory_bounds" name="test_candidate_pages_have_no_duplicates_or_gaps_and_close_early" time="0.014" /><testcase classname="tests.test_risk_memory_bounds" name="test_database_error_closes_connection" time="0.001" /><testcase classname="tests.test_risk_memory_bounds" name="test_compact_candidates_preserve_current_content_hash_and_reviews" time="0.002" /><testcase classname="tests.test_risk_memory_bounds" name="test_top_results_equal_stable_full_sort_with_exact_summary[True]" time="0.024" /><testcase classname="tests.test_risk_memory_bounds" name="test_top_results_equal_stable_full_sort_with_exact_summary[False]" time="0.026" /><testcase classname="tests.test_risk_memory_bounds" name="test_materialization_guard_raises_without_silent_truncation_and_closes" time="0.002" /><testcase classname="tests.test_risk_memory_bounds" name="test_result_selection_memory_does_not_scale_with_input_count" time="0.578" /></testsuite></testsuites>

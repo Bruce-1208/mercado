@@ -88,7 +88,9 @@ def chat_deepseek_with_usage(
     if (str(model or "").lower().startswith("deepseek")
             or endpoint.hostname == "api.deepseek.com"):
         raise ValueError("DeepSeek 生成已停用，请刷新页面使用 qwen3.7-flash 和百炼凭证。")
-    if endpoint.hostname == "dashscope.aliyuncs.com" and thinking is None:
+    # qwen-max has no thinking mode and must not receive its parameters.
+    supports_thinking = (model or DEEPSEEK_MODEL) != "qwen-max"
+    if endpoint.hostname == "dashscope.aliyuncs.com" and thinking is None and supports_thinking:
         thinking = False
     kwargs = {
         "model": model or DEEPSEEK_MODEL,
@@ -100,7 +102,7 @@ def chat_deepseek_with_usage(
         kwargs["max_tokens"] = max_tokens
     if response_format is not None:
         kwargs["response_format"] = response_format
-    if thinking is not None:
+    if thinking is not None and supports_thinking:
         if urlsplit(base_url or DEEPSEEK_BASE_URL).hostname == "dashscope.aliyuncs.com":
             kwargs["extra_body"] = {"enable_thinking": thinking}
             if thinking and thinking_budget is not None:

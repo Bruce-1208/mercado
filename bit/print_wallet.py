@@ -257,6 +257,7 @@ def _actor(cursor, actor_id):
         u.role_key, u.warehouse_key, u.is_active, r.permissions_json, r.own_store_only,
         o.is_active AS organization_active FROM workbench_users u
         LEFT JOIN workbench_roles r ON r.role_key = u.role_key
+            AND r.organization_key = u.organization_key
         LEFT JOIN workbench_organizations o ON o.organization_key =
             COALESCE(NULLIF(NULLIF(u.organization_key, ''), 'default'), 'wuhan-zeshun')
         WHERE u.id = %s""", (actor_id,))

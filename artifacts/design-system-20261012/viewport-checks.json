@@ -1,0 +1,67 @@
+[
+  {
+    "page": "overview",
+    "width": 1440,
+    "fits": true
+  },
+  {
+    "page": "orders",
+    "width": 1440,
+    "fits": true
+  },
+  {
+    "page": "products",
+    "width": 1440,
+    "fits": true
+  },
+  {
+    "page": "overview",
+    "width": 1024,
+    "fits": true
+  },
+  {
+    "page": "orders",
+    "width": 1024,
+    "fits": true
+  },
+  {
+    "page": "products",
+    "width": 1024,
+    "fits": true
+  },
+  {
+    "page": "overview",
+    "width": 390,
+    "fits": true
+  },
+  {
+    "page": "orders",
+    "width": 390,
+    "fits": true
+  },
+  {
+    "page": "products",
+    "width": 390,
+    "fits": true
+  },
+  {
+    "page": "login.html",
+    "width": 1440,
+    "fits": true
+  },
+  {
+    "page": "login.html",
+    "width": 390,
+    "fits": true
+  },
+  {
+    "page": "account_profile.html",
+    "width": 1440,
+    "fits": true
+  },
+  {
+    "page": "account_profile.html",
+    "width": 390,
+    "fits": true
+  }
+]

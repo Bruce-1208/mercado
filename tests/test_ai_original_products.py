@@ -353,6 +353,15 @@ def test_ai_original_publish_requires_completed_copy_and_white_image():
     assert "首图尚未完成 AI 白底生成" in issues
 
 
+def test_manual_only_legacy_failure_can_publish_after_review_and_completion():
+    row = _ai_row()
+    snapshot = json.loads(row["source_snapshot_json"])
+    snapshot["ai_original"].update(status="failed", failed_step="manual_fields")
+    row["source_snapshot_json"] = json.dumps(snapshot)
+
+    assert "AI 原创任务尚未完成" not in product_publish_issues(row)
+
+
 def test_ai_original_publish_requires_generated_listing_attributes():
     row = _ai_row()
     snapshot = json.loads(row["source_snapshot_json"])

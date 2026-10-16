@@ -1,0 +1,1718 @@
+[
+  {
+    "path": "/api/mercado/today/tasks/<int:task_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "update_task",
+    "source": "bit/mercado_action_center.py",
+    "line": 1156,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado/today/events/<int:event_id>/replay",
+    "methods": [
+      "POST"
+    ],
+    "function": "replay_event",
+    "source": "bit/mercado_action_center.py",
+    "line": 1189,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado/notifications",
+    "methods": [
+      "POST"
+    ],
+    "function": "receive_notification",
+    "source": "bit/mercado_action_center.py",
+    "line": 1211,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/print-wallet",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_workbench_print_wallet",
+    "source": "bit/bit_interface.py",
+    "line": 4108,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/billing",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_workbench_billing",
+    "source": "bit/bit_interface.py",
+    "line": 4123,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/infringement-knowledge/collection/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_knowledge_product_collection_status",
+    "source": "bit/bit_interface.py",
+    "line": 7855,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/infringement-knowledge/analysis/start",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_start_infringement_knowledge_analysis",
+    "source": "bit/bit_interface.py",
+    "line": 7958,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/infractions/collect/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_collect_infractions_status",
+    "source": "bit/bit_interface.py",
+    "line": 8305,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/reputation/browser-sync/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_reputation_browser_sync_status",
+    "source": "bit/bit_interface.py",
+    "line": 8961,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/reputation/collect/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_collect_reputation_status",
+    "source": "bit/bit_interface.py",
+    "line": 8980,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/funds/collect/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_collect_funds_status",
+    "source": "bit/bit_interface.py",
+    "line": 9242,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/weight-dimensions-records/upload",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_weight_dimensions_records_upload",
+    "source": "bit/bit_interface.py",
+    "line": 9305,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/weight-dimensions-records/saved",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_weight_dimensions_records_saved",
+    "source": "bit/bit_interface.py",
+    "line": 9370,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/weight-dimensions-records/latest",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_weight_dimensions_records_latest",
+    "source": "bit/bit_interface.py",
+    "line": 9431,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/weight-dimensions-records/export",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_weight_dimensions_records_export_all",
+    "source": "bit/bit_interface.py",
+    "line": 9446,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/weight-dimensions-records/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_browser_extension_weight_dimensions_status",
+    "source": "bit/bit_interface.py",
+    "line": 9582,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/weight-dimensions-records/execute",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_weight_dimensions_execute",
+    "source": "bit/bit_interface.py",
+    "line": 9598,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/order-sync/yandex",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_yandex_order_sync",
+    "source": "bit/bit_interface.py",
+    "line": 9773,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/order-sync/options",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_order_sync_options",
+    "source": "bit/bit_interface.py",
+    "line": 10180,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/orders/purchase-tracking/platforms",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_purchase_tracking_platforms",
+    "source": "bit/bit_interface.py",
+    "line": 10335,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/inventory/skus",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_inventory_skus",
+    "source": "bit/bit_interface.py",
+    "line": 10594,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/inventory/skus/<int:sku_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_update_inventory_sku",
+    "source": "bit/bit_interface.py",
+    "line": 10618,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/inventory/sku-mappings",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_inventory_sku_mappings",
+    "source": "bit/bit_interface.py",
+    "line": 10636,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/inventory/sku-mappings/<int:mapping_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "function": "api_update_inventory_sku_mapping",
+    "source": "bit/bit_interface.py",
+    "line": 10662,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/inventory/reconciliation",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_inventory_reconciliation",
+    "source": "bit/bit_interface.py",
+    "line": 10691,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/inventory/matches",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_inventory_matches",
+    "source": "bit/bit_interface.py",
+    "line": 10750,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/store-links/metrics",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_store_link_metrics",
+    "source": "bit/bit_interface.py",
+    "line": 10894,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/upload-logs",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_video_upload_logs",
+    "source": "bit/bit_interface.py",
+    "line": 11329,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_ai_video_jobs",
+    "source": "bit/bit_interface.py",
+    "line": 11546,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/retry",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_ai_video_retry",
+    "source": "bit/bit_interface.py",
+    "line": 11580,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/settings",
+    "methods": [
+      "GET",
+      "PATCH"
+    ],
+    "function": "api_db_ai_video_settings",
+    "source": "bit/bit_interface.py",
+    "line": 11589,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/assets/<asset_id>",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_ai_video_asset",
+    "source": "bit/bit_interface.py",
+    "line": 11608,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>",
+    "methods": [
+      "GET",
+      "PATCH",
+      "DELETE"
+    ],
+    "function": "api_db_ai_video_job",
+    "source": "bit/bit_interface.py",
+    "line": 11621,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/publish",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_ai_video_publish",
+    "source": "bit/bit_interface.py",
+    "line": 11639,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/content",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_ai_video_content",
+    "source": "bit/bit_interface.py",
+    "line": 11669,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ai-videos/jobs/<job_id>/cover",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_ai_video_cover",
+    "source": "bit/bit_interface.py",
+    "line": 11682,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/store-links/bulk-advertise",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_store_links_bulk_advertise",
+    "source": "bit/bit_interface.py",
+    "line": 11780,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/local-agents/business-bundle",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_local_agent_business_bundle",
+    "source": "bit/bit_interface.py",
+    "line": 12719,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado-collection/stop",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_stop_mercado_collection",
+    "source": "bit/bit_interface.py",
+    "line": 15275,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado-collection/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_mercado_collection_status",
+    "source": "bit/bit_interface.py",
+    "line": 15287,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado-collection/ai-copy/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_mercado_collection_ai_copy_status",
+    "source": "bit/bit_interface.py",
+    "line": 15688,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/catalog/access",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_catalog_access",
+    "source": "bit/bit_interface.py",
+    "line": 15745,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/catalog/visibility",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_catalog_visibility",
+    "source": "bit/bit_interface.py",
+    "line": 15762,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/attribute-drafts",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_mercado_attribute_drafts",
+    "source": "bit/bit_interface.py",
+    "line": 17005,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-collection/items/by-ids",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_get_mercado_collection_items_by_ids",
+    "source": "bit/bit_interface.py",
+    "line": 18053,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-collection/items/<int:item_id>/ai-copy",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_save_mercado_collection_item_ai_copy",
+    "source": "bit/bit_interface.py",
+    "line": 18070,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/bulk-edit",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_bulk_update_mercado_products",
+    "source": "bit/bit_interface.py",
+    "line": 18191,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-collection/bulk-edit",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_bulk_update_mercado_collection",
+    "source": "bit/bit_interface.py",
+    "line": 18204,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-publish-records/published-product-ids",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_published_mercado_product_item_ids",
+    "source": "bit/bit_interface.py",
+    "line": 18267,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-publish-records/published-account-ids",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_published_mercado_product_account_ids",
+    "source": "bit/bit_interface.py",
+    "line": 18291,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-publish-records/by-ids",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_mercado_product_publish_records_by_ids",
+    "source": "bit/bit_interface.py",
+    "line": 18316,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-publish-records/existing-user-products",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_existing_mercado_user_product_ids",
+    "source": "bit/bit_interface.py",
+    "line": 18333,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-publish-records/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_create_mercado_product_publish_records",
+    "source": "bit/bit_interface.py",
+    "line": 18361,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-publish-records/<int:record_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_update_mercado_product_publish_record",
+    "source": "bit/bit_interface.py",
+    "line": 18390,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/review-status",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_update_mercado_product_review_status",
+    "source": "bit/bit_interface.py",
+    "line": 18412,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/move-to-collection",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_move_mercado_products_to_collection",
+    "source": "bit/bit_interface.py",
+    "line": 18431,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/add",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_add_mercado_products",
+    "source": "bit/bit_interface.py",
+    "line": 18451,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-collection/items/delete",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_delete_mercado_collection_items",
+    "source": "bit/bit_interface.py",
+    "line": 18465,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/delete",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_delete_mercado_product_items",
+    "source": "bit/bit_interface.py",
+    "line": 18478,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/by-ids",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_get_mercado_product_items_by_ids",
+    "source": "bit/bit_interface.py",
+    "line": 18491,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_create_mercado_product_publish_schedule",
+    "source": "bit/bit_interface.py",
+    "line": 18505,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/latest",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_get_latest_mercado_product_publish_schedule",
+    "source": "bit/bit_interface.py",
+    "line": 18531,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/claim",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_claim_mercado_product_publish_schedule",
+    "source": "bit/bit_interface.py",
+    "line": 18545,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/recover",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_recover_mercado_product_publish_schedules",
+    "source": "bit/bit_interface.py",
+    "line": 18561,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-products/publish-schedules/<int:schedule_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_update_mercado_product_publish_schedule",
+    "source": "bit/bit_interface.py",
+    "line": 18573,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/task-records",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_task_records",
+    "source": "bit/bit_interface.py",
+    "line": 18611,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/task-records/order-print/latest",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_latest_order_print_records",
+    "source": "bit/bit_interface.py",
+    "line": 18623,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/services/health",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_services_health",
+    "source": "bit/bit_interface.py",
+    "line": 18635,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/official-infractions/current-counts",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_official_infraction_current_counts",
+    "source": "bit/bit_interface.py",
+    "line": 18693,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-tokens/authorization",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_mercado_token_authorization",
+    "source": "bit/bit_interface.py",
+    "line": 19017,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-communications/<int:token_id>/<action>",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_mercado_communication",
+    "source": "bit/bit_interface.py",
+    "line": 19225,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/reputation/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_reputation",
+    "source": "bit/bit_interface.py",
+    "line": 19268,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infractions/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_infractions",
+    "source": "bit/bit_interface.py",
+    "line": 19286,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/delays/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_delays",
+    "source": "bit/bit_interface.py",
+    "line": 19303,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/pago/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_pago",
+    "source": "bit/bit_interface.py",
+    "line": 19315,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/zying-products/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_zying_products",
+    "source": "bit/bit_interface.py",
+    "line": 19327,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/weight-dimensions-records",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_weight_dimensions_records",
+    "source": "bit/bit_interface.py",
+    "line": 19339,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/weight-dimensions-changes",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_weight_dimensions_changes",
+    "source": "bit/bit_interface.py",
+    "line": 19358,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/weight-dimensions-records/existing",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_existing_weight_dimensions_record_order_numbers",
+    "source": "bit/bit_interface.py",
+    "line": 19386,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/weight-dimensions-records/log",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_weight_dimensions_record_log",
+    "source": "bit/bit_interface.py",
+    "line": 19402,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/zying-products/developers/sync",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_sync_zying_product_developers",
+    "source": "bit/bit_interface.py",
+    "line": 19452,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/zying-risk/candidates",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_zying_risk_candidates",
+    "source": "bit/bit_interface.py",
+    "line": 19466,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/zying-risk/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_update_zying_risks",
+    "source": "bit/bit_interface.py",
+    "line": 19481,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/zying-risk/categories",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_zying_risk_categories",
+    "source": "bit/bit_interface.py",
+    "line": 19495,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infringement-risk/bulk",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_update_infringement_risks",
+    "source": "bit/bit_interface.py",
+    "line": 19546,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infringement-risk/results",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_infringement_risk_results",
+    "source": "bit/bit_interface.py",
+    "line": 19560,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infringement-knowledge/candidates",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_infringement_knowledge_candidate",
+    "source": "bit/bit_interface.py",
+    "line": 19627,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infringement-risk/options",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_infringement_risk_options",
+    "source": "bit/bit_interface.py",
+    "line": 19640,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/stocks",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_inventory_stocks",
+    "source": "bit/bit_interface.py",
+    "line": 19652,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/skus",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_inventory_skus",
+    "source": "bit/bit_interface.py",
+    "line": 19667,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/skus/<int:sku_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_update_inventory_sku",
+    "source": "bit/bit_interface.py",
+    "line": 19691,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/sku-mappings",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_inventory_sku_mappings",
+    "source": "bit/bit_interface.py",
+    "line": 19709,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/sku-store-sites",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_inventory_sku_store_sites",
+    "source": "bit/bit_interface.py",
+    "line": 19735,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/sku-mappings/<int:mapping_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "function": "api_db_update_inventory_sku_mapping",
+    "source": "bit/bit_interface.py",
+    "line": 19750,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/reconciliation",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_inventory_reconciliation",
+    "source": "bit/bit_interface.py",
+    "line": 19771,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-management-categories",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_mercado_management_categories",
+    "source": "bit/bit_interface.py",
+    "line": 19930,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-management-categories/<int:category_id>",
+    "methods": [
+      "PATCH",
+      "DELETE"
+    ],
+    "function": "api_db_mercado_management_category",
+    "source": "bit/bit_interface.py",
+    "line": 19949,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/mercado-management-categories/assign",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_assign_mercado_management_category",
+    "source": "bit/bit_interface.py",
+    "line": 19971,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/shelves",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_inventory_shelves",
+    "source": "bit/bit_interface.py",
+    "line": 19992,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/shelves/<int:shelf_id>",
+    "methods": [
+      "PATCH"
+    ],
+    "function": "api_db_update_inventory_shelf",
+    "source": "bit/bit_interface.py",
+    "line": 20016,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/matches",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_inventory_matches",
+    "source": "bit/bit_interface.py",
+    "line": 20034,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/inventory/movements",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_inventory_movements",
+    "source": "bit/bit_interface.py",
+    "line": 20047,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/store-analysis",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_store_analysis",
+    "source": "bit/bit_interface.py",
+    "line": 20086,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/orders/weight-quote",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_order_weight_quote",
+    "source": "bit/bit_interface.py",
+    "line": 20113,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/orders/split/preview",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_order_split_preview",
+    "source": "bit/bit_interface.py",
+    "line": 20132,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/ad-analysis/actions",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_ad_analysis_actions",
+    "source": "bit/bit_interface.py",
+    "line": 20285,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/prohibited-listings/sync/start",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_start_prohibited_listing_sync",
+    "source": "bit/bit_interface.py",
+    "line": 20406,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/orders/access-contexts",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_order_access_contexts",
+    "source": "bit/bit_interface.py",
+    "line": 20480,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/orders/print-logs",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_order_print_logs",
+    "source": "bit/bit_interface.py",
+    "line": 20564,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/chat",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_chat",
+    "source": "bit/bit_interface.py",
+    "line": 20652,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/appeal-chat-records",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_insert_appeal_chat_record",
+    "source": "bit/bit_interface.py",
+    "line": 20674,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/appeal-phrases/random",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_random_appeal_phrase",
+    "source": "bit/bit_interface.py",
+    "line": 20747,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/appeal-phrases/<int:phrase_id>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "function": "api_db_appeal_phrase_detail",
+    "source": "bit/bit_interface.py",
+    "line": 20760,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infractions/latest",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_latest_infractions",
+    "source": "bit/bit_interface.py",
+    "line": 20884,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/pago/latest",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_latest_pago",
+    "source": "bit/bit_interface.py",
+    "line": 20903,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/session-user",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_db_workbench_session_user",
+    "source": "bit/bit_interface.py",
+    "line": 21399,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/organizations",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_db_workbench_organizations",
+    "source": "bit/bit_interface.py",
+    "line": 21452,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/roles/<role_key>",
+    "methods": [
+      "PUT",
+      "DELETE"
+    ],
+    "function": "api_db_workbench_role_detail",
+    "source": "bit/bit_interface.py",
+    "line": 21471,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/registration-code",
+    "methods": [
+      "POST",
+      "DELETE"
+    ],
+    "function": "api_db_workbench_registration_code",
+    "source": "bit/bit_interface.py",
+    "line": 21512,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/register",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_workbench_register",
+    "source": "bit/bit_interface.py",
+    "line": 21536,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/access/catalog",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_access_catalog",
+    "source": "bit/bit_interface.py",
+    "line": 21585,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/workbench/login",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_db_workbench_login",
+    "source": "bit/bit_interface.py",
+    "line": 21789,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado-tokens/authorization",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_mercado_token_authorization",
+    "source": "bit/bit_interface.py",
+    "line": 21807,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/mercado/today/rights-holder/open-store/<task_id>",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_open_reputation_browser_status",
+    "source": "bit/bit_interface.py",
+    "line": 23426,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/yandex-console/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_yandex_console_status",
+    "source": "bit/bit_interface.py",
+    "line": 23565,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/account-integrations/webhook/test",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_account_integration_webhook_test",
+    "source": "bit/bit_interface.py",
+    "line": 23872,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/registration/send-code",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_registration_send_code",
+    "source": "bit/bit_interface.py",
+    "line": 23897,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/request",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_browser_extension_purchase_tracking_request",
+    "source": "bit/bit_interface.py",
+    "line": 24294,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/zying-order-sync/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_browser_extension_zying_order_status",
+    "source": "bit/bit_interface.py",
+    "line": 24306,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/purchase-tracking/fail",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_purchase_tracking_fail",
+    "source": "bit/bit_interface.py",
+    "line": 24491,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/zying-infringement/stop",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_stop_zying_infringement",
+    "source": "bit/bit_interface.py",
+    "line": 24746,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_browser_extension_ai_weight_price_status",
+    "source": "bit/bit_interface.py",
+    "line": 24953,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/login/open",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_open_login",
+    "source": "bit/bit_interface.py",
+    "line": 24968,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/login/confirm",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_confirm_login",
+    "source": "bit/bit_interface.py",
+    "line": 24990,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/categories/refresh",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_refresh_categories",
+    "source": "bit/bit_interface.py",
+    "line": 25012,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/start",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_start",
+    "source": "bit/bit_interface.py",
+    "line": 25034,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/login/supplier",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_open_supplier",
+    "source": "bit/bit_interface.py",
+    "line": 25081,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/continue",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_continue",
+    "source": "bit/bit_interface.py",
+    "line": 25099,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/browser-extension/ai-weight-price/stop",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_browser_extension_ai_weight_price_stop",
+    "source": "bit/bit_interface.py",
+    "line": 25128,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/categories/search",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_ai_original_category_search",
+    "source": "bit/bit_interface.py",
+    "line": 25854,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/categories/<string:category_id>/attributes",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_ai_original_category_attributes",
+    "source": "bit/bit_interface.py",
+    "line": 25891,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/zs",
+    "methods": [
+      "GET"
+    ],
+    "function": "hello_whzs",
+    "source": "bit/bit_interface.py",
+    "line": 26308,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/size-charts/batch",
+    "methods": [
+      "GET",
+      "POST"
+    ],
+    "function": "api_size_chart_batch",
+    "source": "bit/size_chart_routes.py",
+    "line": 115,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/size-charts/reconcile",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_size_chart_reconcile",
+    "source": "bit/size_chart_routes.py",
+    "line": 125,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/infringement-knowledge/wipo/status",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_wipo_status",
+    "source": "bit/wipo_routes.py",
+    "line": 60,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/db/infringement-knowledge/wipo/settings",
+    "methods": [
+      "GET",
+      "PUT"
+    ],
+    "function": "api_db_wipo_settings",
+    "source": "bit/wipo_routes.py",
+    "line": 70,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/stores",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_original_publish_stores",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 100,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/amazon-store",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_original_amazon_store",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 104,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/schema",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_original_publish_schema",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 108,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/preview",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_original_publish_preview",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 112,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_original_publish_jobs",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 120,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs/<job_id>",
+    "methods": [
+      "GET"
+    ],
+    "function": "api_original_publish_job",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 124,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs/<job_id>/refresh",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_original_publish_refresh",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 128,
+    "test_references": [],
+    "reference_only": true
+  },
+  {
+    "path": "/api/ai-original-products/publish/jobs/<job_id>/retry",
+    "methods": [
+      "POST"
+    ],
+    "function": "api_original_publish_retry",
+    "source": "bit/ai_original_publish_routes.py",
+    "line": 132,
+    "test_references": [],
+    "reference_only": true
+  }
+]

@@ -53,3 +53,24 @@ def test_fast_list_skips_count_and_removes_only_duplicate_snapshot():
     assert 'source_snapshot_json' not in row
     assert row['original_1688']['title'] == '供应商商品'
     assert row['ai_original']['status'] == 'completed'
+
+
+@pytest.mark.parametrize('decode_fails', [False, True])
+def test_list_returns_connection_before_decoding_supplier_snapshots(monkeypatch, decode_fails):
+    from erp import mercadolibre_collection_store as store
+    from test_erp_mercadolibre_collection_store import _FakeConnection
+    connection = _FakeConnection()
+    monkeypatch.setattr(store, 'ensure_collection_tables', lambda cursor: None)
+    connection.fake_cursor.fetchall = lambda: [{'id': 17550656}]
+    def decode(row):
+        assert connection.closed and connection.committed
+        if decode_fails:
+            raise ValueError('invalid snapshot')
+        return row
+    monkeypatch.setattr(store, '_mirror_zying_snapshot_fields', decode)
+    if decode_fails:
+        with pytest.raises(ValueError, match='invalid snapshot'):
+            store.list_product_items(include_total=False, connection_factory=lambda: connection)
+    else:
+        result = store.list_product_items(include_total=False, connection_factory=lambda: connection)
+        assert result['rows'][0]['id'] == 17550656

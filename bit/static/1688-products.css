@@ -534,6 +534,46 @@
     min-width: 90px;
 }
 
+/* The unified detail keeps feedback visible beside its save controls. */
+#products-1688-detail-dialog .p1688-edit-footer {
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#products-1688-detail-dialog .p1688-edit-footer .p1688-edit-message {
+    flex: 1 1 180px;
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+#products-1688-detail-dialog .p1688-edit-footer .p1688-edit-message:empty {
+    display: none;
+}
+
+#products-1688-detail-dialog .p1688-edit-footer button {
+    width: auto;
+}
+
+#products-1688-detail-content .p1688-gallery > .p1688-empty {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+    #products-1688-detail-dialog .p1688-edit-footer .p1688-edit-message {
+        flex-basis: 100%;
+    }
+    #products-1688-detail-dialog .p1688-edit-footer button {
+        flex: 1 1 0;
+    }
+}
+
+#products-1688-body .p1688-product-copy > small {
+    display: block;
+    margin-top: var(--zs-space-1);
+    overflow-wrap: anywhere;
+}
+
 .p1688-detail-top {
     display: grid;
     grid-template-columns: minmax(300px, 1.1fr) minmax(300px, 1fr);

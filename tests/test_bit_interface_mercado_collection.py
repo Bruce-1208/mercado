@@ -15,9 +15,13 @@ def offline_console(monkeypatch, tmp_path, isolated_legacy_console_user, subscri
     monkeypatch.setattr(workbench, "workbench_selected_organization", lambda *args: "")
     monkeypatch.setattr(workbench.bit_db_api, "publish_workers", lambda *args: 16)
     # The catalog middleware must use this offline identity too, never real rows.
-    monkeypatch.setattr(workbench.bit_db_api, "check_catalog_access", lambda kind, ids: None)
+    monkeypatch.setattr(workbench.bit_db_api, "check_catalog_access", lambda kind, ids, **kwargs: None)
     monkeypatch.setenv("MERCADO_INFRINGEMENT_TASK_PATH", str(tmp_path / "infringement.sqlite3"))
     monkeypatch.setattr(workbench, "_mercado_infringement_service", None)
+    monkeypatch.setattr(workbench, "_mercado_publish_infringement_enabled", lambda organization: True)
+    monkeypatch.setattr(workbench, "db_create_mercado_product_publish_records",
+                        lambda rows, **kwargs: {int(row["id"]): int(row["id"]) + 1000 for row in rows})
+    monkeypatch.setattr(workbench, "db_update_mercado_product_publish_record", lambda *args, **kwargs: None)
     monkeypatch.setattr(workbench, "LOCAL_AGENT_HUB_PATH", tmp_path / "agents.sqlite3")
     monkeypatch.setattr(workbench, "_local_agent_store_instance", None)
     monkeypatch.setattr(workbench, "_local_agent_hub_migration_source", None)
@@ -273,6 +277,8 @@ def _reset_publish_state():
             processed_count=0,
             published_count=0,
             failed_count=0,
+            pending_review_count=0,
+            persistence_failed_count=0,
             moved_to_collection_count=0,
             skipped_other_account_count=0,
             skipped_published_count=0,
@@ -280,7 +286,13 @@ def _reset_publish_state():
             average_seconds_per_item=0,
             items_per_minute=0,
             estimated_remaining_seconds=0,
+            average_stage_seconds={},
+            current_item_id="",
+            started_at="",
+            finished_at="",
+            review_issues=[],
             results=[],
+            logs=[],
         )
 
 
@@ -434,7 +446,7 @@ def test_workbench_splits_collection_and_product_list_into_separate_modules():
     assert "仅“通过”状态可上架".encode("utf-8") in response.data
     assert "批量上架".encode("utf-8") in response.data
     assert "资料未就绪，将自动移回采集列表".encode("utf-8") in response.data
-    assert "侵权风险待处理，保留产品列表".encode("utf-8") in response.data
+    assert "侵权风险待处理，将在上架记录中显示拦截原因".encode("utf-8") in response.data
     assert "最终上架售价 = 产品净收益 ×".encode("utf-8") in response.data
     assert 'partial: "部分完成"'.encode("utf-8") in response.data
 
@@ -1019,7 +1031,7 @@ def test_product_publish_record_list_endpoint_supports_filters(scope):
             "/api/mercado-publish-records"
             "?search=MLM301&status=failed&store_name=泽顺&site_id=MLB"
             "&group_name=精品组&start_date=2026-09-12T00:00"
-            "&end_date=2026-09-12T23:59&limit=100&salesperson=张三&token_id=9"
+            "&end_date=2026-09-12T23:59&limit=100&salesperson=张三&token_id=9&source_type=zying"
         )
 
     assert response.status_code == 200
@@ -1027,6 +1039,7 @@ def test_product_publish_record_list_endpoint_supports_filters(scope):
     assert response.get_json()["data"]["publish_running"] is False
     list_records.assert_called_once_with(
         search="MLM301",
+        source_type="zying",
         status="failed",
         store_name="泽顺",
         site_id="MLB",
@@ -1053,7 +1066,7 @@ def test_retry_publish_records_starts_grouped_background_task():
             "site_id": "MLB",
             "site_name": "巴西",
             "quantity": 5,
-            "status": "publishing",
+            "status": "failed",
         },
         {
             "id": 81,
@@ -1142,6 +1155,33 @@ def test_retry_publish_records_rejects_successful_record():
     assert response.status_code == 400
     assert "只有上架暂停或上架失败" in response.get_json()["message"]
     start_thread.assert_not_called()
+
+
+def test_retry_publish_records_rejects_publishing_record_as_result_unknown():
+    _reset_publish_state()
+    with patch.object(
+        workbench,
+        "db_get_mercado_product_publish_records_by_ids",
+        return_value=[{
+            "id": 81,
+            "product_item_id": 9,
+            "token_id": 5,
+            "site_id": "MLB",
+            "status": "publishing",
+        }],
+    ), patch.object(workbench.threading.Thread, "start") as start_thread:
+        response = _client().post(
+            "/api/mercado-publish-records/retry",
+            json={"record_ids": [81], "review_before_publish": True},
+        )
+
+    assert response.status_code == 400
+    assert response.is_json
+    message = response.get_json()["message"]
+    assert "结果待确认" in message
+    assert "不能重复提交" in message
+    start_thread.assert_not_called()
+    _reset_publish_state()
 
 
 def test_start_collection_builds_country_url_from_keyword_and_scope():
@@ -1270,6 +1310,11 @@ def test_product_content_update_endpoint():
         "package_length_cm": 30,
         "package_width_cm": 20,
         "package_height_cm": 10,
+        "net_proceeds_usd": 18.5,
+        "pictures": [{"source": "https://example.test/image.jpg"}],
+        "attributes": [{"id": "MATERIAL", "value_name": "Steel"}],
+        "sale_terms": [], "available_quantity": 0, "condition": "new",
+        "source_url": "https://example.test/item", "currency_id": "USD",
         "unknown_field": "ignored",
     }
     with patch.object(
@@ -1860,37 +1905,20 @@ def test_batch_publish_endpoint_rejects_unsupported_site():
     assert "不支持的目标站点" in response.get_json()["message"]
 
 
-def test_batch_publish_endpoint_moves_unapproved_product_to_collection():
+def test_batch_publish_endpoint_records_unapproved_product_without_submission():
     _reset_publish_state()
-    rows = [
-        {
-            "id": 9,
-            "source_item_id": "MLM3016972321",
-            "source_url": "source",
-            "review_status": "unreviewed",
-            "weight_g": 350,
-            **_actual_shipping(350),
-            "net_proceeds_usd": 8,
-        }
-    ]
-    with patch.object(
-        workbench, "db_get_mercado_product_items_by_ids", return_value=rows
-    ), patch.object(
-        workbench,
-        "db_move_mercado_product_items_to_collection",
-        return_value={"requested": 1, "moved": 1, "deleted": 1},
-    ) as move_products, patch.object(
-        workbench.threading.Thread, "start"
-    ) as start_thread:
-        response = _client().post(
-            "/api/mercado-products/publish",
-            json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"},
-        )
-
+    rows = [{"id": 9, "source_item_id": "MLM123", "review_status": "unreviewed", "weight_g": 350, **_actual_shipping(350), "net_proceeds_usd": 8}]
+    with (
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=rows),
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value={"rows": [{"id": 5, "site_id": "CBT"}]}),
+        patch.object(workbench, "db_move_mercado_product_items_to_collection") as move,
+        patch.object(workbench.threading, "Thread") as thread,
+    ):
+        response = _client().post("/api/mercado-products/publish", json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"})
     assert response.status_code == 200
-    assert response.get_json()["data"]["moved_to_collection_count"] == 1
-    move_products.assert_called_once_with([9], reason="审核状态未通过 1 件")
-    start_thread.assert_not_called()
+    assert '审核状态未通过' in response.get_json()['data']['review_issues'][0]['issues']
+    assert thread.call_args.kwargs['args'][1][0]['attempt_record_ids'] == {9: 1009}
+    move.assert_not_called()
     _reset_publish_state()
 
 
@@ -1915,8 +1943,10 @@ def test_manual_approval_admits_imports_without_moving_them_to_collection(source
         request = {"product_item_ids": [9], "token_id": 5, "site_id": "MLM"}
         before = client.post("/api/mercado-products/publish", json=request)
         assert before.status_code == 200
-        assert "保留在产品列表" in before.get_json()["data"]["message"]
-        start.assert_not_called()
+        assert before.get_json()["data"]["review_issues"]
+        start.assert_called_once()
+        _reset_publish_state()
+        start.reset_mock()
         review = client.post("/api/mercado-products/review-status", json={"product_item_ids": [9], "review_status": "approved"})
         assert review.status_code == 200
         after = client.post("/api/mercado-products/publish", json=request)
@@ -1944,38 +1974,20 @@ def test_scheduled_import_uses_the_same_approval_and_risk_screening_flow():
     _reset_publish_state()
 
 
-def test_batch_publish_endpoint_moves_missing_weight_back_to_collection():
+def test_batch_publish_endpoint_records_missing_weight_back_without_submission():
     _reset_publish_state()
-    rows = [{
-        "id": 9,
-        "source_item_id": "MLM3016972321",
-        "review_status": "approved",
-        "weight_g": None,
-        "net_proceeds_usd": 8,
-    }]
+    rows = [{"id": 9, "source_item_id": "MLM123", "review_status": "approved", "weight_g": None, "net_proceeds_usd": 8}]
     with (
-        patch.object(
-            workbench, "db_get_mercado_product_items_by_ids", return_value=rows
-        ),
-        patch.object(
-            workbench,
-            "db_move_mercado_product_items_to_collection",
-            return_value={"requested": 1, "moved": 1, "deleted": 1},
-        ) as move_products,
-        patch.object(workbench.threading.Thread, "start") as start_thread,
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=rows),
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value={"rows": [{"id": 5, "site_id": "CBT"}]}),
+        patch.object(workbench, "db_move_mercado_product_items_to_collection") as move,
+        patch.object(workbench.threading, "Thread") as thread,
     ):
-        response = _client().post(
-            "/api/mercado-products/publish",
-            json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"},
-        )
-
+        response = _client().post("/api/mercado-products/publish", json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"})
     assert response.status_code == 200
-    assert response.get_json()["data"]["moved_to_collection_count"] == 1
-    assert "移回采集列表" in response.get_json()["data"]["message"]
-    move_products.assert_called_once_with(
-        [9], reason="未填写有效重量 1 件"
-    )
-    start_thread.assert_not_called()
+    assert '未填写有效重量' in response.get_json()['data']['review_issues'][0]['issues']
+    assert thread.call_args.kwargs['args'][1][0]['attempt_record_ids'] == {9: 1009}
+    move.assert_not_called()
     _reset_publish_state()
 
 
@@ -2046,47 +2058,28 @@ def test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows():
     payload = response.get_json()["data"]
     assert response.status_code == 200
     assert payload["running"] is True
-    assert payload["requested_count"] == 1
-    assert payload["moved_to_collection_count"] == 3
-    move_products.assert_called_once_with(
-        [9, 11, 12],
-        reason=(
-            "未填写有效重量 1 件；净收益尚未计算 1 件；"
-            "审核状态未通过 1 件；净收益小于等于 0 1 件"
-        ),
-    )
+    assert payload["requested_count"] == 4
+    assert payload["moved_to_collection_count"] == 0
+    move_products.assert_not_called()
+    assert len(payload["review_issues"]) == 3
     start_thread.assert_called_once()
     _reset_publish_state()
 
 
-def test_batch_publish_endpoint_moves_nonpositive_net_to_collection():
+def test_batch_publish_endpoint_records_nonpositive_net_without_submission():
     _reset_publish_state()
-    rows = [{
-        "id": 9,
-        "source_item_id": "MLM3016972321",
-        "review_status": "approved",
-        "weight_g": 350,
-        **_actual_shipping(350),
-        "net_proceeds_usd": -0.01,
-    }]
-    with patch.object(
-        workbench, "db_get_mercado_product_items_by_ids", return_value=rows
-    ), patch.object(
-        workbench,
-        "db_move_mercado_product_items_to_collection",
-        return_value={"requested": 1, "moved": 1, "deleted": 1},
-    ) as move_products, patch.object(
-        workbench.threading.Thread, "start"
-    ) as start_thread:
-        response = _client().post(
-            "/api/mercado-products/publish",
-            json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"},
-        )
-
+    rows = [{"id": 9, "source_item_id": "MLM123", "review_status": "approved", "weight_g": 350, **_actual_shipping(350), "net_proceeds_usd": -0.01}]
+    with (
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=rows),
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value={"rows": [{"id": 5, "site_id": "CBT"}]}),
+        patch.object(workbench, "db_move_mercado_product_items_to_collection") as move,
+        patch.object(workbench.threading, "Thread") as thread,
+    ):
+        response = _client().post("/api/mercado-products/publish", json={"product_item_ids": [9], "token_id": 5, "site_id": "MLM"})
     assert response.status_code == 200
-    assert response.get_json()["data"]["moved_to_collection_count"] == 1
-    move_products.assert_called_once_with([9], reason="净收益小于等于 0 1 件")
-    start_thread.assert_not_called()
+    assert '净收益小于等于 0' in response.get_json()['data']['review_issues'][0]['issues']
+    assert thread.call_args.kwargs['args'][1][0]['attempt_record_ids'] == {9: 1009}
+    move.assert_not_called()
     _reset_publish_state()
 
 
@@ -2147,3 +2140,100 @@ def test_mercado_category_options_route(monkeypatch):
     assert response.status_code == 200
     assert response.get_json()['data']['rows'] == rows
     assert response.headers['Cache-Control'] == 'no-store'
+
+
+@pytest.mark.parametrize("risk", [None, 2])
+def test_publish_accepts_unchecked_and_risky_products_for_recorded_screening(risk):
+    from bit.infringement_state import content_hash
+    _reset_publish_state()
+    row = {"id": 9, "source_item_id": "MLM123", "source_type": "collected",
+           "review_status": "approved", "net_proceeds_usd": 8,
+           "infringement_check_json": None}
+    if risk is not None:
+        row["infringement_check_json"] = {
+            "risk_level": risk, "check_status": "completed", "detection_scope": "title",
+            "content_hash": content_hash(row),
+        }
+    with (
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=[row]),
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value={"rows": [
+            {"id": 5, "display_name": "测试", "site_settings": [{"site_id": "MLM", "discount_rate": 100}]}]}),
+        patch.object(workbench.threading.Thread, "start") as start,
+    ):
+        response = _client().post("/api/mercado-products/publish", json={
+            "product_item_ids": [9], "token_id": 5, "site_id": "MLM"})
+    assert response.status_code == 200
+    assert response.get_json()["data"]["requested_count"] == 1
+    start.assert_called_once()
+    _reset_publish_state()
+
+
+@pytest.mark.parametrize("failure_stage", ["screening", "publisher_setup", "none"])
+def test_publish_attempt_exists_before_screening_and_records_setup_failure(failure_stage):
+    _reset_publish_state()
+    events, updates = [], []
+    row = {"id": 9, "source_item_id": "MLM123", "infringement_check_json": None}
+    def create(rows, **kwargs):
+        events.append("record")
+        assert kwargs["created_by"] == "测试业务员"
+        return {9: 109}
+    def screen(rows, *args):
+        assert events == ["record"]
+        events.append("screen")
+        if failure_stage == "screening":
+            raise ValueError("侵权补检未完成：检测服务异常")
+        return rows
+    def publish(rows, **kwargs):
+        if failure_stage == "publisher_setup":
+            raise ValueError("店铺授权失效")
+        assert kwargs["create_records"](rows) == {9: 109}
+        return {"requested_count": 1, "pending_review_count": 1,
+                "results": [{"record_id": 109, "product_id": 9, "status": "pending_review"}]}
+    with (
+        patch.object(workbench, "db_get_published_mercado_product_item_ids", return_value=[]),
+        patch.object(workbench, "db_get_existing_mercado_user_product_ids", return_value={}),
+        patch.object(workbench, "db_create_mercado_product_publish_records", side_effect=create),
+        patch.object(workbench, "db_update_mercado_product_publish_record", side_effect=lambda *a, **kw: updates.append((a, kw))),
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value={"rows": [{"id": 5}]}),
+        patch.object(workbench, "_screen_mercado_publish_rows", side_effect=screen),
+        patch.object(workbench, "_build_mercado_infringement_preflight", return_value=None),
+        patch("erp.mercadolibre_batch_publish.publish_product_batch", side_effect=publish),
+    ):
+        workbench._run_mercado_product_publish_targets([row], [{"token_id": 5, "site_id": "MLM"}],
+            quantity=1, worker_count=1, batch_id="record-before-screen", created_by="测试业务员")
+    assert events == ["record", "screen"]
+    if failure_stage != "none":
+        assert updates[-1][0] == (109,)
+        assert updates[-1][1]["status"] == "failed"
+        assert updates[-1][1]["result"]["platform_submitted"] is False
+        assert updates[-1][1]["failure_reason"]
+    else:
+        assert all(item[1]["status"] == "publishing" for item in updates)  # Terminal results belong to the publisher.
+    _reset_publish_state()
+
+
+@pytest.mark.parametrize("review,enabled", [(True, True), (True, False), (False, False), (False, True)])
+def test_publish_review_and_company_switch_control_all_screening(review, enabled):
+    _reset_publish_state()
+    row = {"id": 9, "source_item_id": "MLM123", "infringement_check_json": None}
+    with (
+        patch.object(workbench, "db_get_published_mercado_product_item_ids", return_value=[]),
+        patch.object(workbench, "db_get_existing_mercado_user_product_ids", return_value={}),
+        patch.object(workbench, "db_get_mercado_product_items_by_ids", return_value=[row]),
+        patch.object(workbench.bit_db_api, "list_mercado_store_tokens", return_value={"rows": [{"id": 5, "organization_key": "company-b"}]}),
+        patch.object(workbench, "_mercado_publish_infringement_enabled", return_value=enabled) as policy,
+        patch.object(workbench, "_screen_mercado_publish_rows", return_value=[row]) as screen,
+        patch.object(workbench, "_build_mercado_infringement_preflight", return_value=None) as preflight,
+        patch("erp.mercadolibre_batch_publish.product_publish_issues", return_value=[]),
+        patch("erp.mercadolibre_batch_publish.publish_product_batch", return_value={"requested_count": 1, "published_count": 1}) as publish,
+    ):
+        workbench._run_mercado_product_publish_targets([row], [{"token_id": 5, "site_id": "MLM"}],
+            quantity=1, worker_count=1, batch_id="manual-review", created_by="reviewer", review_before_publish=review)
+    assert publish.call_args.kwargs["enforce_infringement"] is (enabled and not review)
+    assert screen.called is (enabled and not review)
+    assert preflight.called is (enabled and not review)
+    if review:
+        policy.assert_not_called()
+    else:
+        policy.assert_called_once_with("company-b")
+    _reset_publish_state()

@@ -107,6 +107,18 @@ def test_missing_category_client_fails_then_resumes_without_regenerating_copy(pr
     assert counts['copy'] == 1
 
 
+def test_completed_draft_with_missing_copy_is_repaired_from_saved_checkpoint(preparation):
+    row, client, counts, _, chat = preparation
+    initial = products.prepare_ai_original_product(row, category_client=client, chat=chat)
+    retry = retry_row(row, initial['ai_original'])
+    retry['source_snapshot_json']['ai_original']['title_pt'] = ''
+    before = dict(counts)
+    assert products.original_generation_skip_reason(retry) == ''
+    repaired = products.prepare_ai_original_product(retry, category_client=client, chat=chat)
+    assert repaired['ai_original']['title_pt'] == initial['ai_original']['title_pt']
+    assert counts == before
+
+
 @pytest.mark.parametrize('category_id', ['', 'MLM123', 'CBT_WRONG'])
 def test_legacy_completed_invalid_category_is_retryable(preparation, category_id):
     row, client, counts, _, chat = preparation
@@ -216,7 +228,8 @@ def test_new_manual_lock_retains_corrected_copy_and_manual_attributes(preparatio
     assert counts["copy"] == 1
 
 
-def test_manual_required_attribute_resumes_without_remapping_skus(preparation):
+def test_manual_required_attribute_resumes_without_remapping_skus(preparation, monkeypatch):
+    monkeypatch.setattr(products, '_required_attribute_default', lambda attribute: None)
     row, client, counts, control, chat = preparation
     control["missing_material"] = True
     with pytest.raises(products.OriginalPreparationError) as failure:
@@ -328,3 +341,16 @@ def test_metadata_repair_never_calls_image_processing(preparation, monkeypatch):
     assert state['attributes'] and state['preparation']['required_ready']
     assert not state['preparation'].get('image_ready')
     assert counts['image'] == 0
+
+
+def test_retry_missing_sku_sources_stops_before_model_or_category_calls():
+    state = {'status': 'failed', 'failed_step': 'sku_images', 'variations': [{'sku_id': 'red'}, {'sku_id': 'blue'}],
+             'generation_budget': {'spent_yuan': .01}}
+    row = {'source_snapshot_json': {'ai_original': state, 'original_1688': {
+        'title': 'Two different colors', 'variations': [{'sku_id': 'red'}, {'sku_id': 'blue'}]}}}
+    def forbidden(*a, **k): pytest.fail('Missing source photos must not trigger a paid retry')
+    with pytest.raises(products.OriginalPreparationError) as caught:
+        products.prepare_ai_original_product(row, chat=forbidden, budget_transport=forbidden)
+    assert caught.value.step == 'sku_images'
+    assert '2 个 SKU' in str(caught.value)
+    assert caught.value.state['generation_budget'] == state['generation_budget']

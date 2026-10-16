@@ -91,10 +91,23 @@ function products1688SourceUrl(row) {
   }
 }
 
+function products1688SourceId(row) {
+  const original = products1688Original(row);
+  const explicit = String(original.source_1688_item_id || original.item_id || "").trim().replace(/^1688[_-]/, "");
+  if (/^\d{5,}$/.test(explicit)) return explicit;
+  const url = products1688SourceUrl(row);
+  const linked = url.match(/\/offer\/(\d+)\.html/i)?.[1] || url.match(/[?&](?:offerId|offer_id|itemId)=(\d+)/i)?.[1];
+  if (linked) return linked;
+  const stored = String(original.source_item_id || row?.source_item_id || "").trim().replace(/^1688[_-]/, "");
+  const number = /^1688\d{10,}$/.test(stored) ? stored.slice(4) : stored;
+  return /^\d{5,}$/.test(number) ? number : "";
+}
+
 function products1688Images(row) {
   const original = products1688Original(row);
-  const values = [original.main_image_url, ...(Array.isArray(original.images) ? original.images : [])];
-  return [...new Set(values.map(value => String(value || "").trim()).filter(value => /^https?:\/\//i.test(value)))].slice(0, 20);
+  const list = value => Array.isArray(value) ? value : [];
+  const values = [original.main_image_url, ...list(original.images), ...list(original.pictures), ...list(original.detail_images)];
+  return ZeshunSku.urls(values);
 }
 
 function products1688ImageFallbacks(images) {
@@ -199,13 +212,15 @@ function products1688SelectedRows() {
 }
 
 function products1688UpdateSelection() {
+  products1688Rows.filter(row => row.can_operate === false).forEach(row => products1688Selected.delete(Number(row.id)));
   const count = products1688Selected.size;
   const summary = document.getElementById("products-1688-selection");
   if (summary) summary.textContent = `本页已选择 ${count} 件`;
   const selectAll = document.getElementById("products-1688-select-all");
   if (selectAll) {
-    const visible = products1688Rows.length;
-    selectAll.checked = visible > 0 && products1688Rows.every(row => products1688Selected.has(Number(row.id)));
+    const selectable = products1688Rows.filter(row => row.can_operate !== false);
+    const visible = selectable.length;
+    selectAll.checked = visible > 0 && selectable.every(row => products1688Selected.has(Number(row.id)));
     selectAll.indeterminate = count > 0 && !selectAll.checked;
   }
   const bulkButton = document.getElementById("products-1688-bulk-edit");
@@ -231,7 +246,7 @@ function products1688RenderRows() {
     const title = original.title || row.title || "未命名商品";
     const sourceUrl = products1688SourceUrl(row);
     const imageMarkup = image
-      ? `<img class="p1688-thumb" src="${products1688Escape(image)}" data-image-candidates="${products1688Escape(JSON.stringify(products1688ImageFallbacks(images)))}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
+      ? `<img ${sourceUrl ? "" : 'tabindex="0"'} class="p1688-thumb" src="${products1688Escape(image)}" data-image-candidates="${products1688Escape(JSON.stringify(products1688ImageFallbacks(images)))}" alt="1688 商品主图" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`
       : `<span class="p1688-thumb"></span>`;
     const linkedImage = sourceUrl
       ? `<a class="p1688-product-image-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页">${imageMarkup}</a>`
@@ -240,11 +255,11 @@ function products1688RenderRows() {
       ? `<a class="p1688-product-title-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页"><strong title="${products1688Escape(title)}">${products1688Escape(title)}</strong></a>`
       : `<strong title="${products1688Escape(title)}">${products1688Escape(title)}</strong>`;
     const status = String(row.ai_status || "pending").toLowerCase();
-    return `<tr class="p1688-editable-row" onclick="products1688RowClick(event, ${Number(row.id)})" title="点击空白处修改资料">
+    return window.catalogOperationMarkup(row, `<tr class="p1688-editable-row" onclick="products1688RowClick(event, ${Number(row.id)})" title="点击空白处查看并编辑详情">
       <td data-label="选择" class="p1688-check-cell"><input type="checkbox" aria-label="选择 ${products1688Escape(title)}" ${products1688Selected.has(Number(row.id)) ? "checked" : ""} onchange="products1688Toggle(${Number(row.id)}, this.checked)"></td>
-      <td data-label="商品"><div class="p1688-product-cell">${linkedImage}<div class="p1688-product-copy">${linkedTitle}</div></div></td>
+      <td data-label="商品"><div class="p1688-product-cell">${linkedImage}<div class="p1688-product-copy">${linkedTitle}<small class="p1688-muted">1688 编号：${products1688Escape(products1688SourceId(row) || "未记录")}</small>${ZeshunSku.badge(row)}</div></div></td>
       <td data-label="自建产品分类" title="${products1688Escape(products1688Category(row))}">${products1688Escape(products1688Category(row))}</td>
-      <td data-label="采购价"><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))}</span><small class="p1688-muted"> CNY</small></td>
+      <td data-label="采购价"><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))}</span><small class="p1688-muted"> CNY${products1688SourceValue(row, "price") == null ? ' · 价格待补充' : ''}</small></td>
       <td data-label="净收益价 · USD">${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? '<span class="p1688-muted">—</span>' : `<span class="p1688-price">$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))}</span>`}</td>
       <td data-label="包装毛重">${products1688Escape(products1688Weight(row))}</td>
       <td data-label="包装尺寸">${products1688Escape(products1688Dimensions(row))}</td>
@@ -252,8 +267,8 @@ function products1688RenderRows() {
       <td data-label="AI 状态">${products1688Status(row) ? `<span class="p1688-status ${products1688Escape(status)}">${products1688Escape(products1688Status(row))}</span>` : "—"}</td>
       <td data-label="采集业务员">${products1688Escape(row.collector_salesperson || "未记录")}</td>
       <td data-label="采集时间">${products1688Escape(products1688Date(original.collected_at || row.added_at))}</td>
-      <td data-label="操作"><div class="p1688-row-actions">${window.catalogVisibilityControl ? window.catalogVisibilityControl(row, "products") : ""}<button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button><button class="secondary" type="button" onclick="products1688OpenEdit(${Number(row.id)})">修改资料</button><button class="secondary" type="button" onclick="products1688OpenAiEditor(${Number(row.id)})">编辑刊登内容</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
-    </tr>`;
+      <td data-label="操作"><div class="p1688-row-actions">${window.catalogVisibilityControl ? window.catalogVisibilityControl(row, "products") : ""}<button class="secondary" type="button" onclick="products1688OpenDetail(${Number(row.id)})">查看详情</button>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开1688</a>` : ""}</div></td>
+    </tr>`);
   }).join("") : '<tr><td class="p1688-empty" colspan="12">没有符合当前条件的 1688 商品，请调整或清空筛选条件。<button type="button" onclick="products1688ResetFilters()">清空筛选</button></td></tr>';
   const total = Number(document.getElementById("products-1688-total-value")?.dataset.total || products1688Rows.length);
   const totalPages = Math.max(1, Math.ceil(total / products1688PageSize));
@@ -269,6 +284,7 @@ function products1688RenderRows() {
 }
 
 function products1688Toggle(id, checked) {
+  if (checked && products1688Rows.find(row => Number(row.id) === Number(id))?.can_operate === false) return;
   const value = Number(id);
   if (checked) products1688Selected.add(value); else products1688Selected.delete(value);
   products1688UpdateSelection();
@@ -276,6 +292,7 @@ function products1688Toggle(id, checked) {
 
 function products1688ToggleAll(checked) {
   products1688Rows.forEach(row => {
+    if (row.can_operate === false) return;
     const id = Number(row.id);
     if (checked) products1688Selected.add(id); else products1688Selected.delete(id);
   });
@@ -301,6 +318,8 @@ function products1688Query() {
     price_max: "products-1688-price-max",
     weight_min: "products-1688-weight-min",
     weight_max: "products-1688-weight-max",
+    sku_count_min: "products-1688-sku-min",
+    sku_count_max: "products-1688-sku-max",
     date_from: "products-1688-date-from",
     date_to: "products-1688-date-to"
   };
@@ -340,22 +359,28 @@ async function products1688FetchOptions() {
     fetch("/api/mercado-management-categories", {cache: "no-store"}).then(async response => {
       const payload = await response.json();
       if (!response.ok || payload.status !== "success") throw Object.assign(new Error(payload.message || `HTTP ${response.status}`), {status: response.status});
-      products1688Categories = (Array.isArray(payload.data?.rows) ? payload.data.rows : []).filter(row => Number(row.id) > 0);
-      const categories = products1688Categories.map(row => [String(row.id), row.name || "未命名分类"]);
-      products1688FillSelect("products-1688-category-filter", [["", "全部分类"], ["uncategorized", "未分类"], ...categories]);
-      products1688FillSelect("products-1688-batch-category", [["", "选择分类"], ["uncategorized", "移出分类"], ...categories]);
-      products1688UpdateSelection();
+      products1688SyncCategories(payload.data?.rows);
     })
   ]);
   return results.flatMap((result, index) => result.status === "rejected" ? [`${index === 0 ? "业务员" : "分类"}选项读取失败：${result.reason?.message || result.reason}`] : []);
 }
 
 function products1688ResetFilters() {
+  for (const bound of ["min", "max"]) document.getElementById(`products-1688-sku-${bound}`).value = "";
   ["search", "salesperson", "category-filter", "status-filter", "review-filter", "price-min", "price-max", "weight-min", "weight-max", "date-from", "date-to"].forEach(name => {
     const control = document.getElementById(`products-1688-${name}`);
     if (control) control.value = "";
   });
   load1688Products();
+}
+
+// Both workspaces edit the same categories; also update cached filter options.
+function products1688SyncCategories(rows) {
+  products1688Categories = (Array.isArray(rows) ? rows : []).filter(row => Number(row.id) > 0);
+  const categories = products1688Categories.map(row => [String(row.id), row.name || "未命名分类"]);
+  products1688FillSelect("products-1688-category-filter", [["", "全部分类"], ["uncategorized", "未分类"], ...categories]);
+  products1688FillSelect("products-1688-batch-category", [["", "选择分类"], ["uncategorized", "移出分类"], ...categories]);
+  products1688UpdateSelection();
 }
 
 async function products1688OpenCategoryManager() {
@@ -492,39 +517,51 @@ function products1688SetEditBusy(busy) {
   products1688EditSaving = busy;
   ["products-1688-edit-save", "products-1688-edit-cancel", "products-1688-edit-close", ...PRODUCTS_1688_EDIT_FIELDS.map(([key]) => `products-1688-edit-${key}`)].forEach(id => {
     const control = document.getElementById(id);
-    if (control) control.disabled = busy;
+    if (control) control.disabled = busy || (products1688EditState?.readOnly && !["products-1688-edit-cancel", "products-1688-edit-close"].includes(id));
+  });
+  document.querySelectorAll("#products-1688-sku-editor input, #products-1688-sku-editor button").forEach(control => {
+    control.disabled = busy || products1688EditState?.readOnly ||
+      (['main', 'left'].includes(control.dataset.skuAction) && control.dataset.skuPosition === '0') ||
+      (control.dataset.skuAction === 'add' && !!products1688EditState && products1688SkuDisplayPictures(products1688EditState.variations[Number(control.dataset.skuRow)]).includes(control.dataset.skuUrl));
   });
   const save = document.getElementById("products-1688-edit-save");
   if (save) save.textContent = busy ? "正在保存…" : "保存修改";
 }
 
-function products1688OpenEdit(id) {
-  if (products1688EditSaving || products1688BulkSaving) return;
-  const row = products1688Rows.find(item => Number(item.id) === Number(id));
-  const dialog = document.getElementById("products-1688-edit-dialog");
-  if (!row || !dialog) return;
+function products1688PrepareEdit(row) {
   const initial = {};
   PRODUCTS_1688_EDIT_FIELDS.forEach(([key]) => {
     initial[key] = products1688EditValue(row, key);
     const input = document.getElementById(`products-1688-edit-${key}`);
     if (input) input.value = initial[key];
   });
-  products1688EditState = {id: Number(id), initial};
-  document.getElementById("products-1688-edit-title").textContent = products1688Original(row).title || row.title || "未命名商品";
-  products1688EditMessage("");
+  const original = products1688Original(row);
+  const variations = structuredClone(Array.isArray(original.variations) && original.variations.length ? original.variations : [{
+    sku_id: products1688SourceId(row) || String(row.id),
+    seller_sku: original.seller_sku || row.seller_sku || "",
+    available_quantity: original.available_quantity ?? row.available_quantity ?? null,
+    price: products1688SourceValue(row, "price") ?? null,
+    weight_g: products1688SourceValue(row, "weight_g") ?? null,
+    images: products1688Images(row), image_url: products1688Images(row)[0] || ""
+  }]);
+  products1688EditState = {id: Number(row.id), initial, variations, readOnly: row.can_operate === false,
+    initialVariations: JSON.stringify(variations),
+    gallery: ZeshunSku.urls([...products1688Images(row), ...variations.flatMap(v => [...ZeshunSku.pictures(v), ...(v.image_candidates || [])])])};
+  products1688RenderSkus();
+  products1688EditMessage(products1688EditState.readOnly ? "其他成员的产品，仅可查看" : "");
   products1688SetEditBusy(false);
-  if (!dialog.open) dialog.showModal();
 }
 
+// Older callers use the edit entry; both entries now open the same detail.
+function products1688OpenEdit(id) { products1688OpenDetail(id); }
+
 function products1688CloseEdit() {
-  if (products1688EditSaving) return;
-  document.getElementById("products-1688-edit-dialog")?.close();
-  products1688EditState = null;
+  products1688CloseDetail();
 }
 
 async function products1688SaveEdit(event) {
   event?.preventDefault();
-  if (!products1688EditState || products1688EditSaving) return;
+  if (!products1688EditState || products1688EditSaving || products1688EditState.readOnly) return;
   const current = {};
   for (const [key, label] of PRODUCTS_1688_EDIT_FIELDS) {
     const input = document.getElementById(`products-1688-edit-${key}`);
@@ -538,6 +575,12 @@ async function products1688SaveEdit(event) {
   let patch;
   try { patch = products1688EditPatch(products1688EditState.initial, current); }
   catch (error) { products1688EditMessage(error.message || String(error), "error"); return; }
+  let variations;
+  try { variations = products1688CollectSkus(true); }
+  catch (error) { products1688EditMessage(error.message || String(error), "error"); return; }
+  const currentSkus = JSON.stringify(variations.map(({net_proceeds_usd, ...v}) => v));
+  const initialSkus = JSON.stringify(products1688EditState.variations === undefined ? [] : JSON.parse(products1688EditState.initialVariations).map(({net_proceeds_usd, ...v}) => v));
+  if (currentSkus !== initialSkus) patch.variations = variations;
   if (!Object.keys(patch).length) { products1688EditMessage("没有需要保存的修改"); return; }
   const id = products1688EditState.id;
   products1688SetEditBusy(true);
@@ -554,8 +597,6 @@ async function products1688SaveEdit(event) {
       products1688Rows = products1688Rows.map(row => Number(row.id) === id ? payload.data : row);
       products1688RenderRows();
     }
-    const detail = document.getElementById("products-1688-detail-dialog");
-    if (hasSavedRow && detail?.open) products1688OpenDetail(id);
     products1688SetEditBusy(false);
     products1688CloseEdit();
     products1688SetStatus("商品资料已保存", "success");
@@ -730,9 +771,9 @@ function products1688VariationLabel(variation) {
 }
 
 function products1688VariationRows(variations) {
-  const rows = Array.isArray(variations) ? variations.filter(item => item && typeof item === "object").slice(0, 200) : [];
+  const rows = Array.isArray(variations) ? variations.filter(item => item && typeof item === "object").slice(0, 500) : [];
   if (!rows.length) return '<div class="p1688-variant-empty">采集快照没有 SKU 变体。</div>';
-  return `<div class="p1688-variant-wrap"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>重量</th><th>包装尺寸</th><th>加价</th><th>加重</th><th>图片</th></tr></thead><tbody>${rows.map(variation => {
+  return `<div class="p1688-variant-wrap"><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>净收益 · USD</th><th>重量</th><th>包装尺寸</th><th>加价</th><th>加重</th><th>图片</th></tr></thead><tbody>${rows.map(variation => {
     const imageValues = [variation.image_url, variation.image, ...(Array.isArray(variation.images) ? variation.images : [])]
       .map(value => typeof value === "object" ? (value.url || value.source || value.src || "") : value)
       .filter(value => /^https?:\/\//i.test(String(value || ""))).slice(0, 4);
@@ -742,11 +783,12 @@ function products1688VariationRows(variations) {
     const extraPrice = variation.price_addition ?? variation.additional_price ?? variation.markup ?? "—";
     const extraWeight = variation.weight_addition_g ?? variation.additional_weight_g ?? variation.added_weight_g ?? "—";
     const images = imageValues.length ? imageValues.map(url => `<a href="${products1688Escape(url)}" target="_blank" rel="noopener noreferrer"><img src="${products1688Escape(products1688DisplayImageUrl(url))}" alt="变体图片" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)"></a>`).join("") : "—";
-    return `<tr><td>${products1688Escape(products1688VariationLabel(variation))}</td><td>${products1688Escape(sku || "—")}</td><td>${products1688Escape(stock)}</td><td>${products1688Escape(price)}</td><td>${products1688Escape(products1688Weight(variation))}</td><td>${products1688Escape(products1688Dimensions(variation))}</td><td>${products1688Escape(extraPrice)}</td><td>${products1688Escape(extraWeight)}</td><td><div class="p1688-variant-images">${images}</div></td></tr>`;
+    return `<tr><td>${products1688Escape(products1688VariationLabel(variation))}</td><td>${products1688Escape(sku || "—")}</td><td>${products1688Escape(stock)}</td><td>${products1688Escape(price)}</td><td>${ZeshunSku.net(variation.price) ?? "—"}</td><td>${products1688Escape(products1688Weight(variation))}</td><td>${products1688Escape(products1688Dimensions(variation))}</td><td>${products1688Escape(extraPrice)}</td><td>${products1688Escape(extraWeight)}</td><td><div class="p1688-variant-images">${images}</div></td></tr>`;
   }).join("")}</tbody></table></div>`;
 }
 
 function products1688OpenDetail(id) {
+  if (products1688EditSaving || products1688BulkSaving) return;
   const row = products1688Rows.find(item => Number(item.id) === Number(id));
   if (!row) return;
   const original = products1688Original(row);
@@ -757,29 +799,32 @@ function products1688OpenDetail(id) {
   const sourceUrl = products1688SourceUrl(row);
   const mainImage = products1688DisplayImageUrl(images[0] || "");
   document.getElementById("products-1688-detail-title").textContent = title;
-  document.getElementById("products-1688-detail-subtitle").textContent = `采集于 ${products1688Date(original.collected_at || row.added_at)}`;
+  document.getElementById("products-1688-detail-subtitle").textContent = `1688 编号：${products1688SourceId(row) || "未记录"} · 采集于 ${products1688Date(original.collected_at || row.added_at)}`;
   document.getElementById("products-1688-detail-content").innerHTML = `<div class="p1688-detail-top">
     <div class="p1688-gallery">${mainImage ? `${sourceUrl ? `<a class="p1688-detail-main-image-link" href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer" title="打开 1688 商品页">` : ""}<img class="p1688-detail-main-image" src="${products1688Escape(mainImage)}" alt="1688 商品主图" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">${sourceUrl ? "</a>" : ""}` : '<div class="p1688-empty">暂无商品图片</div>'}${images.slice(1).map(image => `<img src="${products1688Escape(products1688DisplayImageUrl(image))}" alt="1688 商品图片" loading="lazy" referrerpolicy="no-referrer" onerror="products1688ImageError(this)">`).join("")}</div>
     <div class="p1688-detail-facts">
       <div class="p1688-detail-fact"><label>商品标题</label><span>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">${products1688Escape(title)} ↗</a>` : products1688Escape(title)}</span></div>
       <div class="p1688-detail-fact"><label>自建产品分类</label><span>${products1688Escape(products1688Category(row))}</span></div>
-      <div class="p1688-detail-fact"><label>采购价</label><span class="p1688-price">${products1688Money(products1688SourceValue(row, "price"))} CNY</span></div>
-      <div class="p1688-detail-fact"><label>净收益</label><span>${row.net_proceeds_usd === null || row.net_proceeds_usd === undefined || row.net_proceeds_usd === "" ? "—" : `$${products1688Escape(Number(row.net_proceeds_usd).toFixed(2))} USD`}</span></div>
-      <div class="p1688-detail-fact"><label>实重</label><span>${products1688Escape(products1688Weight(row))}</span></div>
-      <div class="p1688-detail-fact"><label>包装尺寸</label><span>${products1688Escape(products1688Dimensions(row))}</span></div>
       <div class="p1688-detail-fact"><label>审核状态</label><span><span class="p1688-status ${products1688Escape(String(row.review_status || "unreviewed"))}">${products1688Escape(products1688ReviewStatus(row))}</span></span></div>
       <div class="p1688-detail-fact"><label>AI 状态</label><span><span class="p1688-status ${products1688Escape(String(row.ai_status || "pending"))}">${products1688Escape(products1688Status(row))}</span></span></div>
       <div class="p1688-detail-fact"><label>来源链接</label><span>${sourceUrl ? `<a href="${products1688Escape(sourceUrl)}" target="_blank" rel="noopener noreferrer">打开 1688 商品页 ↗</a>` : "—"}</span></div>
     </div>
-  </div>
-  <section class="p1688-detail-section"><h4>商品属性（${Array.isArray(original.properties) ? original.properties.length : 0}）</h4><div class="p1688-property-grid">${products1688PropertyRows(original.properties) || '<span class="p1688-muted">页面未采集到规格属性</span>'}</div></section>
-  <section class="p1688-detail-section"><h4>商品变体 / SKU（${Array.isArray(original.variations) ? original.variations.length : 0}）</h4>${products1688VariationRows(original.variations)}</section>
+  </div>`;
+  document.getElementById("products-1688-source-content").innerHTML = `<section class="p1688-detail-section"><h4>商品属性（${Array.isArray(original.properties) ? original.properties.length : 0}）</h4><div class="p1688-property-grid">${products1688PropertyRows(original.properties) || '<span class="p1688-muted">页面未采集到规格属性</span>'}</div></section>
   <section class="p1688-detail-section"><h4>1688 商品详情</h4><p class="p1688-description">${products1688Escape(original.description_text || "页面未采集到详情描述")}</p></section>`;
+  const priceNote = document.getElementById("products-1688-price-note");
+  if (priceNote) {
+    priceNote.hidden = products1688SourceValue(row, "price") != null;
+    priceNote.textContent = "采购价尚未确认，请重新采集或填写已确认的价格。";
+  }
+  products1688PrepareEdit(row);
   if (!dialog.open) dialog.showModal();
 }
 
 function products1688CloseDetail() {
+  if (products1688EditSaving) return;
   document.getElementById("products-1688-detail-dialog")?.close();
+  products1688EditState = null;
 }
 
 function products1688WorkflowIssue(row) {
@@ -847,9 +892,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (products1688BulkSaving) event.preventDefault();
     else products1688BulkIds = [];
   });
-  document.getElementById("products-1688-edit-dialog")?.addEventListener("cancel", event => {
+  document.getElementById("products-1688-detail-dialog")?.addEventListener("cancel", event => {
     if (products1688EditSaving) event.preventDefault();
     else products1688EditState = null;
+  });
+  document.getElementById("products-1688-detail-dialog")?.addEventListener("close", () => {
+    if (!document.getElementById("products-1688-detail-dialog")?.open) products1688EditState = null;
   });
   document.getElementById("mercado-category-dialog")?.addEventListener("close", () => {
     if (document.getElementById("tab-1688-products")?.classList.contains("active")) load1688Products(false);
@@ -861,5 +909,41 @@ document.addEventListener("DOMContentLoaded", () => {
 function products1688RowClick(event, id) {
   if (event.target.closest("a, button, input, select, textarea, label, [role=button], .p1688-check-cell")) return;
   if (window.getSelection?.().toString()) return;
-  products1688OpenEdit(id);
+  products1688OpenDetail(id);
 }
+
+function products1688CollectSkus(validate = false) {
+  return (products1688EditState?.variations || []).map((row, index) => {
+    const result = structuredClone(row);
+    for (const key of ['seller_sku', 'price', 'available_quantity', 'weight_g']) {
+      const input = document.querySelector(`[data-1688-sku="${index}"][data-field="${key}"]`);
+      if (validate && input && key !== 'seller_sku') {
+        const value = input.value.trim();
+        if (input.validity.badInput || value && (!Number.isFinite(Number(value)) || (key === 'available_quantity' ? Number(value) < 0 || !Number.isInteger(Number(value)) : Number(value) <= 0))) {
+          input.focus();
+          throw new Error(`SKU ${index + 1} 的${{price:'采购价',available_quantity:'库存',weight_g:'重量'}[key]}须填写有效的${key === 'available_quantity' ? '非负整数' : '正数'}，或留空清除`);
+        }
+      }
+      if (input && String(row[key] ?? '') !== input.value.trim()) result[key] = key === 'seller_sku' ? input.value.trim() : input.value === '' ? null : Number(input.value);
+    }
+    result.net_proceeds_usd = ZeshunSku.net(result.price);
+    return result;
+  });
+}
+function products1688SkuDisplayPictures(row) {
+  return ZeshunSku.withSecondary(ZeshunSku.pictures(row), products1688EditState?.gallery || [], row.sku_images_customized);
+}
+function products1688RenderSkus() {
+  const host = document.getElementById('products-1688-sku-editor');
+  if (!host || !products1688EditState) return;
+  const rows = products1688EditState.variations || [];
+  host.innerHTML = `<h4>SKU 明细 · ${rows.length || 1} 个 SKU</h4><p class="p1688-edit-help">每个 SKU 独立刊登。净收益（USD）= 向上取整（（本行采购价 + 5 元运费）÷ 6.7）。首张为主图，其余为副图；图片未对应的 SKU 请手动确认。</p>` + (rows.length ? `<div class="zs-sku-matrix"><table><thead><tr><th>变体 / 规格</th><th>SKU</th><th>库存</th><th>采购价 · CNY</th><th>净收益 · USD</th><th>重量 · g</th><th>图片（点击调整）</th></tr></thead><tbody>${rows.map((row, index) => {
+    const field = (key, type = 'number') => `<input type="${type}" min="0" step="${key === 'available_quantity' ? '1' : 'any'}" data-1688-sku="${index}" data-field="${key}" aria-label="SKU ${index+1} ${key}" value="${products1688Escape(row[key] ?? '')}" ${key === 'price' ? `oninput="document.getElementById('p1688-sku-net-${index}').textContent = ZeshunSku.net(this.value) ?? '—'"` : ''}>`;
+    return `<tr><td>${products1688Escape(products1688VariationLabel(row))}</td><td>${field('seller_sku', 'text')}</td><td>${field('available_quantity')}</td><td>${field('price')}</td><td><output id="p1688-sku-net-${index}">${ZeshunSku.net(row.price) ?? '—'}</output><small>含运费 ¥5</small></td><td>${field('weight_g')}</td><td>${ZeshunSku.render('1688', index, products1688SkuDisplayPictures(row), products1688EditState.gallery, products1688DisplayImageUrl)}</td></tr>`;
+  }).join('')}</tbody></table></div>` : '<p>没有多规格记录，按单 SKU 管理。</p>');
+  products1688SetEditBusy(products1688EditSaving);
+}
+globalThis.ZeshunSku?.register('1688', {
+  get(index) { if (!products1688EditState || products1688EditSaving || products1688EditState.readOnly) return []; products1688EditState.variations = products1688CollectSkus(); return products1688SkuDisplayPictures(products1688EditState.variations[index]); },
+  set(index, urls) { if (!products1688EditState || products1688EditSaving || products1688EditState.readOnly) return; ZeshunSku.setPictures(products1688EditState.variations[index], urls); products1688EditState.variations[index].sku_images_customized = true; products1688RenderSkus(); }
+});

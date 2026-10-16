@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="7" skipped="0" tests="25" time="0.616" timestamp="2026-10-12T16:40:26.434802+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_purchase_target_is_excluded_from_pending_and_stale_queue[True]" time="0.003" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_purchase_target_is_excluded_from_pending_and_stale_queue[False]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_inflight_product_refresh_cannot_replace_purchase_target[True-collected]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_inflight_product_refresh_cannot_replace_purchase_target[True-pulled]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_inflight_product_refresh_cannot_replace_purchase_target[False-collected]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_inflight_product_refresh_cannot_replace_purchase_target[False-pulled]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_collection_refresh_updates_capture_without_overwriting_purchase_product" time="0.007"><failure message="sqlite3.OperationalError: no such column: newer.organization_key">tests/test_purchase_net_proceeds_persistence.py:178: in test_collection_refresh_updates_capture_without_overwriting_purchase_product
+    assert store.update_item_profitability("MLM1", {"id": 1, "task_id": 8,
+erp/mercadolibre_collection_store.py:6179: in update_item_profitability
+    cursor.execute(f"""
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: no such column: newer.organization_key</failure></testcase><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_generic_refresh_respects_persisted_owner_and_updates_ordinary_rows[collected]" time="0.010" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_generic_refresh_respects_persisted_owner_and_updates_ordinary_rows[zying]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_generic_refresh_respects_persisted_owner_and_updates_ordinary_rows[ai_original]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_generic_refresh_does_not_overwrite_source_owned_rows_without_incoming_type[zying]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_generic_refresh_does_not_overwrite_source_owned_rows_without_incoming_type[ai_original]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_daily_invalidation_preserves_purchase_but_invalidates_estimated_costs" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_purchase_saved_between_invalidation_selection_and_write_is_preserved" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_zying_recollection_refreshes_source_without_erasing_purchase_target[True]" time="0.001"><failure message="sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key">tests/test_purchase_net_proceeds_persistence.py:229: in test_zying_recollection_refreshes_source_without_erasing_purchase_target
+    store.upsert_zying_products_to_products([{"product_id": "ZY1", "title": "Fresh source",
+erp/mercadolibre_collection_store.py:5175: in upsert_zying_products_to_products
+    _execute_access_insert(cursor, f"""
+erp/mercadolibre_collection_store.py:1351: in _execute_access_insert
+    return cursor.executemany(sql, [tuple(row) + access_values for row in values])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_purchase_net_proceeds_persistence.py:62: in executemany
+    self.execute(query, row)
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key</failure></testcase><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_zying_recollection_refreshes_source_without_erasing_purchase_target[False]" time="0.001"><failure message="sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key">tests/test_purchase_net_proceeds_persistence.py:229: in test_zying_recollection_refreshes_source_without_erasing_purchase_target
+    store.upsert_zying_products_to_products([{"product_id": "ZY1", "title": "Fresh source",
+erp/mercadolibre_collection_store.py:5175: in upsert_zying_products_to_products
+    _execute_access_insert(cursor, f"""
+erp/mercadolibre_collection_store.py:1351: in _execute_access_insert
+    return cursor.executemany(sql, [tuple(row) + access_values for row in values])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_purchase_net_proceeds_persistence.py:62: in executemany
+    self.execute(query, row)
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key</failure></testcase><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_pulled_listing_import_keeps_purchase_value_and_metadata" time="0.001"><failure message="sqlite3.OperationalError: no such table: mercado_store_site_settings">tests/test_purchase_net_proceeds_persistence.py:246: in test_pulled_listing_import_keeps_purchase_value_and_metadata
+    store.upsert_pulled_store_links_to_products({"id": 11, "store_name": "Store"}, [
+erp/mercadolibre_collection_store.py:5265: in upsert_pulled_store_links_to_products
+    cursor.execute(
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: no such table: mercado_store_site_settings</failure></testcase><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_ai_recollection_and_inflight_worker_keep_purchase_metadata_and_override" time="0.003"><failure message="sqlite3.OperationalError: no such column: organization_key">tests/test_purchase_net_proceeds_persistence.py:260: in test_ai_recollection_and_inflight_worker_keep_purchase_metadata_and_override
+    store.upsert_ai_original_product({"source_url": "https://detail.1688.com/offer/907173727091.html",
+erp/mercadolibre_collection_store.py:4097: in upsert_ai_original_product
+    _execute_source_scoped(cursor, f"SELECT * FROM `{PRODUCT_TABLE}` WHERE `source_item_id` = %s FOR UPDATE", (product["source_item_id"],))
+erp/mercadolibre_collection_store.py:1358: in _execute_source_scoped
+    return cursor.execute(sql, tuple(values) + (product_access.organization(),))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: no such column: organization_key</failure></testcase><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_remote_listing_field_sync_keeps_purchase_target[fields0]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_remote_listing_field_sync_keeps_purchase_target[fields1]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_remote_listing_field_sync_keeps_purchase_target[fields2]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_content_input_edits_preserve_purchase_target_and_invalidate_estimate[True]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_content_input_edits_preserve_purchase_target_and_invalidate_estimate[False]" time="0.001" /><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_collection_measurement_edit_keeps_matching_product_purchase_target" time="0.001"><failure message="sqlite3.OperationalError: no such column: c.organization_key">tests/test_purchase_net_proceeds_persistence.py:304: in test_collection_measurement_edit_keeps_matching_product_purchase_target
+    store.update_collection_items([1], {"weight_g": 800}, connection_factory=lambda: database)
+erp/mercadolibre_collection_store.py:6757: in protected
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+erp/mercadolibre_collection_store.py:3869: in update_collection_items
+    cursor.execute(
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: no such column: c.organization_key</failure></testcase><testcase classname="tests.test_purchase_net_proceeds_persistence" name="test_readding_collection_capture_keeps_product_purchase_and_refreshes_other_source_data" time="0.002"><failure message="sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key">tests/test_purchase_net_proceeds_persistence.py:313: in test_readding_collection_capture_keeps_product_purchase_and_refreshes_other_source_data
+    store._add_collection_items_to_products_once([1], connection_factory=lambda: database)
+erp/mercadolibre_collection_store.py:6490: in _add_collection_items_to_products_once
+    _execute_access_insert(cursor, f"""
+erp/mercadolibre_collection_store.py:1352: in _execute_access_insert
+    return cursor.execute(sql, tuple(values) + access_values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_purchase_net_proceeds_persistence.py:56: in execute
+    self.cursor.execute(query, values)
+E   sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key</failure></testcase></testsuite></testsuites>

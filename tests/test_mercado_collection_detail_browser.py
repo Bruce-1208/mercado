@@ -20,6 +20,11 @@ def test_list_opens_right_drawer_with_all_images_and_descriptions(console_page, 
     page.route("**/mercado-collection/items/91", lambda route: route.fulfill(body=html, content_type="text/html"))
     page.route("**/api/mercado-collection/items?*", lambda route: route.fulfill(
         body=json.dumps({"status": "success", "data": {"rows": [detail_row], "total": 1}}), content_type="application/json"))
+    page.route("**/api/mercado-collection/attribute-check?*", lambda route: route.fulfill(
+        body=json.dumps({"status": "success", "data": {"results": [{"id": 91, "status": "missing",
+            "message": "缺少 1 项必填属性", "category_id": "MLM123", "missing": [
+                {"scope": "规格 1", "name": "型号", "attribute_id": "MODEL"}
+            ]}]}}), content_type="application/json"))
     # Offline product drawings make the gallery visually reviewable without external requests.
     svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
       <rect width="600" height="600" fill="#fafbfd"/><ellipse cx="300" cy="475" rx="155" ry="22" fill="#e2e8f0"/>
@@ -45,6 +50,8 @@ def test_list_opens_right_drawer_with_all_images_and_descriptions(console_page, 
     assert page.locator("#product-detail-drawer-title").inner_text() == detail_row["title"]
     assert page.locator(".detail-thumbnail").count() == 16
     assert "材质" in page.locator("#attributes").inner_text()
+    page.wait_for_selector('#product-detail-drawer [data-collection-attribute-check][data-status="missing"]')
+    assert "MODEL" in drawer.locator('[data-collection-attribute-check]').inner_text()
     assert "完整描述最后一行" in page.locator("#description").inner_text()
     assert "原始采集描述，完整保留" in page.locator("#description").inner_text()
     assert "SPEAKER-BLUE" in page.locator("#variants").inner_text()

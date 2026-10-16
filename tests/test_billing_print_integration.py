@@ -73,5 +73,5 @@ def test_old_wallet_entry_redirects_to_payment_management():
 def test_console_has_one_payment_entry_and_order_wallet_link_targets_integrated_section():
     markup = (ROOT / "bit/templates/index.html").read_text()
     assert 'href="/print-wallet"' not in markup
-    assert 'href="/billing" data-icon="¥"><span class="nav-label">支付管理</span>' in markup
+    assert 'href="/billing" target="_blank" rel="noopener" data-icon="¥"><span class="nav-label">支付管理</span>' in markup
     assert 'href="/billing?section=print-wallet"' in markup

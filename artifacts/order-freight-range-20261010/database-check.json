@@ -1,0 +1,30 @@
+[
+  {
+    "minimum": "0",
+    "maximum": "5",
+    "total": 61137,
+    "rows": 50,
+    "seconds": 3.352
+  },
+  {
+    "minimum": "-5",
+    "maximum": "0",
+    "total": 60838,
+    "rows": 50,
+    "seconds": 3.166
+  },
+  {
+    "minimum": "0",
+    "maximum": "0",
+    "total": 60838,
+    "rows": 50,
+    "seconds": 3.076
+  },
+  {
+    "minimum": null,
+    "maximum": "-1",
+    "total": 0,
+    "rows": 0,
+    "seconds": 2.315
+  }
+]

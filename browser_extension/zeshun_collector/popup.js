@@ -79,6 +79,11 @@ const purchaseDateStart = document.getElementById("purchase-date-start");
 const purchaseDateEnd = document.getElementById("purchase-date-end");
 const purchaseOrderStatus = document.getElementById("purchase-order-status");
 const purchasePlatform = document.getElementById("purchase-platform");
+const purchaseSalesperson = document.getElementById("purchase-salesperson");
+const purchaseGroupName = document.getElementById("purchase-group-name");
+const purchaseRefreshFiltersButton = document.getElementById("purchase-refresh-filters");
+let purchaseFiltersReady = false;
+let purchaseFilterOptions = {};
 const purchasePageStatus = document.getElementById("purchase-page-status");
 const purchaseTaskMeta = document.getElementById("purchase-task-meta");
 const purchaseOpenLoginButton = document.getElementById("purchase-open-login");
@@ -501,7 +506,7 @@ function showMode(mode) {
     loadWeightPriceStatus();
   }
   if (weightDimensions) loadWeightDimensionsStatus();
-  if (purchase) loadPurchaseTrackingStatus();
+  if (purchase) { loadPurchaseTrackingOptions(); loadPurchaseTrackingStatus(); }
   globalThis.ZeshunAppealPopup?.setVisible(appeal);
 }
 
@@ -679,10 +684,13 @@ function renderPurchaseTrackingStatus(state = {}) {
   const skipped = Number(state.skipped || 0);
   purchasePageStatus.textContent = hasTask
     ? `${purchasePlatformLabels[state.platform] || state.platform || "采购平台"} · 待同步 ${total} 个订单`
-    : "选择美客多下单日期范围和采购平台，仅同步有采购订单号、无采购物流号的订单；未找到的跳过。";
+    : "按日期、订单状态、采购平台、业务员和店铺组筛选，仅同步有采购订单号、无采购物流号的订单；未找到的跳过。";
   purchaseTaskMeta.hidden = !hasTask;
   purchaseTaskMeta.textContent = hasTask
-    ? `任务 ${state.request_id.slice(0, 8)}… · ${purchasePlatformLabels[state.platform] || state.platform} · ${total} 单`
+    ? [`任务 ${state.request_id.slice(0, 8)}…`, purchasePlatformLabels[state.platform] || state.platform,
+        state.date_start && state.date_end ? `${state.date_start} 至 ${state.date_end}` : "",
+        (Array.from(purchaseOrderStatus.options).find(option => option.value === state.order_status)?.textContent || "全部订单状态"), purchaseFilterLabel(state.salesperson, "全部业务员"),
+        purchaseFilterLabel(state.group_name, "全部店铺组"), `${total} 单`].filter(Boolean).join(" · ")
     : "";
   purchaseTaskStatus.textContent = state.message || (running ? "同步进行中…" : "等待同步任务");
   purchaseSummary.textContent = `成功 ${synced} · 未发货 ${pending} · 跳过 ${skipped} · 失败 ${failed}`;
@@ -693,13 +701,22 @@ function renderPurchaseTrackingStatus(state = {}) {
       <span>${escapeHtml(item.tracking_number || item.message || statusLabels[item.status] || item.status || "-")}</span>
     </div>
   `).join("");
-  purchaseOpenLoginButton.disabled = !authenticated || phase === "syncing";
+  purchaseOpenLoginButton.disabled = !authenticated || phase === "syncing" || (!hasTask && !purchaseFiltersReady);
   purchasePlatform.disabled = hasTask && !["completed", "error", "idle"].includes(phase);
   purchaseResetDatesButton.hidden = !hasTask || !["waiting_login", "waiting_plugin"].includes(phase);
   purchaseResetDatesButton.disabled = !authenticated;
   purchaseDateStart.disabled = purchasePlatform.disabled;
   purchaseDateEnd.disabled = purchasePlatform.disabled;
   purchaseOrderStatus.disabled = purchasePlatform.disabled;
+  purchaseSalesperson.disabled = purchasePlatform.disabled || !purchaseFiltersReady || Boolean(purchaseFilterOptions.fixed_salesperson);
+  purchaseGroupName.disabled = purchasePlatform.disabled || !purchaseFiltersReady;
+  purchaseRefreshFiltersButton.disabled = purchasePlatform.disabled;
+  if (purchasePlatform.disabled) {
+    if (state.date_start) purchaseDateStart.value = state.date_start;
+    if (state.date_end) purchaseDateEnd.value = state.date_end;
+    setPurchaseFilterOptions(purchaseSalesperson, purchaseFilterOptions.salespeople, "全部业务员", state.salesperson || "");
+    setPurchaseFilterOptions(purchaseGroupName, purchaseFilterOptions.groups, "全部店铺组", state.group_name || "");
+  }
   if (purchasePlatform.disabled) purchaseOrderStatus.value = state.order_status || "";
   if (purchasePlatform.disabled) purchasePlatform.value = state.platform;
   purchaseConfirmLoginButton.disabled = !authenticated || !hasTask || !["waiting_login", "waiting_plugin"].includes(phase);
@@ -707,6 +724,37 @@ function renderPurchaseTrackingStatus(state = {}) {
   purchaseConfirmLoginButton.textContent = phase === "syncing" ? "同步进行中…" : "确定登录并开始同步";
   schedulePurchaseTrackingPoll();
 }
+
+function purchaseFilterLabel(value, fallback) {
+  return ({__unassigned__: "未分配业务员", __ungrouped__: "未分组"})[value] || value || fallback;
+}
+
+function setPurchaseFilterOptions(select, values, placeholder, selected = select.value) {
+  const locked = Boolean(purchaseTrackingState?.request_id && !["completed", "error", "idle"].includes(purchaseTrackingState.phase));
+  const choices = [...new Set(values || [])];
+  if (locked && selected && !choices.includes(selected)) choices.push(selected);
+  select.replaceChildren(new Option(placeholder, ""), ...choices.map(value => new Option(purchaseFilterLabel(value, ""), value)));
+  select.value = choices.includes(selected) ? selected : "";
+}
+
+async function loadPurchaseTrackingOptions() {
+  purchaseFiltersReady = false;
+  renderPurchaseTrackingStatus(purchaseTrackingState || {});
+  try {
+    const response = await runtimeMessage({type: "GET_PURCHASE_TRACKING_OPTIONS"});
+    if (!response.ok) throw new Error(response.error || "读取业务员和店铺组失败，请更新服务端后重试");
+    purchaseFilterOptions = response;
+    setPurchaseFilterOptions(purchaseSalesperson, response.salespeople, "全部业务员", response.fixed_salesperson || purchaseSalesperson.value);
+    setPurchaseFilterOptions(purchaseGroupName, response.groups, "全部店铺组");
+    purchaseFiltersReady = true;
+    renderPurchaseTrackingStatus(purchaseTrackingState || {});
+  } catch (error) {
+    purchasePageStatus.textContent = error.message || String(error);
+    purchaseRefreshFiltersButton.disabled = false;
+  }
+}
+
+purchaseRefreshFiltersButton.addEventListener("click", loadPurchaseTrackingOptions);
 
 async function loadPurchaseTrackingStatus() {
   try {
@@ -724,7 +772,7 @@ purchaseResetDatesButton.addEventListener("click", async () => {
   purchaseResetDatesButton.disabled = true;
   try {
     const response = await runtimeMessage({type: "RESET_PURCHASE_TRACKING_DATES", request_id: purchaseTrackingState?.request_id});
-    if (!response.ok) throw new Error(response.error || "重新选择日期失败");
+    if (!response.ok) throw new Error(response.error || "重新筛选失败");
     renderPurchaseTrackingStatus(response);
     purchaseDateStart.focus();
   } catch (error) {
@@ -746,7 +794,9 @@ purchaseOpenLoginButton.addEventListener("click", async () => {
       platform: purchasePlatform.value,
       date_start: purchaseDateStart.value,
       date_end: purchaseDateEnd.value,
-      order_status: purchaseOrderStatus.value
+      order_status: purchaseOrderStatus.value,
+      salesperson: purchaseSalesperson.value,
+      group_name: purchaseGroupName.value
     });
     if (!response.ok) throw new Error(response.error || "打开采购平台失败");
     purchaseTaskStatus.textContent = response.message || "请手动登录采购平台后点击确定登录";

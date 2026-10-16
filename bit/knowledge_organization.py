@@ -2,7 +2,6 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
-import os
 import re
 
 _current = ContextVar("knowledge_organization", default=None)
@@ -24,7 +23,9 @@ def organization():
     from flask import has_request_context, g, request
     if has_request_context():
         from bit import bit_interface as app
-        agent = getattr(g, "internal_agent_user", None)
+        agent = (getattr(g, "internal_agent_user", None)
+                 or getattr(g, "browser_extension_user", None)
+                 or getattr(g, "local_executor_user", None))
         if agent:
             return normalize(agent.get("organization_key"))
         # This header is accepted only behind the internal API authentication.
@@ -32,8 +33,10 @@ def organization():
             return normalize(request.headers.get(HEADER) or LEGACY_ORGANIZATION)
         user = app.get_current_workbench_user() or {}
         return normalize(app.workbench_selected_organization(user) or user.get("organization_key"))
-    # Existing single-company CLI jobs keep their historical owner.
-    return normalize(os.environ.get("WORKBENCH_DEFAULT_ORGANIZATION_KEY") or LEGACY_ORGANIZATION)
+    # Background workers retain the initiating enterprise through the existing
+    # task identity context; only unowned legacy CLI jobs use the default.
+    from erp.ai_usage_billing import current_usage_context
+    return normalize(current_usage_context().get("organization_key"))
 
 
 @contextmanager

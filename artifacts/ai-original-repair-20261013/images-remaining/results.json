@@ -1,0 +1,58 @@
+[
+  {
+    "id": 17268564,
+    "status": "completed",
+    "category_id": "CBT179254",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268590,
+    "status": "completed",
+    "category_id": "CBT116629",
+    "attributes": 13,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268665,
+    "status": "completed",
+    "category_id": "CBT435356",
+    "attributes": 11,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268656,
+    "status": "completed",
+    "category_id": "CBT179254",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268698,
+    "status": "completed",
+    "category_id": "CBT402994",
+    "attributes": 14,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268815,
+    "status": "completed",
+    "category_id": "CBT430982",
+    "attributes": 12,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268829,
+    "status": "completed",
+    "category_id": "CBT10096",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  }
+]

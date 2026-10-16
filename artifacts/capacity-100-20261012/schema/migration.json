@@ -1,0 +1,1 @@
+{"database": "stress_test", "present_before": true, "present_after": true, "applied": false, "elapsed_seconds": 0.0, "deployment_requirement": "COPY rebuild: pause writes and reserve table-copy disk space"}

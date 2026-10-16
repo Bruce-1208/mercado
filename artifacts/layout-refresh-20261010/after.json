@@ -1,0 +1,1167 @@
+[
+  {
+    "viewport": 1440,
+    "id": "tab-overview",
+    "title": "你好，界面预览",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-orders",
+    "title": "订单管理",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-inventory",
+    "title": "库存管理",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-1688-products",
+    "title": "1688产品区",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-ai-original-products",
+    "title": "AI原创产品",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-mercado-collection",
+    "title": "美客多跟卖采集",
+    "overflow": false,
+    "width": 1440,
+    "offenders": [
+      {
+        "tag": "DIV",
+        "cls": "datetime-control",
+        "id": "",
+        "width": 165
+      },
+      {
+        "tag": "INPUT",
+        "cls": "minute-datetime zs-empty-date",
+        "id": "mercado-date-to",
+        "width": 165
+      },
+      {
+        "tag": "SPAN",
+        "cls": "datetime-placeholder",
+        "id": "",
+        "width": 133
+      }
+    ]
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-mercado-products",
+    "title": "产品列表",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-weight-dimensions-records",
+    "title": "重量尺寸变更记录",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-mercado-shipping-standards",
+    "title": "美客多运费标准",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-mercado-publish-records",
+    "title": "产品上架记录",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-yandex",
+    "title": "Yandex 店铺管理",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-appeal",
+    "title": "自动化AI申诉",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-tasks",
+    "title": "任务模块",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-salesperson-stats",
+    "title": "业务员量统计",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-store-analysis",
+    "title": "店铺分析",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-order-analysis",
+    "title": "订单分析",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-ai-video",
+    "title": "AI 视频生成",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-store-links",
+    "title": "店铺链接",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-size-charts",
+    "title": null,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-clearance-alerts",
+    "title": null,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-product-diagnosis",
+    "title": null,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-promotions",
+    "title": "活动管理",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-price-competition",
+    "title": null,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-ad-analysis",
+    "title": "广告分析",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-prohibited-listings",
+    "title": "禁限售列表",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-store-tokens",
+    "title": "店铺授权",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-pre-sale",
+    "title": "美客多售前问答",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-customer-service",
+    "title": "售后处理",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-funds",
+    "title": "资金管理",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-ai-weight-price",
+    "title": null,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-zying-collection",
+    "title": "智赢产品同步",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-risk-check",
+    "title": "侵权检测",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-infringement-knowledge",
+    "title": "侵权知识库",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-infractions",
+    "title": "侵权数据",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-ip-rights",
+    "title": null,
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-reputation",
+    "title": "声誉数据",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-api-reputation",
+    "title": "API 声誉",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-ai-appeals",
+    "title": "自动化申诉记录",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1440,
+    "id": "tab-access",
+    "title": "人员与权限",
+    "overflow": false,
+    "width": 1440,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-overview",
+    "title": "你好，界面预览",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-orders",
+    "title": "订单管理",
+    "overflow": false,
+    "width": 1024,
+    "offenders": [
+      {
+        "tag": "DIV",
+        "cls": "order-market-source",
+        "id": "",
+        "width": 359
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "order-origin-button active",
+        "id": "",
+        "width": 68
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "order-origin-button",
+        "id": "",
+        "width": 158
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "order-origin-token-count",
+        "width": 7
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "order-origin-button",
+        "id": "",
+        "width": 73
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "order-origin-yandex-count",
+        "width": 7
+      }
+    ]
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-inventory",
+    "title": "库存管理",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-1688-products",
+    "title": "1688产品区",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-ai-original-products",
+    "title": "AI原创产品",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-mercado-collection",
+    "title": "美客多跟卖采集",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-mercado-products",
+    "title": "产品列表",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-weight-dimensions-records",
+    "title": "重量尺寸变更记录",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-mercado-shipping-standards",
+    "title": "美客多运费标准",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-mercado-publish-records",
+    "title": "产品上架记录",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-yandex",
+    "title": "Yandex 店铺管理",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-appeal",
+    "title": "自动化AI申诉",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-tasks",
+    "title": "任务模块",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-salesperson-stats",
+    "title": "业务员量统计",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-store-analysis",
+    "title": "店铺分析",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-order-analysis",
+    "title": "订单分析",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-ai-video",
+    "title": "AI 视频生成",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-store-links",
+    "title": "店铺链接",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-size-charts",
+    "title": null,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-clearance-alerts",
+    "title": null,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-product-diagnosis",
+    "title": null,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-promotions",
+    "title": "活动管理",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-price-competition",
+    "title": null,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-ad-analysis",
+    "title": "广告分析",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-prohibited-listings",
+    "title": "禁限售列表",
+    "overflow": false,
+    "width": 1024,
+    "offenders": [
+      {
+        "tag": "DIV",
+        "cls": "store-link-sync-metric",
+        "id": "",
+        "width": 100
+      },
+      {
+        "tag": "SPAN",
+        "cls": "",
+        "id": "",
+        "width": 56
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "prohibited-last-sync",
+        "width": 68
+      }
+    ]
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-store-tokens",
+    "title": "店铺授权",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-pre-sale",
+    "title": "美客多售前问答",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-customer-service",
+    "title": "售后处理",
+    "overflow": false,
+    "width": 1024,
+    "offenders": [
+      {
+        "tag": "BUTTON",
+        "cls": "primary",
+        "id": "customer-service-load",
+        "width": 200
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "secondary",
+        "id": "",
+        "width": 43
+      },
+      {
+        "tag": "DETAILS",
+        "cls": "zs-advanced-filters zs-date-advanced",
+        "id": "",
+        "width": 1009
+      },
+      {
+        "tag": "SUMMARY",
+        "cls": "",
+        "id": "",
+        "width": 1009
+      },
+      {
+        "tag": "DIV",
+        "cls": "zs-advanced-grid zs-date-advanced-grid",
+        "id": "",
+        "width": 1009
+      },
+      {
+        "tag": "DIV",
+        "cls": "field",
+        "id": "",
+        "width": 499
+      },
+      {
+        "tag": "LABEL",
+        "cls": "",
+        "id": "",
+        "width": 499
+      },
+      {
+        "tag": "INPUT",
+        "cls": "",
+        "id": "customer-service-end-date",
+        "width": 499
+      }
+    ]
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-funds",
+    "title": "资金管理",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-ai-weight-price",
+    "title": null,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-zying-collection",
+    "title": "智赢产品同步",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-risk-check",
+    "title": "侵权检测",
+    "overflow": false,
+    "width": 1024,
+    "offenders": [
+      {
+        "tag": "ASIDE",
+        "cls": "risk-check-log-card",
+        "id": "",
+        "width": 310
+      },
+      {
+        "tag": "DIV",
+        "cls": "risk-check-log-header",
+        "id": "",
+        "width": 308
+      },
+      {
+        "tag": "SPAN",
+        "cls": "risk-check-live-indicator",
+        "id": "",
+        "width": 61
+      },
+      {
+        "tag": "PRE",
+        "cls": "copy-anywhere-target",
+        "id": "risk-check-log",
+        "width": 308
+      }
+    ]
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-infringement-knowledge",
+    "title": "侵权知识库",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-infractions",
+    "title": "侵权数据",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-ip-rights",
+    "title": null,
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-reputation",
+    "title": "声誉数据",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-api-reputation",
+    "title": "API 声誉",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-ai-appeals",
+    "title": "自动化申诉记录",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 1024,
+    "id": "tab-access",
+    "title": "人员与权限",
+    "overflow": false,
+    "width": 1024,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-overview",
+    "title": "你好，界面预览",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-orders",
+    "title": "订单管理",
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "BUTTON",
+        "cls": "secondary",
+        "id": "order-refresh-button",
+        "width": 98
+      },
+      {
+        "tag": "DIV",
+        "cls": "order-metric",
+        "id": "",
+        "width": 125
+      },
+      {
+        "tag": "SPAN",
+        "cls": "",
+        "id": "",
+        "width": 105
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "order-metric-cost",
+        "width": 105
+      },
+      {
+        "tag": "DIV",
+        "cls": "order-metric profit",
+        "id": "",
+        "width": 125
+      },
+      {
+        "tag": "SPAN",
+        "cls": "",
+        "id": "",
+        "width": 105
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "order-metric-profit",
+        "width": 105
+      }
+    ]
+  },
+  {
+    "viewport": 390,
+    "id": "tab-inventory",
+    "title": "库存管理",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-1688-products",
+    "title": "1688产品区",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-ai-original-products",
+    "title": "AI原创产品",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-mercado-collection",
+    "title": "美客多跟卖采集",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-mercado-products",
+    "title": "产品列表",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-weight-dimensions-records",
+    "title": "重量尺寸变更记录",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-mercado-shipping-standards",
+    "title": "美客多运费标准",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-mercado-publish-records",
+    "title": "产品上架记录",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-yandex",
+    "title": "Yandex 店铺管理",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-appeal",
+    "title": "自动化AI申诉",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-tasks",
+    "title": "任务模块",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-salesperson-stats",
+    "title": "业务员量统计",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-store-analysis",
+    "title": "店铺分析",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-order-analysis",
+    "title": "订单分析",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-ai-video",
+    "title": "AI 视频生成",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-store-links",
+    "title": "店铺链接",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-size-charts",
+    "title": null,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-clearance-alerts",
+    "title": null,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-product-diagnosis",
+    "title": null,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-promotions",
+    "title": "活动管理",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-price-competition",
+    "title": null,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-ad-analysis",
+    "title": "广告分析",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-prohibited-listings",
+    "title": "禁限售列表",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-store-tokens",
+    "title": "店铺授权",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-pre-sale",
+    "title": "美客多售前问答",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-customer-service",
+    "title": "售后处理",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-funds",
+    "title": "资金管理",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-ai-weight-price",
+    "title": null,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-zying-collection",
+    "title": "智赢产品同步",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-risk-check",
+    "title": "侵权检测",
+    "overflow": false,
+    "width": 390,
+    "offenders": [
+      {
+        "tag": "DIV",
+        "cls": "risk-status-item warning",
+        "id": "",
+        "width": 104
+      },
+      {
+        "tag": "SPAN",
+        "cls": "",
+        "id": "",
+        "width": 78
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "risk-check-one",
+        "width": 78
+      },
+      {
+        "tag": "DIV",
+        "cls": "risk-status-item danger",
+        "id": "",
+        "width": 104
+      },
+      {
+        "tag": "SPAN",
+        "cls": "",
+        "id": "",
+        "width": 78
+      },
+      {
+        "tag": "STRONG",
+        "cls": "",
+        "id": "risk-check-two",
+        "width": 78
+      }
+    ]
+  },
+  {
+    "viewport": 390,
+    "id": "tab-infringement-knowledge",
+    "title": "侵权知识库",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-infractions",
+    "title": "侵权数据",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-ip-rights",
+    "title": null,
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-reputation",
+    "title": "声誉数据",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-api-reputation",
+    "title": "API 声誉",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-ai-appeals",
+    "title": "自动化申诉记录",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  },
+  {
+    "viewport": 390,
+    "id": "tab-access",
+    "title": "人员与权限",
+    "overflow": false,
+    "width": 390,
+    "offenders": []
+  }
+]

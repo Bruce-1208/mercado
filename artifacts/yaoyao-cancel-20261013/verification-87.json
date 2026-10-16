@@ -1,0 +1,67 @@
+{
+  "id": 87,
+  "name": "遥遥领先13号店",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site_id": "MLM",
+      "seller_id": "3625488064",
+      "remaining": [
+        {
+          "id": "MLM3501131865",
+          "status": "started",
+          "price": 24.49,
+          "original_price": 27.22,
+          "currency_id": "USD",
+          "net_proceeds": {
+            "amount": 12.99,
+            "currency": "USD",
+            "selling_fee": 3.8,
+            "shipping_fee": 7.7
+          }
+        },
+        {
+          "id": "MLM3501131861",
+          "status": "started",
+          "price": 24.49,
+          "original_price": 27.22,
+          "currency_id": "USD",
+          "net_proceeds": {
+            "amount": 12.99,
+            "currency": "USD",
+            "selling_fee": 3.8,
+            "shipping_fee": 7.7
+          }
+        },
+        {
+          "id": "MLM3501131857",
+          "status": "started",
+          "price": 24.49,
+          "original_price": 27.22,
+          "currency_id": "USD",
+          "net_proceeds": {
+            "amount": 12.99,
+            "currency": "USD",
+            "selling_fee": 3.8,
+            "shipping_fee": 7.7
+          }
+        }
+      ]
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site_id": "MLM",
+      "seller_id": "3625488064",
+      "remaining": []
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site_id": "MLB",
+      "seller_id": "3622852557",
+      "remaining": []
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+[
+  {
+    "params": {
+      "freight_variance": "different",
+      "summary_only": false
+    },
+    "before_ms": 1663.6,
+    "after_ms": 1398.7,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "different",
+      "summary_only": true
+    },
+    "before_ms": 1559.6,
+    "after_ms": 1370.6,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "different_any",
+      "summary_only": false
+    },
+    "before_ms": 1609.2,
+    "after_ms": 1426.4,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "different_any",
+      "summary_only": true
+    },
+    "before_ms": 1576.4,
+    "after_ms": 1374.1,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "actual_lower",
+      "summary_only": false
+    },
+    "before_ms": 1533.9,
+    "after_ms": 1310.2,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "actual_lower",
+      "summary_only": true
+    },
+    "before_ms": 1523.9,
+    "after_ms": 1497.7,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_actual",
+      "summary_only": false
+    },
+    "before_ms": 1922.1,
+    "after_ms": 1555.8,
+    "total": 74393,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_actual",
+      "summary_only": true
+    },
+    "before_ms": 1762.1,
+    "after_ms": 1392.9,
+    "total": 74393,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_quote",
+      "summary_only": false
+    },
+    "before_ms": 103.2,
+    "after_ms": 106.7,
+    "total": 2,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_quote",
+      "summary_only": true
+    },
+    "before_ms": 95.2,
+    "after_ms": 94.6,
+    "total": 2,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "dimensions_changed",
+      "summary_only": false
+    },
+    "before_ms": 206.3,
+    "after_ms": 198.4,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "dimensions_changed",
+      "summary_only": true
+    },
+    "before_ms": 189.5,
+    "after_ms": 189.1,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "amount",
+      "include_summary": false
+    },
+    "before_ms": 1690.9,
+    "after_ms": 1232.2,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "balance",
+      "include_summary": false
+    },
+    "before_ms": 1697.1,
+    "after_ms": 1244.3,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "profit_rate",
+      "include_summary": false
+    },
+    "before_ms": 1790.6,
+    "after_ms": 1314.8,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "group_name": "Group 1"
+    },
+    "before_ms": 1606.0,
+    "after_ms": 1013.4,
+    "total": 39603,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "status": "交付"
+    },
+    "before_ms": 1509.3,
+    "after_ms": 193.7,
+    "total": 7273,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "origin": "yandex"
+    },
+    "before_ms": 1463.0,
+    "after_ms": 96.3,
+    "total": 793,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "allowed_store_ids": [
+        1,
+        2
+      ],
+      "store_ids": [
+        3
+      ]
+    },
+    "before_ms": 98.7,
+    "after_ms": 1.7,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "search": "Synthetic",
+      "store_ids": [
+        2
+      ]
+    },
+    "before_ms": 5514.4,
+    "after_ms": 226.4,
+    "total": 3960,
+    "different_fields": []
+  }
+]

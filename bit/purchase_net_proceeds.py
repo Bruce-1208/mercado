@@ -160,7 +160,10 @@ def _order_identity(order: Mapping[str, Any]) -> tuple[str, int]:
     return next(iter(titles)), quantity
 
 
-def _new_product_snapshot(row: Mapping[str, Any], target: Decimal, ratio: int, rate: Mapping[str, Any]) -> str:
+def _new_product_snapshot(
+    row: Mapping[str, Any], target: Decimal, ratio: int, rate: Mapping[str, Any],
+    *, reset_ai_reviews: bool = False,
+) -> str:
     snapshot = _loads(row.get("source_snapshot_json"))
     # The snapshot participates in the profitability worker's compare-and-set,
     # and source-specific overrides must agree with the authoritative column.
@@ -174,6 +177,8 @@ def _new_product_snapshot(row: Mapping[str, Any], target: Decimal, ratio: int, r
         overrides = dict(overrides) if isinstance(overrides, Mapping) else {}
         overrides["net_proceeds_usd"] = float(target)
         snapshot["source_1688_overrides"] = overrides
+        if reset_ai_reviews:
+            products._mark_ai_marketplace_drafts_unreviewed(snapshot)
     elif source_type == "zying":
         snapshot["zying_net_proceeds_usd"] = float(target)
     return json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
@@ -250,12 +255,22 @@ def synchronize(cursor: Any, orders: list[dict], purchase_cost: Decimal, ratio: 
             target = by_title[title]
             changed = _decimal(row.get("net_proceeds_usd")) != target
             if target_type == "product":
+                reset_ai_reviews = changed and str(row.get("source_type") or "").strip().lower() == "ai_original"
+                review_assignment = ", `review_status` = 'unreviewed'" if reset_ai_reviews else ""
                 cursor.execute(
                     f"UPDATE `{products.PRODUCT_TABLE}` SET `net_proceeds_usd` = %s, "
                     "`profitability_source` = %s, `profitability_updated_at` = %s, "
-                    "`profitability_error` = NULL, `source_snapshot_json` = %s, `updated_at` = %s "
+                    "`profitability_error` = NULL, `source_snapshot_json` = %s"
+                    + review_assignment + ", `updated_at` = %s "
                     "WHERE `id` = %s",
-                    (target, SOURCE, now, _new_product_snapshot(row, target, ratio, rate), now, row["id"]),
+                    (
+                        target, SOURCE, now,
+                        _new_product_snapshot(
+                            row, target, ratio, rate,
+                            reset_ai_reviews=reset_ai_reviews,
+                        ),
+                        now, row["id"],
+                    ),
                 )
                 product_changed += int(changed)
             else:

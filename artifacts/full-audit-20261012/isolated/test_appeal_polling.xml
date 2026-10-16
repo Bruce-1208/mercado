@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="7" skipped="0" tests="10" time="0.183" timestamp="2026-10-12T16:37:23.958760+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_appeal_polling" name="test_pending_jobs_release_response_without_streaming" time="0.007"><failure message="assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code">tests/test_appeal_polling.py:42: in test_pending_jobs_release_response_without_streaming
+    assert response.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code</failure></testcase><testcase classname="tests.test_appeal_polling" name="test_terminal_logs_drain_all_pages_and_do_not_expose_payload" time="0.003"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = submit(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;)">tests/test_appeal_polling.py:52: in test_terminal_logs_drain_all_pages_and_do_not_expose_payload
+    assert submit(client).status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = submit(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;)</failure></testcase><testcase classname="tests.test_appeal_polling" name="test_poll_requires_permission_and_owner" time="0.007"><failure message="AssertionError: assert 404 == 200&#10; +  where 404 = &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt; = get('/api/run_shensu/polling-job/events')&#10; +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get">tests/test_appeal_polling.py:78: in test_poll_requires_permission_and_owner
+    assert client.get("/api/run_shensu/polling-job/events").status_code == 200
+E   AssertionError: assert 404 == 200
+E    +  where 404 = &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt; = get('/api/run_shensu/polling-job/events')
+E    +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get</failure></testcase><testcase classname="tests.test_appeal_polling" name="test_poll_rejects_invalid_cursor[-1]" time="0.005" /><testcase classname="tests.test_appeal_polling" name="test_poll_rejects_invalid_cursor[oops]" time="0.004" /><testcase classname="tests.test_appeal_polling" name="test_poll_rejects_invalid_cursor[9223372036854775808]" time="0.005" /><testcase classname="tests.test_appeal_polling" name="test_queue_maintenance_is_shared_between_viewers" time="0.005"><failure message="AssertionError: assert 404 == 200&#10; +  where 404 = &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt; = get('/api/run_shensu/polling-job/events')&#10; +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get">tests/test_appeal_polling.py:96: in test_queue_maintenance_is_shared_between_viewers
+    assert client.get("/api/run_shensu/polling-job/events").status_code == 200
+E   AssertionError: assert 404 == 200
+E    +  where 404 = &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt; = get('/api/run_shensu/polling-job/events')
+E    +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get</failure></testcase><testcase classname="tests.test_appeal_polling" name="test_poll_reports_stopping_until_agent_acknowledges" time="0.007"><failure message="AssertionError: assert 404 == 200&#10; +  where 404 = &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt; = post('/api/run_shensu/stop', json={'task_id': 'polling-job'})&#10; +      where post = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.post">tests/test_appeal_polling.py:104: in test_poll_reports_stopping_until_agent_acknowledges
+    assert client.post("/api/run_shensu/stop", json={"task_id": "polling-job"}).status_code == 200
+E   AssertionError: assert 404 == 200
+E    +  where 404 = &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [404 NOT FOUND]&gt; = post('/api/run_shensu/stop', json={'task_id': 'polling-job'})
+E    +      where post = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.post</failure></testcase><testcase classname="tests.test_appeal_polling" name="test_large_log_events_are_split_by_byte_budget" time="0.005"><failure message="KeyError: '任务不存在或不属于当前 Agent'">tests/test_appeal_polling.py:117: in test_large_log_events_are_split_by_byte_budget
+    store.append_event("polling-job", "polling-agent", content=marker * 300000)
+bit/local_agent_hub.py:625: in append_event
+    raise KeyError("任务不存在或不属于当前 Agent")
+E   KeyError: '任务不存在或不属于当前 Agent'</failure></testcase><testcase classname="tests.test_appeal_polling" name="test_hundred_http_polls_complete_with_four_wsgi_workers" time="0.009"><failure message="AssertionError: assert 403 == 200&#10; +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = submit(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, 'http-job-0')">tests/test_appeal_polling.py:139: in test_hundred_http_polls_complete_with_four_wsgi_workers
+    assert submit(client, f"http-job-{index}").status_code == 200
+E   AssertionError: assert 403 == 200
+E    +  where 403 = &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [403 FORBIDDEN]&gt; = submit(&lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;, 'http-job-0')</failure></testcase></testsuite></testsuites>

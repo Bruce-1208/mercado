@@ -8,7 +8,7 @@ import re
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Iterable, Mapping
 
 from bit.sync_capacity import run_store as run_capacity_store, due_batch
@@ -267,10 +267,13 @@ def _iter_infractions(
     seller_id: str,
     *,
     date_created_since: str = "",
+    date_created_to: str = "",
 ):
     offset = 0
     seen_ids: set[str] = set()
     while True:
+        if offset + PROHIBITED_PAGE_SIZE >= 10000:
+            raise RuntimeError("禁限售处罚记录超过单日分页上限，保留上次完整快照")
         params = {
             "element_type": "ITM",
             "limit": PROHIBITED_PAGE_SIZE,
@@ -279,19 +282,43 @@ def _iter_infractions(
         }
         if date_created_since:
             params["date_created_since"] = date_created_since
+        if date_created_to:
+            params["date_created_to"] = date_created_to
         page = client.request(
             "GET",
             f"/marketplace/moderations/infractions/{seller_id}",
             params=params,
         )
         rows = _infraction_rows(page)
+        total = _paging_total(page, offset + len(rows))
+        if total >= 10000:
+            start = date.fromisoformat(date_created_since or "1970-01-01")
+            end = date.fromisoformat(date_created_to) if date_created_to else datetime.now().date()
+            if start >= end:
+                raise RuntimeError("禁限售处罚记录超过单日分页上限，保留上次完整快照")
+            midpoint = start + (end - start) // 2
+            # Split before yielding so a parent page is never counted twice.
+            for left, right in ((start, midpoint), (midpoint + timedelta(days=1), end)):
+                for row in _iter_infractions(client, seller_id,
+                        date_created_since=left.isoformat(), date_created_to=right.isoformat()):
+                    key = str(row.get("id") or "") or f"{row.get('related_item_id')}:{row.get('date_created')}"
+                    if key not in seen_ids:
+                        seen_ids.add(key)
+                        yield row
+            return
+        new_rows = 0
         for row in rows:
             infraction_id = str(row.get("id") or "")
             dedupe_key = infraction_id or f"{row.get('related_item_id')}:{row.get('date_created')}"
             if dedupe_key in seen_ids:
                 continue
             seen_ids.add(dedupe_key)
+            new_rows += 1
             yield row
+        if rows and not new_rows:
+            raise RuntimeError("禁限售处罚记录分页无进展，保留上次完整快照")
+        if not rows and offset < total:
+            raise RuntimeError("禁限售处罚记录分页不完整，保留上次完整快照")
         offset += len(rows)
         total = _paging_total(page, offset)
         if not rows or offset >= total or len(rows) < PROHIBITED_PAGE_SIZE:
@@ -647,18 +674,8 @@ def start_prohibited_listing_sync(
 
 
 def start_due_prohibited_listing_sync() -> dict[str, Any]:
-    try:
-        auto_sync = get_overview_sync_settings(PROHIBITED_LISTINGS_SCOPE)
-    except Exception as exc:
-        _append_log(f"读取全量更新开关失败，保持自动更新：{exc}")
-        auto_sync = {"enabled": True}
-    if not auto_sync.get("enabled", True):
-        return {
-            "started": False,
-            "disabled": True,
-            "due_token_ids": [],
-            "state": prohibited_listing_sync_status(),
-        }
+    # Per-enterprise switches are applied by the due-store query. A global
+    # early return would let one enterprise disable every other enterprise.
     if get_lock_owner(PROHIBITED_SYNC_LOCK_KEY):
         return {
             "started": False,

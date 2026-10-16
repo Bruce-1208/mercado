@@ -2137,3 +2137,37 @@ def test_purchase_tracking_search_input_alone_does_not_prove_order_exists(browse
     assert result['status'] == 'failed'
     assert '查询超时' in result['message']
     page.close()
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('suffix,pagination,count,expected_page,expected_next', [
+    ('_NoIndex_True_SHIPPING*ORIGIN_10215069', '', 48, 1, '_Desde_49_NoIndex_'),
+    ('_Desde_49_NoIndex_True_SHIPPING*ORIGIN_10215069', '', 48, 2, '_Desde_97_NoIndex_'),
+    ('_Desde_97_NoIndex_True_SHIPPING*ORIGIN_10215069', '', 12, 3, ''),
+    ('_NoIndex_True', '<a class="andes-pagination__button--next" href="/toy_Desde_51">Next</a>', 48, 1, '_Desde_51'),
+    ('_NoIndex_True', '<ul class="andes-pagination"><li><a href="/toy_Desde_49">2</a></li></ul>', 48, 1, '_Desde_49'),
+    ('_NoIndex_True', '<li class="andes-pagination__button--next andes-pagination__button--disabled"><a rel="next" href="/toy_Desde_49">Next</a></li>', 48, 1, ''),
+    ('_NoIndex_True', '<a rel="next" href="https://example.org/next">Next</a>', 48, 1, '_Desde_49_NoIndex_'),
+])
+def test_product_list_pagination_fallback(browser, width, suffix, pagination, count, expected_page, expected_next):
+    page = browser.new_page(viewport={"width": width, "height": 900})
+    cards = ''.join(
+        f'<li class="ui-search-layout__item"><div class="poly-card"><a class="poly-component__title" '
+        f'href="https://articulo.mercadolibre.com.mx/MLM-{12345 + index}-toy">Toy</a></div></li>'
+        for index in range(count)
+    )
+    page.route('https://listado.mercadolibre.com.mx/**', lambda route: route.fulfill(
+        body=f'<ul>{cards}</ul>{pagination}', content_type='text/html'))
+    page.goto('https://listado.mercadolibre.com.mx/toy' + suffix)
+    page.evaluate('window.chrome={runtime:{onMessage:{addListener:fn=>window.receive=fn}}}')
+    page.add_script_tag(path=str(EXTENSION / 'collector-core.js'))
+    page.add_script_tag(path=str(EXTENSION / 'content.js'))
+    data = page.evaluate("new Promise(resolve=>receive({type:'READ_PRODUCT_LIST'}, {}, resolve))")
+    assert data['ok'] is True
+    assert data['page'] == expected_page
+    assert len(data['items']) == count
+    if expected_next:
+        assert expected_next in data['next_url']
+    else:
+        assert data['next_url'] == ''
+    page.close()

@@ -1,0 +1,33 @@
+{
+  "completed_at": "2026-10-16T15:11:36.166088+08:00",
+  "status": "restored",
+  "local_http": 200,
+  "public_http": 200,
+  "services_listening": [
+    5000,
+    5001,
+    5002,
+    5003,
+    5004
+  ],
+  "database": "/Volumes/Samsung 980 PRO/mysql-data",
+  "original_preserved": "/Volumes/Samsung 980 PRO/mysql-data-before-recovery-20261016",
+  "recovery_workspace": "/Volumes/Samsung 980 PRO/mysql-recovery-20261016",
+  "tables_restored": 98,
+  "rows_restored": 9346673,
+  "all_table_counts_match": true,
+  "content_checksums_passed": 97,
+  "accounts_and_grants_verified": 2,
+  "normal_mode": {
+    "innodb_force_recovery": 0,
+    "innodb_flush_log_at_trx_commit": 1,
+    "sync_binlog": 1,
+    "innodb_doublewrite": "ON",
+    "redo_logging": "ON"
+  },
+  "method": "Isolated APFS clone; clear FILE_FULL on final surviving redo header and recompute verified CRC32C; replay remaining redo at force_recovery=1; logical export and rebuild into fresh database. Original retained.",
+  "limitations": [
+    "Missing newest redo prevents guaranteeing final transactions complete.",
+    "Product full-content checksum and additional table checks deferred at user request to prioritize service restoration. All 98 table counts and 97 content checksums matched."
+  ]
+}

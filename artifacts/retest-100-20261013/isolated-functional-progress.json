@@ -1,0 +1,22 @@
+[
+  {
+    "file": "test_catalog_visibility_routes",
+    "exit": 1
+  },
+  {
+    "file": "test_local_executor_auth",
+    "exit": 1
+  },
+  {
+    "file": "test_ai_original_platform_filters",
+    "exit": 1
+  },
+  {
+    "file": "test_publish_concurrency",
+    "exit": 1
+  },
+  {
+    "file": "test_bit_order_management",
+    "exit": 1
+  }
+]

@@ -1,0 +1,45 @@
+/* Product editor sections follow the shared workbench controls and tokens. */
+#mercado-product-edit-dialog .mercado-editor-nav {
+    display: flex; flex: 0 0 auto; gap: var(--zs-space-2); overflow-x: auto;
+    padding: var(--zs-space-3) var(--zs-space-4); border-bottom: 1px solid var(--zs-stroke);
+}
+#mercado-product-edit-dialog .mercado-editor-nav button { flex: 0 0 auto; }
+#mercado-product-edit-dialog .mercado-product-edit-form { align-content: start; }
+#mercado-product-edit-dialog .field { min-width: 0; }
+#mercado-product-edit-dialog .mercado-editor-section {
+    margin: var(--zs-space-2) 0 0; padding-bottom: var(--zs-space-2);
+    border-bottom: 1px solid var(--zs-stroke); color: var(--zs-heading);
+    font-size: var(--zs-text-body); scroll-margin-top: var(--zs-space-4);
+}
+#mercado-product-edit-dialog small, #mercado-product-edit-dialog .mercado-editor-empty {
+    color: var(--zs-secondary); font-size: var(--zs-text-small); font-weight: 400;
+}
+#mercado-product-edit-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--zs-space-3); }
+#mercado-product-edit-dialog .mercado-editor-picture {
+    min-width: 0; display: grid; gap: var(--zs-space-2); padding: var(--zs-space-3);
+    background: var(--zs-card); border: 1px solid var(--zs-stroke); border-radius: var(--zs-radius-card);
+}
+#mercado-product-edit-dialog .mercado-editor-picture img,
+#mercado-product-edit-dialog .mercado-editor-picture-empty { width: 100%; height: 120px; object-fit: contain; display: block; }
+#mercado-product-edit-dialog .mercado-editor-picture > div:last-child { display: flex; flex-wrap: wrap; gap: var(--zs-space-2); }
+#mercado-product-edit-dialog .mercado-editor-picture input { width: 100%; min-width: 0; box-sizing: border-box; }
+#mercado-product-edit-dialog .mercado-editor-attribute {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr) auto;
+    align-items: end; gap: var(--zs-space-2); margin-bottom: var(--zs-space-2);
+}
+#mercado-product-edit-dialog .mercado-editor-attribute input { width: 100%; min-width: 0; box-sizing: border-box; }
+#mercado-product-edit-dialog .mercado-variant-picture-cell { display: flex; flex-wrap: wrap; }
+#mercado-product-edit-dialog .mercado-variant-picture-cell input { flex-basis: 100%; }
+#mercado-product-edit-dialog .mercado-product-variant-wrap { min-width: 0; }
+@media (max-width: 680px) {
+    #mercado-product-edit-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #mercado-product-edit-dialog .mercado-editor-attribute { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #mercado-product-edit-dialog .mercado-editor-section small { display: block; margin-top: var(--zs-space-1); }
+}
+
+/* Collection mode shares the editor but displays its complete detail section. */
+#mercado-product-edit-dialog .mercado-product-edit-form > [hidden],
+#mercado-product-edit-dialog .mercado-editor-nav > [hidden] { display: none; }
+
+#mercado-product-edit-category-levels { display: grid; gap: var(--zs-space-2); }
+#mercado-product-edit-category-picker select { width: 100%; min-width: 0; }

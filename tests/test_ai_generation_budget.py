@@ -360,3 +360,18 @@ def test_qwen_requires_own_key_before_any_request():
     chat = BudgetedChat(model=QWEN_MODEL, transport=lambda **kw: pytest.fail('must not send DeepSeek key'))
     with pytest.raises(ValueError, match='百炼 API Key'):
         chat(MESSAGES)
+
+
+@pytest.mark.parametrize('status,message', [(401,'失效'), (402,'余额不足'), (403,'权限')])
+def test_account_error_preserves_safe_cause_and_durable_attempt(status, message):
+    from erp.ai_original_products import OriginalModelAccountError
+    class AccountError(RuntimeError):
+        status_code = status
+    def transport(**kwargs):
+        raise AccountError('secret-provider-error-must-not-be-shown')
+    snapshots = []
+    chat = make_chat(transport, on_update=snapshots.append)
+    with pytest.raises(OriginalModelAccountError, match=message) as error:
+        chat(messages=[{'role':'user','content':'hello'}], max_tokens=500)
+    assert 'secret-provider' not in str(error.value)
+    assert snapshots[-1]['calls'][-1]['state'] == 'unknown'

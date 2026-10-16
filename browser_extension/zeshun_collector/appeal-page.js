@@ -22,7 +22,7 @@ async function mercadoAppealPageAction(command, args = {}) {
   const enabled = el => visible(el) && !el.disabled && !el.readOnly && el.getAttribute("aria-disabled") !== "true";
   const label = el => norm([el.innerText, el.getAttribute("aria-label"), el.getAttribute("title"), el.getAttribute("placeholder"), el.getAttribute("aria-placeholder")].join(" "));
   const nodes = all();
-  const clickable = el => el.matches("button,a,[role='button'],[role='link']") && enabled(el);
+  const clickable = el => el.matches("button,a,summary,[role='button'],[role='link']") && enabled(el);
   const siteIds = {MX: "MLM", BR: "MLB", CL: "MLC", CO: "MCO", AR: "MLA", UY: "MLU"};
   const normalizeSite = value => {
     const upper = String(value || "").toUpperCase().replace(/-REMOTE$/, "");
@@ -64,10 +64,17 @@ async function mercadoAppealPageAction(command, args = {}) {
       guest: root.isGuest === true && String(root.userId) === "-1" && root.siteId === "CBT",
       operating: root.operating_site_id || root.operatingSiteId || (root.siteId !== "CBT" ? root.siteId : "")
     }));
+    // Current seller navigation exposes its authenticated account in the
+    // SiteSwitcherWidget initializer; inspect that exact initializer only.
+    for (const script of document.querySelectorAll("script")) {
+      const config = /new\s+(?:win|window)\.SiteSwitcherWidget\(\{([\s\S]*?)\}\)/.exec(script.textContent || "");
+      const id = config && /\buserId:\s*"(\d+)"/.exec(config[1]);
+      if (id) identity.push({id: id[1], nickname: "", operating: ""});
+    }
     const positive = identity.filter(user => /^\d+$/.test(String(user.id || "")) && Number(user.id) > 0);
     const sellerIds = [...new Set(positive.map(user => String(user.id)))];
     const current = nodes.find(el => el.matches(".nav-header-cbt__current-site,.nav-header-cbt__site-switcher-value"));
-    const selected = nodes.find(el => el.matches("#nav-header-cbt__switcher [class*='option-selected'],#nav-header-cbt__switcher [data-value][class*='selected'],[data-value$='-remote'][class*='selected'],[data-value$='-full'][class*='selected'],[data-value$='-fulfillment'][class*='selected']"));
+    const selected = nodes.find(el => el.matches(".nav-header-sellers-sites-switcher__option[aria-selected='true'],#nav-header-cbt__switcher [class*='option-selected'],#nav-header-cbt__switcher [data-value][class*='selected'],[data-value$='-remote'][class*='selected'],[data-value$='-full'][class*='selected'],[data-value$='-fulfillment'][class*='selected']"));
     const flag = nodes.find(el => el.matches(".nav-header-cbt__current-flag img, .nav-header-cbt__current img"));
     const selectedRemote = selected?.getAttribute("data-value") || selected?.querySelector("[data-value]")?.getAttribute("data-value") || "";
     const siteSignals = [selectedRemote, current?.innerText,
@@ -75,15 +82,19 @@ async function mercadoAppealPageAction(command, args = {}) {
     const uniqueSites = [...new Set(siteSignals)];
     let cookieSite = "", cookieRemote = "";
     try { cookieRemote = decodeURIComponent(document.cookie.match(/(?:^|;\s*)cbtSiteId=([^;]+)/)?.[1] || ""); cookieSite = normalizeSite(cookieRemote); } catch (_) {}
-    const available = nodes.filter(el => el.matches("#nav-header-cbt__switcher [data-value], [class*='site-switcher'] [data-value]"))
+    const available = nodes.filter(el => el.matches("#nav-header-cbt__switcher [data-value], [class*='site-switcher'] [data-value], .nav-header-sellers-sites-switcher__option[data-value]"))
       .map(el => el.getAttribute("data-value")).filter(Boolean);
+    const sites = nodes.filter(el => el.matches("#nav-header-cbt__switcher [data-value], [class*='site-switcher'] [data-value], .nav-header-sellers-sites-switcher__option[data-value]"))
+      .filter(el => /-remote$/i.test(el.getAttribute("data-value") || "") && el.getAttribute("aria-disabled") !== "true")
+      .map(el => ({site_id: normalizeSite(el.getAttribute("data-value")), seller_id: el.getAttribute("data-userid") || (sellerIds.length === 1 ? sellerIds[0] : "")}))
+      .filter(site => site.site_id && /^\d+$/.test(site.seller_id));
     const loginForm = nodes.some(el => visible(el) && el.matches("input[type='password'],#login_user_id,input[name='login_user_id']"));
     const text = plain(document.body?.innerText || "");
     const loggedOut = identity.some(user => user.guest) || /\/(?:login|lgz|legacy-user)(?:\/|$)/i.test(location.pathname) || loginForm;
     return {seller_id: sellerIds.length === 1 ? sellerIds[0] : "", identity_conflict: sellerIds.length > 1,
       nickname: positive[0]?.nickname || "", site_id: uniqueSites.length === 1 ? uniqueSites[0] : (!uniqueSites.length ? cookieSite : ""),
       site_conflict: uniqueSites.length > 1 || /-(?:full|fulfillment)/i.test(selectedRemote || cookieRemote),
-      selected_remote: selectedRemote, cookie_remote: cookieRemote, available, logged_out: loggedOut,
+      selected_remote: selectedRemote, cookie_remote: cookieRemote, available, sites, logged_out: loggedOut,
       rate_limited: text.includes("hubo un error accediendo a esta pagina"), url: location.href, title: document.title};
   }
   if (command === "context") return context();
@@ -94,10 +105,76 @@ async function mercadoAppealPageAction(command, args = {}) {
     if (before.site_id === target && !before.site_conflict) return {already: true};
     const option = nodes.find(el => el.getAttribute("data-value") === `${target}-remote` && enabled(el));
     if (option) { option.click(); return {clicked: true}; }
-    const switcher = nodes.find(el => clickable(el) && (el.matches("#nav-header-cbt__site-switcher-toggle,.nav-header-cbt__site-switcher-trigger,.nav-header-cbt__site-switcher") ||
+    const switcher = nodes.find(el => clickable(el) && (el.matches("[data-js='site-switcher-target'],#nav-header-cbt__site-switcher-toggle,.nav-header-cbt__site-switcher-trigger,.nav-header-cbt__site-switcher") ||
       /select country|select site|选择国家|选择站点/i.test(label(el))));
     if (switcher) { switcher.click(); return {opened: true}; }
     return {error: "未找到当前店铺站点切换器"};
+  }
+  if (command === "infringement_items") {
+    const state = window.__PRELOADED_STATE__?.body?.container;
+    const titles = {MLM: "Mexico", MLB: "Brazil", MLC: "Chile", MCO: "Colombia", MLA: "Argentina", MLU: "Uruguay"};
+    if (state?.selectedTab !== "detections" || !String(state.title || "").endsWith(`- ${titles[args.site_id]}`)) {
+      return {error: "侵权检测页面未加载或站点不匹配"};
+    }
+    const data = state.infractions, paging = data?.paging;
+    const total = Number(state.detectionsTotal), offset = Number(args.offset || 0), limit = Number(paging?.limit);
+    if (!Array.isArray(data?.results) || !Number.isInteger(total) || total < 0 || !Number.isInteger(limit) || limit <= 0 ||
+        Number(paging.total) !== total || Number(paging.offset) !== offset || data.results.length !== Math.min(limit, Math.max(0, total - offset))) {
+      return {error: "侵权检测分页不完整，请重新采集"};
+    }
+    const rows = [];
+    for (const raw of data.results) {
+      const id = String(raw.element_id || "").toUpperCase();
+      if (!new RegExp(`^${args.site_id}\\d+$`).test(id) || !raw.case_id) return {error: "侵权商品编号或案件编号无效"};
+      // Only the automated-detections tab, never rights-holder complaints.
+      const date = /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/.exec(String(raw.date_created || ""));
+      if (!date) return {error: "侵权记录日期格式已改变"};
+      const occurred = new Date(2000 + Number(date[3]), Number(date[1]) - 1, Number(date[2])).getTime();
+      const reason = String(raw.related_filter_name || "");
+      rows.push({case_id: String(raw.case_id), product_id: id, title: norm(raw.item?.title), description: "",
+        eligible: occurred >= Date.now() - 100 * 86400000 && !/prohibited/i.test(reason)});
+    }
+    return {rows, total, limit, offset};
+  }
+  if (command === "open_inactive_listings") {
+    const tab = nodes.find(el => enabled(el) && el.matches("a,button,[role='tab'],label") &&
+      /^(inactive|inactivos|inativas|inativos|非活跃|不活跃|未激活)(?:\s*\(\d+\))?$/i.test(norm(el.innerText)));
+    if (!tab) return {error: "未找到非活跃商品入口，无法完整读取禁限售商品"};
+    if (tab.getAttribute("aria-selected") === "true" || tab.getAttribute("aria-current") === "page" || /--selected|--active/.test(tab.className)) return {selected: true};
+    tab.click();
+    return {clicked: true};
+  }
+  if (command === "prohibited_items") {
+    if (!/\/listings\/list(?:\/|$)/.test(location.pathname)) return {error: "禁限售采集必须在当前店铺商品列表执行"};
+    const selectedFilter = nodes.find(el => visible(el) && el.matches("[aria-selected='true'],[aria-current='page'],.andes-tabs__tab--active,.andes-tabs__tab--selected") &&
+      /^(inactive|inactivos|inativas|inativos|非活跃|不活跃|未激活)(?:\s*\(\d+\))?$/i.test(norm(el.innerText)));
+    if (!selectedFilter) return {error: "非活跃商品列表尚未加载，停止以免漏采禁限售商品"};
+    const cards = nodes.filter(el => el.matches("[data-item-id],.sc-list-item,.ui-search-result,[role='row'],tbody tr"))
+      .filter(el => visible(el) && !el.parentElement?.closest("[data-item-id],.sc-list-item,.ui-search-result,[role='row'],tbody tr"));
+    const rows = [], seen = new Set();
+    let productCards = 0;
+    for (const card of cards) {
+      const text = norm(card.innerText);
+      const matches = [...new Set((`${card.getAttribute("data-item-id") || ""} ${text} ${[...card.querySelectorAll("a[href]")].map(el => el.href).join(" ")}`)
+        .match(/(?:MLM|MLB|MLC|MCO|MLA|MLU)[- ]?\d{6,}/g) || [])].map(id => id.replace(/[- ]/g, ""));
+      if (matches.length) productCards++;
+      const prohibited = /the product is prohibited|producto (?:está |esta |es )?prohibido|produto (?:está |esta |é )?proibido|该产品属于禁售|禁限售产品/i.test(text);
+      if (!prohibited) continue;
+      const ids = [...new Set(matches.filter(id => id.startsWith(args.site_id)))];
+      if (ids.length !== 1) return {error: "禁限售商品编号不明确，请检查当前商品列表"};
+      const title = norm(card.querySelector("[data-testid='title'],.sc-list-item__title,h2,h3")?.textContent);
+      if (!seen.has(ids[0])) rows.push({product_id: ids[0], title, description: ""});
+      seen.add(ids[0]);
+    }
+    const empty = /no listings|you have no listings|no tienes publicaciones|nenhum anúncio|暂无商品|没有商品/i.test(document.body?.innerText || "");
+    if (!productCards && !empty) return {error: "尚未识别到商品列表，不能将采集失败当作无禁限售商品"};
+    const next = nodes.find(el => enabled(el) && el.matches("a[rel='next'],.andes-pagination__button--next a,button[aria-label='Next'],a[aria-label='Next']"));
+    return {rows, has_next: Boolean(next), fingerprint: cards.map(card => norm(card.innerText)).join("|") || "empty"};
+  }
+  if (command === "next_products") {
+    const next = nodes.find(el => enabled(el) && el.matches("a[rel='next'],.andes-pagination__button--next a,button[aria-label='Next'],a[aria-label='Next']"));
+    if (next) { next.click(); return {advanced: true}; }
+    return {advanced: false};
   }
   const assistantShell = nodes.find(el => el.id === "sa-assistant-chat");
   const shell = args.mode !== "人工客服" ? assistantShell : null;
@@ -179,17 +256,106 @@ async function mercadoAppealPageAction(command, args = {}) {
     const before = snapshot(); button.click();
     return {clicked: true, acknowledged: true, send_method: "button_click", snapshot: before};
   }
+  // Screenshot evidence shows one fixed cancellation copy on the status card.
+  // Overrides live only in this page world, expire on their own and stay fully
+  // reversible, so the operator keeps the real conversation after the capture.
+  const query = selector => { try { return [...document.querySelectorAll(selector)]; } catch (_) { return []; } };
+  const parentOf = el => el.parentElement || el.parentNode?.host || null;
+  function treeDistance(from, to) {
+    const depths = new Map();
+    for (let el = to, step = 0; el; el = parentOf(el), step++) depths.set(el, step);
+    for (let el = from, step = 0; el; el = parentOf(el), step++) if (depths.has(el)) return step + depths.get(el);
+    return Number.MAX_SAFE_INTEGER;
+  }
+  function overrideTargets(spec) {
+    const matches = query(spec.selector).filter(visible);
+    if (spec.all) return matches;
+    if (!matches.length) return [];
+    const anchors = spec.near ? query(spec.near) : [];
+    if (matches.length === 1 || !anchors.length) return [matches[0]];
+    // One class can be shared by several markdown blocks; rewrite the block that
+    // belongs to the status card instead of an unrelated agent reply.
+    const distance = el => anchors.reduce((best, anchor) => Math.min(best, treeDistance(el, anchor)), Number.MAX_SAFE_INTEGER);
+    return [matches.sort((a, b) => distance(a) - distance(b))[0]];
+  }
+  function releaseOverrides() {
+    const state = window.__zeshunAppealTextOverrides;
+    if (!state) return {restored: 0};
+    window.__zeshunAppealTextOverrides = null;
+    if (state.observer) state.observer.disconnect();
+    if (state.timer) clearTimeout(state.timer);
+    let restored = 0;
+    for (const [element, original] of state.originals) {
+      if (element.isConnected && element.textContent !== original) { element.textContent = original; restored++; }
+    }
+    state.originals.clear();
+    return {restored};
+  }
+  if (command === "restore_text") return releaseOverrides();
+  if (command === "override_text") {
+    const specs = (Array.isArray(args.overrides) ? args.overrides : [])
+      .filter(spec => spec && typeof spec.selector === "string" && spec.selector && typeof spec.text === "string")
+      .slice(0, 8);
+    if (!specs.length) return {error: "没有可应用的截图文案"};
+    releaseOverrides();
+    const state = {specs, originals: new Map(), observer: null, timer: 0};
+    window.__zeshunAppealTextOverrides = state;
+    const apply = () => {
+      if (window.__zeshunAppealTextOverrides !== state) return {};
+      const counts = {};
+      for (const spec of state.specs) {
+        const targets = overrideTargets(spec);
+        counts[spec.selector] = targets.length;
+        for (const element of targets) {
+          if (!state.originals.has(element)) state.originals.set(element, element.textContent);
+          if (element.textContent !== spec.text) element.textContent = spec.text;
+        }
+      }
+      return counts;
+    };
+    const counts = apply();
+    const missing = specs.map(spec => spec.selector).filter(selector => !counts[selector]);
+    const holdMs = Math.min(Math.max(Number(args.hold_ms) || 0, 0), 30000);
+    if (holdMs) {
+      // The seller center re-renders the status card on every chat update, so
+      // reassert the copy at most once per frame until the hold expires.
+      let scheduled = false;
+      state.observer = new MutationObserver(() => {
+        if (scheduled || window.__zeshunAppealTextOverrides !== state) return;
+        scheduled = true;
+        requestAnimationFrame(() => { scheduled = false; apply(); });
+      });
+      state.observer.observe(document.documentElement, {childList: true, subtree: true, characterData: true});
+      state.timer = setTimeout(releaseOverrides, holdMs);
+    }
+    return {patched: state.originals.size, counts, missing, held_ms: holdMs};
+  }
   if (command === "metric_link" || command === "request_delay_report") {
-    const aliases = {投诉: /complaints?|claims?|投诉|客诉/i, 取消率: /cancell?ations?|cancelled orders|canceled orders|取消/i, 延误: /non.compliant shipments|late shipments|delayed shipments|shipping delays|handling time|延误|延迟发货/i};
-    const titles = nodes.filter(el => String(el.className).includes("variable__title"));
-    const title = titles.find(el => aliases[args.form]?.test(label(el)));
+    const aliases = {投诉: /complaints?|claims?|reclamos?|reclamacoes|投诉|客诉/i,
+      取消率: /cancell?ations?|cancelled orders|canceled orders|cancelaciones|cancelamentos|取消/i,
+      延误: /non.compliant shipments|late shipments|delayed shipments|shipping delays|handling time|envios con demora|envios atrasados|延误|延迟发货/i};
+    const isTitle = el => String(el.className).includes("variable__title") || el.matches("h2,h3,h4,[role='heading']");
+    const titles = nodes.filter(el => visible(el) && isTitle(el));
+    const matchesMetric = el => Object.values(aliases).some(pattern => pattern.test(plain(label(el))));
+    const title = titles.find(el => aliases[args.form]?.test(plain(label(el))));
     if (!title) return {error: `没有找到${args.form}指标卡片`};
-    const card = title.closest(".andes-card") || title.parentElement?.closest("[class*='variable']") || title.parentElement;
-    const candidates = [card, ...all(card)];
-    const link = candidates.find(el => clickable(el) && (args.form === "延误"
-      ? /download affected orders|下载受影响|下载.*订单/i.test(label(el))
-      : /review in metrics|view in metrics|see metrics|ver en metricas|revisar en metricas|查看.*指标/i.test(plain(label(el))) || /\/metrics(?:[/?#]|$)/i.test(el.getAttribute("href") || "")));
-    const zero = /(?:^|\s)0(?:[.,]0+)?\s*%/.test(norm(card.innerText));
+    // Some layouts put the action in a footer outside the title's Andes card.
+    // Walk up only within this metric; never borrow a neighbouring metric's link.
+    let link, card = title;
+    for (let container = title, depth = 0; container && depth < 9; container = container.parentElement, depth++) {
+      if (container === document.body || container === document.documentElement) break;
+      const candidates = [container, ...all(container)];
+      if (titles.some(other => other !== title && candidates.includes(other) && matchesMetric(other) &&
+          !aliases[args.form]?.test(plain(label(other))))) break;
+      card = container;
+      link = candidates.find(el => clickable(el) && (args.form === "延误"
+        ? /download affected orders|descargar.*(?:pedidos|ventas)|baixar.*pedidos|下载受影响|下载.*订单/i.test(plain(label(el)))
+        : /(?:review|view|see)(?: in)? metrics|(?:ver|revisar)(?: en| em)? metricas|查看.*(?:指标|详情)/i.test(plain(label(el))) || /\/metrics(?:[/?#]|$)/i.test(el.getAttribute("href") || "")));
+      if (link) break;
+    }
+    // Threshold/help text can also contain 0%; it is not the actual metric.
+    const percentage = [card, ...all(card)].find(el => visible(el) && el.matches(".variable__percentage"));
+    const zero = percentage && /^0(?:[.,]0+)?\s*%$/.test(norm(percentage.innerText));
     if (!link) return zero ? {empty: true} : {error: `${args.form}指标没有可读取的订单入口`};
     if (command === "request_delay_report") {
       const requestedAt = Date.now();
@@ -213,20 +379,30 @@ async function mercadoAppealPageAction(command, args = {}) {
     return {error: "延误报表通过邮件发送，当前店铺没有可读取的最新 CSV 报表"};
   }
   if (command === "orders") {
-    const ids = new Set();
-    const add = value => { const id = String(value || "").replace(/\D/g, ""); if (/^\d{10,20}$/.test(id)) ids.add(id); };
+    const ids = new Set(), packs = new Set();
+    const add = (set, value) => { const id = String(value || "").trim().replace(/^#/, ""); if (/^[1-9]\d{9,19}$/.test(id)) set.add(id); };
+    const packPattern = /(?:pack(?:age)?(?:\s*(?:id|number|no\.?))?|paquete|pacote|包裹(?:号|编号)?)[\s:#：]*(\d{10,20})\b/gi;
+    const packValues = el => {
+      const values = new Set();
+      for (const attr of ["data-pack-id", "data-package-id"]) add(values, el.getAttribute(attr));
+      for (const match of norm(el.innerText).matchAll(packPattern)) add(values, match[1]);
+      for (const match of (el.getAttribute("href") || "").matchAll(/\/packs?\/(\d{10,20})(?:[/?#]|$)/gi)) add(values, match[1]);
+      return values;
+    };
     for (const el of nodes.filter(visible)) {
-      for (const attr of ["data-order-id", "data-order-number", "data-sale-id"]) add(el.getAttribute(attr));
-      for (const match of (el.getAttribute("href") || "").matchAll(/(?:orders?|sales?|ventas?|pedidos?)[^0-9]{0,20}(\d{10,20})/gi)) add(match[1]);
+      if (el === document.body || el === document.documentElement) continue;
       const text = norm(el.innerText);
-      if (!text || text.length > 800) continue;
-      for (const match of text.matchAll(/(?:orders?|sales?|ventas?|vendas?|pedidos?|订单|销售单)[^0-9]{0,30}(\d{10,20})/gi)) add(match[1]);
-      if (el.matches("tr,li,[role='row']") || /row|order|sale|card|item|record/.test(String(el.className))) {
-        for (const match of text.matchAll(/\b\d{10,20}\b/g)) add(match[0]);
-      }
+      if (text.length <= 800) packValues(el).forEach(id => packs.add(id));
+      const row = el.closest("tr,li,[role='row'],.sc-list-item,[data-order-id]") || el;
+      if (norm(row.innerText).length <= 800 && packValues(row).size) continue;
+      for (const attr of ["data-order-id", "data-order-number", "data-sale-id"]) add(ids, el.getAttribute(attr));
+      for (const match of (el.getAttribute("href") || "").matchAll(/(?:orders?|sales?|ventas?|pedidos?)[^0-9]{0,20}(\d{10,20})/gi)) add(ids, match[1]);
+      if (text.length <= 800) for (const match of text.matchAll(/(?:orders?|sales?|ventas?|vendas?|pedidos?|订单|销售单)[^0-9]{0,30}(\d{10,20})/gi)) add(ids, match[1]);
     }
-    return {ids: [...ids], fingerprint: `${[...ids].join("|")}:${document.body?.scrollHeight || 0}`};
+    packs.forEach(id => ids.delete(id));
+    return {ids: [...ids], pack_ids: [...packs], fingerprint: `${[...ids, ...packs].join("|")}:${document.body?.scrollHeight || 0}`};
   }
+
   if (command === "next_orders") {
     const buttons = nodes.filter(clickable);
     const next = buttons.find(el => el.matches("a[rel='next'],.andes-pagination__button--next") ||

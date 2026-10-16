@@ -108,7 +108,7 @@ def fixture():
     publisher = YandexOriginalPublisher({"business_id": 11, "campaign_id": 22, "placement_type": "FBS"}, "unused", client=client)
     row = {"id": 5, "source_item_id": "1688-5", "source_snapshot_json": json.dumps({
         "original_1688": {"title": "收纳盒", "variations": [], "source_url": "https://detail.1688.com/offer/5.html"},
-        "marketplace_listings": {"yandex": {"status": "completed", "title": "Белый контейнер для хранения",
+        "marketplace_listings": {"yandex": {"status": "completed", "review_status": "approved", "title": "Белый контейнер для хранения",
             "description": "Контейнер для хранения небольших предметов дома.", "main_image_url": "/local/source.jpg"}},
     })}
     settings = {"sku": "original-5", "category_id": 123, "brand": "Brand", "price": 120, "currency": "CNY", "quantity": 5,

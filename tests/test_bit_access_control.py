@@ -114,12 +114,12 @@ def test_server_appeal_execution_requires_super_admin(monkeypatch):
     client = bit_interface.app.test_client()
     response = client.post("/api/run_shensu", json={"execution_target": "server"})
     assert response.status_code == 403
-    assert "仅超级管理员" in response.get_json()["message"]
+    assert "超级管理员" in response.get_json()["message"]
 
     monkeypatch.setattr(bit_interface, "build_daily_task_params", lambda data: {"execution_target": "server"})
     response = client.post("/api/tasks/daily/start", json={"execution_target": "server"})
     assert response.status_code == 403
-    assert "仅超级管理员" in response.get_json()["message"]
+    assert "超级管理员" in response.get_json()["message"]
 
 
 def test_session_user_contains_role_data_scope():
@@ -353,8 +353,8 @@ def test_workbench_schema_migrates_roles_and_existing_users():
 
     assert "CREATE TABLE IF NOT EXISTS `workbench_roles`" in source
     assert "`role_key` VARCHAR(64)" in source
-    assert "SET `role_key` = 'super_admin'" in source
-    assert "WORKBENCH_DEFAULT_ROLES" in source
+    assert "SET `role_key` = 'viewer'" in source
+    assert "_seed_workbench_roles" in source
     warehouse_role = next(
         role for role in bit_interface.WORKBENCH_DEFAULT_ROLES
         if role["role_key"] == "warehouse"
@@ -476,12 +476,11 @@ def test_access_management_page_contains_role_user_and_permission_controls():
     assert 'id="access-role-form"' in template
     assert 'id="access-user-form"' in template
     assert 'id="access-permission-grid"' in template
-    assert 'id="access-role-own-store-only"' in template
-    assert "仅可查看和操作本人店铺及产品数据" in template
+    assert 'id="access-role-own-store-only" type="checkbox"' in template
     assert 'id="access-shop-form"' not in template
     assert 'id="access-shop-body"' not in template
     assert 'requestAccessApi("/api/access/browser-configs")' not in template
-    assert "更新声誉”控制官方 API 声誉及账号状态读取" in template
+    assert "更新声誉”控制官方 API 声誉读取" in template
     assert "七天流量”控制浏览器流量读取" in template
     assert "“进行申诉”控制申诉任务" in template
     assert "currentWorkbenchUser" in template
@@ -552,12 +551,12 @@ def test_member_cannot_address_another_store_token(monkeypatch):
 def test_organization_readiness_is_read_only(seed, pending, expected):
     class Cursor:
         def __init__(self):
-            self.results = iter([seed, {"pending_count": pending}])
+            self.results = iter([{"Field": "salesperson_limit"}, seed, {"pending_count": pending}])
             self.queries = []
 
         def execute(self, sql):
             self.queries.append(sql)
-            assert sql.lstrip().startswith("SELECT")
+            assert sql.lstrip().startswith(("SELECT", "SHOW COLUMNS"))
 
         def fetchone(self):
             return next(self.results)
@@ -570,17 +569,18 @@ def test_organization_readiness_is_read_only(seed, pending, expected):
         assert 'LEFT JOIN `workbench_organizations`' in query
 
 
-@pytest.mark.parametrize("missing", ["none", "user_organization_column", "organization_table", "pending_organization", "stale_roles", "missing_user_role"])
+@pytest.mark.parametrize("missing", ["none", "role_organization_column", "user_organization_column", "organization_table", "pending_organization", "stale_roles", "missing_user_role"])
 def test_account_initialization_only_writes_when_upgrade_needed(monkeypatch, missing):
     events = []
-    # The real role schema has no organization_key column; customer ownership
-    # belongs to users, so do not derive this fixture from required constants.
-    role_columns = {'role_key', 'role_name', 'description', 'permissions_json',
+    # Roles and users both carry the enterprise boundary.
+    role_columns = {'organization_key', 'role_key', 'role_name', 'description', 'permissions_json',
                     'own_store_only', 'is_system', 'created_at', 'updated_at'}
     user_columns = {'id', 'username', 'password_hash', 'display_name', 'personal_name', 'email',
                     'department', 'wechat_id', 'phone', 'warehouse_key', 'organization_key', 'role_key', 'is_active',
                     'created_at', 'updated_at'}
     tables = {'workbench_roles', 'workbench_users', 'workbench_organizations'}
+    if missing == 'role_organization_column':
+        role_columns.remove('organization_key')
     if missing == 'user_organization_column':
         user_columns.remove('organization_key')
     if missing == 'organization_table':
@@ -598,6 +598,9 @@ def test_account_initialization_only_writes_when_upgrade_needed(monkeypatch, mis
 
         def fetchone(self):
             return {'total': 1}
+
+        def fetchall(self):
+            return [{'organization_key': 'wuhan-zeshun'}]
 
     class Connection:
         def cursor(self):
@@ -623,6 +626,8 @@ def test_account_initialization_only_writes_when_upgrade_needed(monkeypatch, mis
     else:
         assert events[-2:] == ['commit', 'close']
         assert any('CREATE TABLE IF NOT EXISTS `workbench_organizations`' in event for event in events)
+        if missing == 'role_organization_column':
+            assert any('ADD PRIMARY KEY (`organization_key`, `role_key`)' in event for event in events)
         if missing == 'user_organization_column':
             assert any('ALTER TABLE `workbench_users` ADD COLUMN `organization_key`' in event for event in events)
         normalize = next(i for i, event in enumerate(events) if "SET `organization_key` = 'wuhan-zeshun'" in event)

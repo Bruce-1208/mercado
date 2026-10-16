@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="7" time="0.504" timestamp="2026-10-12T16:39:55.995038+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_local_agent_worker" name="test_worker_exports_agent_identity_for_business_processes" time="0.001" /><testcase classname="tests.test_local_agent_worker" name="test_daily_worker_runs_with_shared_process_controls[False]" time="0.111"><failure message="EOFError">tests/test_local_agent_worker.py:55: in test_daily_worker_runs_with_shared_process_controls
+    result = run_daily_task({"mode": "once"}, outer_stop, job_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+local_agent_worker.py:161: in run_daily_task
+    with multiprocessing.Manager() as manager:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/context.py:57: in Manager
+    m.start()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/managers.py:566: in start
+    self._address = reader.recv()
+                    ^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:249: in recv
+    buf = self._recv_bytes()
+          ^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:413: in _recv_bytes
+    buf = self._recv(4)
+          ^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:382: in _recv
+    raise EOFError
+E   EOFError</failure></testcase><testcase classname="tests.test_local_agent_worker" name="test_daily_worker_runs_with_shared_process_controls[True]" time="0.094"><failure message="EOFError">tests/test_local_agent_worker.py:55: in test_daily_worker_runs_with_shared_process_controls
+    result = run_daily_task({"mode": "once"}, outer_stop, job_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+local_agent_worker.py:161: in run_daily_task
+    with multiprocessing.Manager() as manager:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/context.py:57: in Manager
+    m.start()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/managers.py:566: in start
+    self._address = reader.recv()
+                    ^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:249: in recv
+    buf = self._recv_bytes()
+          ^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:413: in _recv_bytes
+    buf = self._recv(4)
+          ^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:382: in _recv
+    raise EOFError
+E   EOFError</failure></testcase><testcase classname="tests.test_local_agent_worker" name="test_daily_worker_releases_lock_on_business_failure" time="0.098"><failure message="EOFError">tests/test_local_agent_worker.py:72: in test_daily_worker_releases_lock_on_business_failure
+    run_daily_task({"mode": "once"}, threading.Event(), job_file)
+local_agent_worker.py:161: in run_daily_task
+    with multiprocessing.Manager() as manager:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/context.py:57: in Manager
+    m.start()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/managers.py:566: in start
+    self._address = reader.recv()
+                    ^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:249: in recv
+    buf = self._recv_bytes()
+          ^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:413: in _recv_bytes
+    buf = self._recv(4)
+          ^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/connection.py:382: in _recv
+    raise EOFError
+E   EOFError</failure></testcase><testcase classname="tests.test_local_agent_worker" name="test_worker_log_handles_windows_gbk_product_titles" time="0.001" /><testcase classname="tests.test_local_agent_worker" name="test_awp_failed_run_exits_nonzero_and_preserves_result" time="0.002" /><testcase classname="tests.test_local_agent_worker" name="test_zying_failure_preserves_actionable_message" time="0.002" /></testsuite></testsuites>

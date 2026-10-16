@@ -4,8 +4,10 @@ import pytest
 from test_console_ui_browser import ROOT, console_browser, console_page  # noqa: F401
 
 
-def test_unattempted_category_is_not_reported_as_failure_but_false_completion_is(console_page):
+@pytest.mark.parametrize("width", [1440, 390])
+def test_unattempted_category_is_not_reported_as_failure_but_false_completion_is(console_page, width):
     page = console_page
+    page.set_viewport_size({"width": width, "height": 1000})
     page.evaluate('''() => {
         document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
         document.getElementById('tab-ai-original-products').classList.add('active');
@@ -19,8 +21,20 @@ def test_unattempted_category_is_not_reported_as_failure_but_false_completion_is
     cards = page.locator('#ai-original-grid > .ai-original-card')
     assert '美客多类目待修正' not in cards.nth(0).text_content()
     assert '美客多类目生成失败' not in cards.nth(0).text_content()
+    assert cards.nth(0).locator('.ai-original-badge').text_content() == '待制作'
     assert cards.nth(1).locator('.ai-original-badge').text_content() == '失败'
     assert '美客多类目生成失败，可重新生成' in cards.nth(1).text_content()
+    status_filter = page.locator('#ai-original-status-filter')
+    if not status_filter.is_visible():
+        page.locator('.zs-advanced-filters:has(#ai-original-status-filter) > summary').click()
+    status_filter.select_option('pending')
+    status_filter.focus()
+    assert status_filter.evaluate('(node) => document.activeElement === node')
+    assert cards.count() == 1
+    page.evaluate('toggleAllAiOriginalProducts(true)')
+    assert page.evaluate('[...aiOriginalSelected]') == [1]
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
 
 
 @pytest.mark.parametrize('width', [1440, 1024, 390])

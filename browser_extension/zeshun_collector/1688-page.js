@@ -10,12 +10,17 @@ function zeshunRead1688PageData() {
     "package_length_cm", "package_width_cm", "package_height_cm", "packageLengthCm", "packageWidthCm", "packageHeightCm",
     "lengthUnit", "widthUnit", "heightUnit", "sizeUnit", "dimensionUnit", "raw_dimensions", "dimensions_display",
     "dimensions", "packageDimensions", "packageSize", "packingSize", "size"];
-  const arrays = (selector, predicate, fields, includeObject = false) => {
+  const imageFields = ['imageUrl', 'imgUrl', 'image', 'pictureUrl', 'image_url', 'skuImageUrl',
+    'skuImage', 'largeImageUrl', 'bigImageUrl', 'picture', 'images'];
+  const optionFields = ['skuId', 'specAttrs', 'name', 'value', 'valueName', 'specValue', 'label',
+    'valueId', 'propValueId', 'propId', 'fid', 'vid', 'pvs', 'specId', 'skuAttr'];
+  const arrays = (selector, predicate, fields, includeObject = false, collectAll = false) => {
     const element = document.querySelector(selector);
     if (!element) return [];
     const key = Object.keys(element).find(name => /^__react(Fiber|InternalInstance)\$/.test(name));
     let fiber = key ? element[key] : null;
     const seen = new WeakSet();
+    const collected = [];
     for (let level = 0; fiber && level < 12; level++, fiber = fiber.return) {
       const found = [];
       const visit = (value, depth) => {
@@ -29,28 +34,29 @@ function zeshunRead1688PageData() {
         }
         for (const [name, child] of Object.entries(value)) {
           if (["_owner", "stateNode", "return", "child", "sibling", "children"].includes(name)) continue;
+          if (/recommend|related|tracking|analytics/i.test(name)) continue;
           if (child && typeof child === "object" && !child.$$typeof) visit(child, depth + 1);
         }
       };
       visit(fiber.memoizedProps, 0);
-      if (found.length) return found;
+      if (found.length && !collectAll) return found;
+      collected.push(...found);
     }
-    return [];
+    return collected;
   };
   return {
     offer_id: offerId,
     sku_image_sets: arrays("#skuSelection[data-module='od_sku_selection'], [data-module='od_sku_selection']",
       item => item && typeof item === "object"
-        && ["imageUrl", "imgUrl", "image", "pictureUrl", "image_url"].some(key => typeof item[key] === "string" && item[key])
-        && ["skuId", "specAttrs", "name", "value", "valueName"].some(key => item[key]),
-      ["skuId", "specAttrs", "name", "value", "valueName", "imageUrl", "imgUrl", "image", "pictureUrl", "image_url"], true),
+        && imageFields.some(key => item[key]) && optionFields.some(key => item[key]),
+      [...optionFields, ...imageFields], true, true),
     sku_sets: arrays("#skuSelection[data-module='od_sku_selection'], [data-module='od_sku_selection']",
       item => item && typeof item === "object" && item.skuId && item.specAttrs,
       ["skuId", "specAttrs", "discountPrice", "currentPrice", "priceNum", "price", "salePrice", "priceAmount", "priceValue", "skuCode", "sku", "sellerSku",
-        "canBookCount", "availableQuantity", "stock", "quantity", "imageUrl", "imgUrl", "image", "pictureUrl", ...metricFields]),
+        "canBookCount", "availableQuantity", "stock", "quantity", ...optionFields, ...imageFields, ...metricFields]),
     price_sets: arrays("#productPrice, [data-module='od_product_price']",
       item => item && typeof item === "object" && ["price", "priceAmount", "priceValue"].some(key => key in item),
-      ["price", "priceAmount", "priceValue"]),
+      ["price", "priceAmount", "priceValue"], true, true),
     pack_sets: arrays("#productPackInfo[data-module='od_product_pack_info'], [data-module='od_product_pack_info']",
       item => item && typeof item === "object" && metricFields.some(key => key in item && !/Unit$/.test(key)),
       ["skuId", "id", "specAttrs", ...metricFields], true)

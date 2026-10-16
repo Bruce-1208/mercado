@@ -1,0 +1,1855 @@
+{
+  "scope": "Synthetic users with separate cache scopes. Staff each authorized for one of 20 stores (4000 orders/store); admins authorized for all 80000 orders. Actual current order handler and SQL, simulated identity/authentication SELECT 1, Waitress32 / DB pool6 / isolated MySQL128MiB. Each user waits 5s AFTER response, synchronized cold starts. Mixed profile: 90% store-scoped staff and 10% full-dataset admins. Every6 requests:3 list,1 summary,1 search,1 next-page. 65s stages deliberately include keyword search and multiple cache expiry cycles. No real background jobs or external APIs. Closed-loop model underdelivers target traffic when slow.",
+  "stages": [
+    {
+      "profile": "mixed",
+      "users": 20,
+      "think_seconds": 5,
+      "duration_seconds": 65.05,
+      "actual_rps": 3.9,
+      "peak_db_active": 5,
+      "peak_order_requests": 20,
+      "requests": 254,
+      "failed": 0,
+      "error_percent": 0.0,
+      "p50_ms": 77.22,
+      "p95_ms": 932.73,
+      "p99_ms": 5252.59,
+      "max_ms": 5295.78,
+      "per_endpoint": {
+        "list": {
+          "requests": 136,
+          "failed": 0,
+          "error_percent": 0.0,
+          "p50_ms": 75.05,
+          "p95_ms": 699.71,
+          "p99_ms": 932.02,
+          "max_ms": 932.73
+        },
+        "summary": {
+          "requests": 40,
+          "failed": 0,
+          "error_percent": 0.0,
+          "p50_ms": 80.63,
+          "p95_ms": 1860.44,
+          "p99_ms": 2262.11,
+          "max_ms": 2262.11
+        },
+        "page2": {
+          "requests": 38,
+          "failed": 0,
+          "error_percent": 0.0,
+          "p50_ms": 67.49,
+          "p95_ms": 662.63,
+          "p99_ms": 662.75,
+          "max_ms": 662.75
+        },
+        "search": {
+          "requests": 40,
+          "failed": 0,
+          "error_percent": 0.0,
+          "p50_ms": 514.3,
+          "p95_ms": 5252.59,
+          "p99_ms": 5295.78,
+          "max_ms": 5295.78
+        }
+      },
+      "samples": [
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 198.73,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "summary",
+          "ms": 74.45,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 64.33,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "search",
+          "ms": 332.91,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 108.15,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "page2",
+          "ms": 63.28,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 65.87,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "summary",
+          "ms": 72.94,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 68.49,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "search",
+          "ms": 351.09,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 75.51,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "page2",
+          "ms": 67.92,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 1,
+          "endpoint": "list",
+          "ms": 82.76,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 459.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "summary",
+          "ms": 83.56,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 75.05,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "search",
+          "ms": 1056.3,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 85.2,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "page2",
+          "ms": 70.58,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 72.44,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "summary",
+          "ms": 195.68,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 64.32,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "search",
+          "ms": 742.09,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 63.48,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "page2",
+          "ms": 63.26,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 2,
+          "endpoint": "list",
+          "ms": 69.76,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 553.47,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "summary",
+          "ms": 70.96,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 61.98,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "search",
+          "ms": 672.37,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 119.94,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "page2",
+          "ms": 62.51,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 58.45,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "summary",
+          "ms": 76.2,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 70.58,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "search",
+          "ms": 1099.92,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 62.81,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "page2",
+          "ms": 54.95,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 3,
+          "endpoint": "list",
+          "ms": 60.4,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 199.91,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "summary",
+          "ms": 58.62,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 53.67,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "search",
+          "ms": 324.39,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 77.94,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "page2",
+          "ms": 54.34,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 50.12,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "summary",
+          "ms": 55.83,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 58.83,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "search",
+          "ms": 320.12,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 59.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "page2",
+          "ms": 59.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 4,
+          "endpoint": "list",
+          "ms": 59.89,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 760.81,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "summary",
+          "ms": 302.36,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 58.24,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "search",
+          "ms": 464.7,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 76.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "page2",
+          "ms": 63.03,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 74.23,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "summary",
+          "ms": 367.05,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 65.02,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "search",
+          "ms": 816.9,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 87.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "page2",
+          "ms": 63.0,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 5,
+          "endpoint": "list",
+          "ms": 77.08,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 659.45,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "summary",
+          "ms": 75.06,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 60.28,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "search",
+          "ms": 873.15,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 64.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "page2",
+          "ms": 45.84,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 60.54,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "summary",
+          "ms": 164.65,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 58.63,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "search",
+          "ms": 1101.37,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 82.48,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "page2",
+          "ms": 43.91,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 6,
+          "endpoint": "list",
+          "ms": 47.51,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 283.52,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "summary",
+          "ms": 57.82,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 55.31,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "search",
+          "ms": 325.55,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 111.68,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "page2",
+          "ms": 54.56,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 53.54,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "summary",
+          "ms": 61.84,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 63.7,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "search",
+          "ms": 375.39,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 64.08,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "page2",
+          "ms": 59.33,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 7,
+          "endpoint": "list",
+          "ms": 76.9,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 494.97,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "summary",
+          "ms": 108.0,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 77.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "search",
+          "ms": 325.52,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 106.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "page2",
+          "ms": 94.77,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 76.16,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "summary",
+          "ms": 70.66,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 67.32,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "search",
+          "ms": 538.45,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 64.47,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "page2",
+          "ms": 65.45,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 8,
+          "endpoint": "list",
+          "ms": 71.65,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 207.84,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "summary",
+          "ms": 323.66,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 75.13,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "search",
+          "ms": 417.63,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 110.56,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "page2",
+          "ms": 85.81,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 79.27,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "summary",
+          "ms": 290.5,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 62.2,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "search",
+          "ms": 692.28,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 73.07,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "page2",
+          "ms": 73.67,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 9,
+          "endpoint": "list",
+          "ms": 79.28,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "list",
+          "ms": 932.02,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "summary",
+          "ms": 1859.28,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "list",
+          "ms": 669.58,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "search",
+          "ms": 5294.1,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "list",
+          "ms": 699.09,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "page2",
+          "ms": 662.63,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "list",
+          "ms": 672.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "summary",
+          "ms": 2255.06,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "list",
+          "ms": 711.59,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 10,
+          "endpoint": "search",
+          "ms": 5252.59,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 436.53,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "summary",
+          "ms": 99.64,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 70.48,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "search",
+          "ms": 425.03,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 106.91,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "page2",
+          "ms": 73.64,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 71.55,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "summary",
+          "ms": 69.24,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 66.78,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "search",
+          "ms": 399.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 63.62,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "page2",
+          "ms": 63.55,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 11,
+          "endpoint": "list",
+          "ms": 92.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 685.92,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "summary",
+          "ms": 78.47,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 74.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "search",
+          "ms": 397.4,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 109.64,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "page2",
+          "ms": 85.66,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 68.41,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "summary",
+          "ms": 67.88,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 64.21,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "search",
+          "ms": 514.3,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 64.75,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "page2",
+          "ms": 70.23,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 12,
+          "endpoint": "list",
+          "ms": 82.57,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 554.28,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "summary",
+          "ms": 323.9,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 78.54,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "search",
+          "ms": 396.0,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 132.24,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "page2",
+          "ms": 79.83,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 74.04,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "summary",
+          "ms": 389.21,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 77.22,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "search",
+          "ms": 437.24,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 72.67,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "page2",
+          "ms": 73.42,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 13,
+          "endpoint": "list",
+          "ms": 73.69,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 589.45,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "summary",
+          "ms": 85.74,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 66.53,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "search",
+          "ms": 604.27,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 143.71,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "page2",
+          "ms": 72.7,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 70.92,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "summary",
+          "ms": 83.62,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 74.25,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "search",
+          "ms": 912.43,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 64.7,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "page2",
+          "ms": 62.61,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 14,
+          "endpoint": "list",
+          "ms": 67.32,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 310.99,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "summary",
+          "ms": 71.43,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 64.96,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "search",
+          "ms": 359.2,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 121.24,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "page2",
+          "ms": 67.49,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 65.91,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "summary",
+          "ms": 72.76,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 72.35,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "search",
+          "ms": 588.21,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 65.04,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "page2",
+          "ms": 66.34,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 15,
+          "endpoint": "list",
+          "ms": 95.18,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 387.27,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "summary",
+          "ms": 67.71,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 64.01,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "search",
+          "ms": 342.65,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 99.57,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "page2",
+          "ms": 68.02,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 61.9,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "summary",
+          "ms": 54.5,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 58.43,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "search",
+          "ms": 418.63,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 65.59,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "page2",
+          "ms": 62.22,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 16,
+          "endpoint": "list",
+          "ms": 83.88,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 345.68,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "summary",
+          "ms": 312.96,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 75.62,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "search",
+          "ms": 802.46,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 88.13,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "page2",
+          "ms": 74.78,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 87.91,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "summary",
+          "ms": 393.16,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 75.19,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "search",
+          "ms": 976.74,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 100.92,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "page2",
+          "ms": 70.31,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 17,
+          "endpoint": "list",
+          "ms": 93.23,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 784.48,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "summary",
+          "ms": 80.63,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 71.58,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "search",
+          "ms": 747.18,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 86.06,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "page2",
+          "ms": 70.35,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 70.42,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "summary",
+          "ms": 161.18,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 68.0,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "search",
+          "ms": 355.6,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 61.66,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "page2",
+          "ms": 64.23,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 18,
+          "endpoint": "list",
+          "ms": 66.42,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 673.5,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "summary",
+          "ms": 74.41,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 70.41,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "search",
+          "ms": 350.19,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 110.81,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "page2",
+          "ms": 81.29,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 63.18,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "summary",
+          "ms": 70.9,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 62.07,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "search",
+          "ms": 623.3,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 64.36,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "page2",
+          "ms": 67.77,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 19,
+          "endpoint": "list",
+          "ms": 79.36,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "list",
+          "ms": 932.73,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "summary",
+          "ms": 1860.44,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "list",
+          "ms": 666.33,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "search",
+          "ms": 5295.78,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "list",
+          "ms": 699.71,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "page2",
+          "ms": 662.75,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "list",
+          "ms": 668.82,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "summary",
+          "ms": 2262.11,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "list",
+          "ms": 716.85,
+          "ok": true,
+          "status": 200
+        },
+        {
+          "user": 20,
+          "endpoint": "search",
+          "ms": 5239.01,
+          "ok": true,
+          "status": 200
+        }
+      ],
+      "pool_after": {
+        "pool_count": 1,
+        "active": 0,
+        "idle": 4,
+        "physical": 4,
+        "max_connections": 6,
+        "pools": [
+          {
+            "active": 0,
+            "idle": 4,
+            "physical": 4,
+            "max_connections": 6,
+            "utilization_percent": 0.0
+          }
+        ]
+      }
+    }
+  ]
+}

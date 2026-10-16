@@ -15,15 +15,20 @@ def test_net_save_updates_checklist_even_when_list_reload_fails(console_page):
         "description_pt": "Descricao", "weight_g": 100, "weight_basis": "ai_original_manual",
         "net_proceeds_usd": 12, "package_length_cm": 10, "package_width_cm": 10,
         "package_height_cm": 10, "main_image_url": "/test-ai-white.jpg",
-        "ai_original": {"status": "completed", "image_generation_method": "local_background_removal",
-                        "attributes": [{"id": "MATERIAL", "value_name": "Plastic"}]},
+        "ai_original": {"status": "completed", "category_id": "CBT123",
+                        "image_generation_method": "local_background_removal",
+                        "attributes": [{"id": "MATERIAL", "value_name": "Plastic"}],
+                        "validation": {"errors": [], "warnings": []}},
         "original_1688": {"title": "测试产品"},
     }
     bodies = []
 
     def save(route):
-        bodies.append(route.request.post_data_json)
-        route.fulfill(content_type="application/json", body=json.dumps({"status": "success", "data": saved}))
+        changes = route.request.post_data_json
+        bodies.append(changes)
+        route.fulfill(content_type="application/json", body=json.dumps({
+            "status": "success", "data": {**saved, **changes},
+        }))
 
     page.route("**/api/ai-original-products/1", save)
     page.route("**/api/ai-original-products?*", lambda route: route.fulfill(
@@ -38,10 +43,11 @@ def test_net_save_updates_checklist_even_when_list_reload_fails(console_page):
     }""", saved)
     checklist = page.locator(".ai-original-manual-checks li").filter(has_text="净收益")
     assert checklist.text_content() == "○净收益已填写待保存"
-    page.locator("button").filter(has_text="保存参数并审核通过").click()
+    page.locator("#ai-original-review-1").select_option("approved")
+    page.get_by_role("button", name="保存状态", exact=True).click()
     page.wait_for_function("document.querySelector('.ai-original-manual-checks').textContent.includes('净收益已填写') && !document.querySelector('.ai-original-manual-checks').textContent.includes('待保存')")
     assert checklist.text_content() == "✓净收益已填写"
-    assert page.locator("#ai-original-task-status").inner_text() == "产品 1 已保存并审核通过"
+    assert page.locator("#ai-original-task-status").inner_text() == "产品 1 已设为通过"
     assert bodies[0]["net_proceeds_usd"] == 12
     assert page.evaluate("aiOriginalRows[0].net_proceeds_usd") == 12
     page.locator("#ai-original-net-1").fill("15")
@@ -55,8 +61,10 @@ def generated_fields():
     return {
         "title_es": "Mascara", "title_pt": "Mascara", "description_es": "Descripcion",
         "description_pt": "Descricao", "main_image_url": "/test-ai-white.jpg",
-        "ai_original": {"status": "completed", "image_generation_method": "local_background_removal",
-                        "attributes": [{"id": "MATERIAL", "value_name": "Plastic"}]},
+        "ai_original": {"status": "completed", "category_id": "CBT123",
+                        "image_generation_method": "local_background_removal",
+                        "attributes": [{"id": "MATERIAL", "value_name": "Plastic"}],
+                        "validation": {"errors": [], "warnings": []}},
     }
 
 
@@ -79,17 +87,14 @@ def test_approval_with_missing_dimensions_updates_card_and_filter(console_page):
         aiOriginalRows = [row]; renderAiOriginalProducts(); decorateAiOriginalWorkbench();
     }""", row)
     page.locator(".ai-original-card").scroll_into_view_if_needed()
-    page.wait_for_function("document.querySelector('.ai-original-badge')?.innerText === '疑似侵权'")
     assert page.locator(".ai-original-badge").inner_text() == "疑似侵权"
+    assert '疑似侵权' in page.locator('.ai-original-issues').inner_text()
     page.locator("#ai-original-net-1").fill("14.75")
-    page.get_by_role("button", name="保存参数并审核通过", exact=True).click()
-    page.wait_for_function("aiOriginalRows[0].review_status === 'approved'")
-    page.wait_for_function("document.querySelector('.ai-original-badge')?.innerText === '待补充'")
-    assert page.locator(".ai-original-badge").inner_text() == "待补充"
-    assert page.evaluate("aiOriginalRows.filter(row => aiOriginalProductStatus(row) === 'incomplete').length") == 1
-    page.locator("#ai-original-status-filter").select_option("incomplete")
-    assert page.locator(".ai-original-card").count() == 1
-    page.locator(".ai-original-card").scroll_into_view_if_needed()
+    page.locator("#ai-original-review-1").select_option("approved")
+    page.get_by_role("button", name="保存状态", exact=True).click()
+    assert "需完成 AI 制作并补齐所有必填项" in page.locator("#ai-original-task-status").inner_text()
+    assert page.evaluate("aiOriginalRows[0].review_status") == "suspected"
+    assert page.locator(".ai-original-badge").inner_text() == "疑似侵权"
     assert page.locator("#ai-original-net-1").input_value() == "14.75"
     assert "包装尺寸待补齐" in page.locator(".ai-original-issues").inner_text()
 
@@ -101,6 +106,9 @@ def test_partial_bulk_review_retains_failed_inputs_and_continues_approvals(conso
              "weight_g": 100, "net_proceeds_usd": 5, "category_id": "CBT123",
              "original_1688": {"title": f"批量审核 {pid}"}} for pid in (1, 2, 3)]
     def save(route):
+        if route.request.method != "PATCH":
+            route.fallback()
+            return
         pid = int(route.request.url.rsplit("/", 1)[-1])
         if pid == 2:
             route.fulfill(status=500, content_type="application/json",
@@ -165,7 +173,7 @@ def test_1688_net_save_updates_ai_card_even_when_list_refreshes_fail(console_pag
     }""", row)
     page.locator("#products-1688-edit-net_proceeds_usd").fill(new_net)
     page.locator("#products-1688-edit-save").click()
-    page.wait_for_function("!document.getElementById('products-1688-edit-dialog').open")
+    page.wait_for_function("!document.getElementById('products-1688-detail-dialog').open")
     expected = int(new_net) if new_net else None
     assert writes == [{"net_proceeds_usd": expected}]
     assert page.evaluate("aiOriginalRows[0].net_proceeds_usd") == expected

@@ -33,7 +33,8 @@ def test_source_first_developer_advanced_and_salesperson_filter(console_page, wi
     assert not developer.is_visible()
     assert developer.locator('..').locator('label').text_content() == '产品开发（智赢）'
     selector = page.locator('#mercado-salesperson-filter')
-    assert selector.is_visible()
+    from test_common_date_filters_browser import reveal_filter
+    reveal_filter(selector)
     page.evaluate('mercadoListPage = 3; selectedMercadoCollectionIds.add(1)')
     selector.select_option('业务乙')
     page.wait_for_function("mercadoListRows.length === 1 && mercadoListRows[0].salesperson === '业务乙'")
@@ -50,7 +51,8 @@ def test_source_first_developer_advanced_and_salesperson_filter(console_page, wi
     output = ROOT / 'artifacts/product-filter-refresh-20261010'
     output.mkdir(exist_ok=True)
     page.screenshot(path=str(output / f'products-{width}.png'), full_page=True)
-    page.locator('#mercado-product-filters .zs-advanced-filters > summary').click()
+    if not developer.is_visible():
+        page.locator('#mercado-product-filters .zs-advanced-filters > summary').click()
     assert developer.is_visible()
     page.evaluate('resetMercadoProductFilters()')
     page.wait_for_function('mercadoListRows.length === 2')

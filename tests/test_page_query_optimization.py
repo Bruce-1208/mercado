@@ -77,7 +77,9 @@ def test_live_scans_obey_configured_budget(monkeypatch):
         pools.append(kwargs['max_workers'])
         return ThreadPoolExecutor(**kwargs)
     def budget(kind, token, fn, *args, **kwargs):
-        admissions.append((kind, token))
+        admissions.append((kind, token, kwargs.pop("capacity_foreground", False)))
+        kwargs.pop("capacity_timeout", None)
+        kwargs.pop("capacity_stop_event", None)
         return fn(*args, **kwargs)
     monkeypatch.setattr(sync, 'ThreadPoolExecutor', executor)
     monkeypatch.setattr(sync, 'run_capacity_store', budget)
@@ -86,5 +88,5 @@ def test_live_scans_obey_configured_budget(monkeypatch):
     })
     result = sync.collect_live_detection_infractions([{'token_id': 1}, {'token_id': 2}], max_workers=8)
     assert pools == [1]
-    assert admissions == [('infractions', 1), ('infractions', 2)]
+    assert admissions == [('infractions', 1, True), ('infractions', 2, True)]
     assert len(result['results']) == 2

@@ -1,0 +1,291 @@
+[
+  {
+    "params": {
+      "freight_variance": "different",
+      "summary_only": false
+    },
+    "before_ms": 1433.5,
+    "after_ms": 1168.4,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "different",
+      "summary_only": true
+    },
+    "before_ms": 1350.6,
+    "after_ms": 1076.0,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "different_any",
+      "summary_only": false
+    },
+    "before_ms": 1390.3,
+    "after_ms": 1152.1,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "different_any",
+      "summary_only": true
+    },
+    "before_ms": 1351.9,
+    "after_ms": 1079.7,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "actual_lower",
+      "summary_only": false
+    },
+    "before_ms": 1435.7,
+    "after_ms": 1259.7,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "actual_lower",
+      "summary_only": true
+    },
+    "before_ms": 1313.1,
+    "after_ms": 1053.2,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_actual",
+      "summary_only": false
+    },
+    "before_ms": 1529.3,
+    "after_ms": 1307.9,
+    "total": 74393,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_actual",
+      "summary_only": true
+    },
+    "before_ms": 1354.5,
+    "after_ms": 1097.5,
+    "total": 74393,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_quote",
+      "summary_only": false
+    },
+    "before_ms": 103.2,
+    "after_ms": 110.8,
+    "total": 2,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "pending_quote",
+      "summary_only": true
+    },
+    "before_ms": 104.4,
+    "after_ms": 98.5,
+    "total": 2,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "dimensions_changed",
+      "summary_only": false
+    },
+    "before_ms": 203.1,
+    "after_ms": 190.8,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "dimensions_changed",
+      "summary_only": true
+    },
+    "before_ms": 187.8,
+    "after_ms": 184.9,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "amount",
+      "include_summary": false
+    },
+    "before_ms": 1188.2,
+    "after_ms": 965.1,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "balance",
+      "include_summary": false
+    },
+    "before_ms": 1210.8,
+    "after_ms": 971.3,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "profit_rate",
+      "include_summary": false
+    },
+    "before_ms": 1295.1,
+    "after_ms": 1074.3,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "group_name": "Group 1"
+    },
+    "before_ms": 981.4,
+    "after_ms": 716.9,
+    "total": 39603,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "status": "交付"
+    },
+    "before_ms": 185.3,
+    "after_ms": 181.7,
+    "total": 7273,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "origin": "yandex"
+    },
+    "before_ms": 88.9,
+    "after_ms": 90.6,
+    "total": 793,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "allowed_store_ids": [
+        1,
+        2
+      ],
+      "store_ids": [
+        3
+      ]
+    },
+    "before_ms": 1.7,
+    "after_ms": 1.4,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "search": "Synthetic",
+      "store_ids": [
+        2
+      ]
+    },
+    "before_ms": 203.8,
+    "after_ms": 100.8,
+    "total": 3960,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "尾部",
+      "include_summary": false
+    },
+    "before_ms": 1991.2,
+    "after_ms": 113.1,
+    "total": 1,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "AbC-PACK",
+      "include_summary": false
+    },
+    "before_ms": 1984.6,
+    "after_ms": 113.2,
+    "total": 1,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "abc-pack",
+      "include_summary": false
+    },
+    "before_ms": 1989.7,
+    "after_ms": 111.9,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "123456789006",
+      "include_summary": false
+    },
+    "before_ms": 1992.7,
+    "after_ms": 113.7,
+    "total": 1,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "%",
+      "include_summary": false
+    },
+    "before_ms": 2736.1,
+    "after_ms": 567.9,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "_",
+      "include_summary": false
+    },
+    "before_ms": 2709.5,
+    "after_ms": 628.7,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "notfound-edge",
+      "include_summary": false
+    },
+    "before_ms": 2134.4,
+    "after_ms": 115.4,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "remark_search": "remark",
+      "summary_only": true
+    },
+    "before_ms": 78.8,
+    "after_ms": 75.9,
+    "total": 0,
+    "different_fields": []
+  }
+]

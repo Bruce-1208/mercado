@@ -571,24 +571,59 @@
 
   function readProductList() {
     if (looksLikeDetailPage()) return {ok: false, error: "当前是商品详情页，请选择搜索列表页"};
-    const cards = core.cardCandidates(document);
+    const cardIds = new Set();
+    const cards = core.cardCandidates(document).filter(item => {
+      const key = core.normalizeItemId(item.url) || item.url.split("#")[0];
+      if (cardIds.has(key)) return false;
+      cardIds.add(key);
+      return true;
+    });
     const empty = document.querySelector(".ui-search-rescue, .ui-search-rescue__title");
     if (!cards.length && !empty) return {ok: false, error: "未识别到商品列表，请等待加载完成或先完成登录/验证"};
     const current = document.querySelector(".andes-pagination__button--current, [aria-current='page']");
     const pageText = current?.textContent?.trim() || "";
     const offset = location.pathname.match(/_Desde_(\d+)/i);
-    const page = Number(pageText.match(/\d+/)?.[0] || (offset || new URL(location.href).searchParams.has("page") ? 0 : 1));
-    const next = document.querySelector(".andes-pagination__button--next:not(.andes-pagination__button--disabled) a[href], a[rel='next']");
+    const queryPage = Number(new URL(location.href).searchParams.get("page"));
+    const page = Number(pageText.match(/\d+/)?.[0]) ||
+      (queryPage > 0 ? queryPage : offset ? Math.floor((Number(offset[1]) - 1) / 48) + 1 : 1);
+    const disabled = node => Boolean(node.closest(".andes-pagination__button--disabled, [aria-disabled='true'], [disabled]"));
+    const safeLink = link => {
+      if (!link || disabled(link) || !core.isSupportedUrl(link.href)) return "";
+      const url = new URL(link.href);
+      url.hash = "";
+      const currentUrl = new URL(location.href);
+      currentUrl.hash = "";
+      return url.origin === currentUrl.origin && url.href !== currentUrl.href ? url.href : "";
+    };
+    const nextLinks = [...document.querySelectorAll(
+      ".andes-pagination__button--next a[href], a.andes-pagination__button--next[href], a[rel='next'], a[title='Siguiente'], a[title='Próxima']"
+    )];
     const links = [...document.querySelectorAll(".andes-pagination a[href]")];
     const first = links.find(link => link.textContent.trim() === "1");
-    const safeLink = link => link && core.isSupportedUrl(link.href) ? link.href : "";
+    let nextUrl = nextLinks.map(safeLink).find(Boolean) ||
+      safeLink(links.find(link => Number(link.textContent.trim()) === page + 1));
+    let synthesized = false;
+    // Internacional / NoIndex pages can omit pagination entirely. Match the
+    // server collector's 48-item offset fallback, only for a full result page.
+    if (!nextUrl && cards.length >= 40 && /_NoIndex_/i.test(location.pathname) &&
+        !document.querySelector(".andes-pagination__button--next.andes-pagination__button--disabled, .andes-pagination__button--next[aria-disabled='true']") &&
+        !nextLinks.some(disabled)) {
+      const url = new URL(location.href);
+      const nextOffset = (offset ? Number(offset[1]) : 1) + 48;
+      if (url.searchParams.has("page")) url.searchParams.set("page", String(page + 1));
+      else if (offset) url.pathname = url.pathname.replace(/_Desde_\d+/i, `_Desde_${nextOffset}`);
+      else url.pathname = url.pathname.replace(/_NoIndex_/i, `_Desde_${nextOffset}_NoIndex_`);
+      url.hash = "";
+      nextUrl = url.href;
+      synthesized = true;
+    }
     let decodedUrl = location.href;
     try { decodedUrl = decodeURIComponent(decodedUrl); } catch (_) {}
     const internationalSelected = /SHIPPING(?:\*|_)?ORIGIN(?:_|=)10215069/i.test(decodedUrl) ||
       [...document.querySelectorAll("[aria-current='true'], .andes-list__item--selected, .ui-search-filter-name")]
         .some(node => /internacional/i.test(node.textContent || ""));
     return {
-      ok: true, page, next_url: safeLink(next), first_url: safeLink(first),
+      ok: true, page, next_url: nextUrl, next_url_synthesized: synthesized, first_url: safeLink(first),
       international_selected: internationalSelected,
       items: cards.map(item => {
         const profile = core.cardShippingProfile(item.card, item.url);

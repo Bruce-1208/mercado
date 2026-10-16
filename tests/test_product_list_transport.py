@@ -17,7 +17,7 @@ def offline_workbench():
     from flask import Flask, jsonify, request
     path = Path(__file__).parents[1] / 'bit/bit_interface.py'
     names = {'api_mercado_products', 'api_db_mercado_products', '_parse_int_param',
-             'api_db_mercado_product_publish_records', 'api_mercado_product_salespeople',
+             'api_db_mercado_product_publish_records', 'api_mercado_product_publish_records', 'api_mercado_product_salespeople',
              'api_db_mercado_product_salespeople'}
     functions = [node for node in ast.parse(path.read_text()).body
                  if isinstance(node, ast.FunctionDef) and node.name in names]
@@ -41,12 +41,13 @@ def test_publish_record_transport_preserves_salesperson_and_store_filters(monkey
     monkeypatch.setattr(api, '_request', listing)
     monkeypatch.setattr(api, '_collection_store_call', listing)
     api.list_mercado_product_publish_records(
-        salesperson=' 张三 ', token_ids=[7, 9], filter_token_ids=[9],
+        salesperson=' 张三 ', token_ids=[7, 9], filter_token_ids=[9], product_item_id=41,
     )
     params = listing.call_args.kwargs['params'] if mode == 'api' else listing.call_args.kwargs
     assert params['salesperson'] == '张三'
     assert params['token_ids'] == [7, 9]
     assert params['filter_token_ids'] == [9]
+    assert params['product_item_id'] == 41
     inspect.signature(store.list_product_publish_records).bind(**params)
 
 
@@ -54,7 +55,7 @@ def test_internal_publish_record_route_preserves_salesperson_and_store_scope(mon
     listing = Mock(return_value={'rows': [], 'total': 0})
     monkeypatch.setattr(offline_workbench, 'db_list_mercado_product_publish_records', listing, raising=False)
     with offline_workbench.app.test_request_context(
-        '/api/db/mercado-publish-records?salesperson=张三&token_ids=7&token_ids=9&filter_token_ids=9'
+        '/api/db/mercado-publish-records?salesperson=张三&token_ids=7&token_ids=9&filter_token_ids=9&product_item_id=41'
     ):
         response = offline_workbench.api_db_mercado_product_publish_records()
     assert response.status_code == 200
@@ -62,6 +63,7 @@ def test_internal_publish_record_route_preserves_salesperson_and_store_scope(mon
     assert params['salesperson'] == '张三'
     assert params['token_ids'] == [7, 9]
     assert params['filter_token_ids'] == [9]
+    assert params['product_item_id'] == 41
     inspect.signature(store.list_product_publish_records).bind(**params)
 
 
@@ -172,3 +174,57 @@ def test_salesperson_directory_uses_web_service():
     from bit.service_split import is_worker_path
     assert not is_worker_path('/api/mercado-products/salespeople', 'GET')
     assert not is_worker_path('/api/db/mercado-products/salespeople', 'GET')
+
+
+@pytest.mark.parametrize('mode', ['mysql', 'api'])
+def test_grouped_skus_flag_reaches_product_store(monkeypatch, mode):
+    monkeypatch.setattr(api, 'DB_MODE', mode)
+    listing = Mock(return_value={'rows': [], 'total': 0, 'group_count': 0})
+    monkeypatch.setattr(api, '_request', listing)
+    monkeypatch.setattr(api, '_collection_store_call', listing)
+    api.list_mercado_product_items(group_skus=True, token_ids=[7])
+    params = listing.call_args.kwargs['params'] if mode == 'api' else listing.call_args.kwargs
+    assert params['group_skus'] is True
+    assert params['token_ids'] == [7]
+    inspect.signature(store._list_rows).bind(store.PRODUCT_TABLE, **params)
+
+
+@pytest.mark.parametrize('handler,path', [('api_mercado_products','/api/mercado-products'),
+                                         ('api_db_mercado_products','/api/db/mercado-products')])
+def test_grouping_route_forwards_request_flag(monkeypatch, offline_workbench, handler, path):
+    module = offline_workbench
+    listing = Mock(return_value={'rows': [], 'total': 0, 'group_count': 0})
+    monkeypatch.setattr(module, 'db_list_mercado_product_items', listing, raising=False)
+    monkeypatch.setattr(module, 'reject_db_api_client_mode', lambda: None, raising=False)
+    with module.app.test_request_context(path + '?group_skus=1'):
+        response = getattr(module, handler)()
+    assert response.status_code == 200
+    assert listing.call_args.kwargs['group_skus'] is True
+
+
+@pytest.mark.parametrize('scope', [None, set(), {7, 9}])
+def test_product_history_public_route_preserves_access_scope(monkeypatch, offline_workbench, scope):
+    listing = Mock(return_value={'rows': [], 'total': 0})
+    monkeypatch.setattr(offline_workbench, 'db_list_mercado_product_publish_records', listing, raising=False)
+    monkeypatch.setattr(offline_workbench, '_authorized_token_ids_for_user', lambda: scope, raising=False)
+    monkeypatch.setattr(offline_workbench, '_mercado_publish_state_snapshot', lambda **kwargs: {}, raising=False)
+    with offline_workbench.app.test_request_context('/api/mercado-publish-records?product_item_id=41&limit=100&offset=100'):
+        response = offline_workbench.api_mercado_product_publish_records()
+    assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
+    params = listing.call_args.kwargs
+    assert params['product_item_id'] == 41
+    assert params['offset'] == 100
+    assert params.get('token_ids') == (sorted(scope) if scope is not None else None)
+
+
+@pytest.mark.parametrize('mode', ['mysql', 'api'])
+@pytest.mark.parametrize('product_id', [0, -1, 'bad'])
+def test_product_history_transport_rejects_invalid_product(monkeypatch, mode, product_id):
+    monkeypatch.setattr(api, 'DB_MODE', mode)
+    request = Mock()
+    monkeypatch.setattr(api, '_request', request)
+    monkeypatch.setattr(api, '_collection_store_call', request)
+    with pytest.raises(ValueError):
+        api.list_mercado_product_publish_records(product_item_id=product_id)
+    request.assert_not_called()

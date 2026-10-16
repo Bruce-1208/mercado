@@ -36,6 +36,7 @@ def service(tmp_path, monkeypatch):
             {"user_id": "101" if token["id"] == 11 else "201", "site_id": "MLM"},
             {"user_id": "102" if token["id"] == 11 else "202", "site_id": "MLB"},
             {"user_id": "103" if token["id"] == 11 else "203", "site_id": "MLC"}],
+        packages_loader=lambda identity, site, ids: [str(9000000000000 + int(value)) for value in ids],
         identifiers_loader=identifiers, phrase_loader=lambda form: "{nickname}：请核查{order_ids}")
     value.user = {"id": 7, "organization_key": "tenant-a", "access_version": 1}
     value.rows, value.loaded, value.written, value.identifier_calls = rows, loaded, written, identifier_calls
@@ -143,6 +144,41 @@ def test_disabled_store_or_site_cannot_be_selected(service):
         service.context(service.user, {"seller_id": "100"})
 
 
+def test_context_reports_missing_store_with_browser_account_id(service):
+    with pytest.raises(appeal.AppealError, match="ID：999.*未匹配到本人授权店铺") as error:
+        service.context(service.user, {"seller_id": "999", "nickname": "shop-a"})
+    assert error.value.status == 403
+
+
+def test_context_distinguishes_unreadable_authorization_from_missing_store(service):
+    def unavailable(token):
+        raise RuntimeError("private upstream response")
+    service.accounts_loader = unavailable
+    with pytest.raises(appeal.AppealError, match="授权资料读取失败") as error:
+        service.context(service.user, {"seller_id": "101"})
+    assert error.value.status == 503
+    assert "private upstream response" not in str(error.value)
+    with pytest.raises(appeal.AppealError, match="授权账号校验失败") as direct_error:
+        service.context(service.user, {"seller_id": "100"})
+    assert direct_error.value.status == 503
+
+
+def test_context_reports_duplicate_authorized_store_without_selecting_one(service):
+    service.rows.append({**service.rows[0], "id": 33})
+    with pytest.raises(appeal.AppealError, match="匹配到多个本人授权店铺") as error:
+        service.context(service.user, {"seller_id": "100"})
+    assert error.value.status == 403
+    assert service.written == []
+
+
+def test_context_reports_empty_account_scope_without_loading_other_stores(service):
+    service.scoped_tokens = lambda user: []
+    with pytest.raises(appeal.AppealError, match="没有可用的本人授权店铺") as error:
+        service.context(service.user, {"seller_id": "100"})
+    assert error.value.status == 403
+    assert service.loaded == []
+
+
 def test_ai_plan_grouping_and_fixed_agent_business_order(service):
     plan = service.plan(service.user, params(forms=["投诉", "侵权", "取消率", "禁限售", "延误"]))
     assert [row["form"] for row in plan["browser_collections"]] == ["延误", "取消率", "投诉"]
@@ -160,15 +196,15 @@ def test_ai_plan_grouping_and_fixed_agent_business_order(service):
 
 def test_manual_mode_matches_single_agent_selection_and_custom_copy(service):
     plan = service.plan(service.user, params(mode="人工客服", forms=["投诉", "侵权", "禁限售"]))
-    assert [len(group["identifiers"]) for group in plan["groups"]] == [10, 10, 0]
-    assert plan["browser_collections"] == []
+    assert [len(group["identifiers"]) for group in plan["groups"]] == [10, 10]
+    assert [item["form"] for item in plan["browser_collections"]] == ["投诉"]
     assert plan["groups"][1]["identifiers"] == [f"MLM{n}" for n in range(1, 11)]
     assert service.plan(service.user, {"task_id": plan["task_id"]})["groups"] == plan["groups"]
     service.identifier_calls.clear()
     custom = service.plan(service.user, params(mode="人工客服", forms=list(appeal.FORMS), message="自定义正文"))
-    assert len(custom["groups"]) == 5
+    assert len(custom["groups"]) == 2
     assert all(group["message"] == "自定义正文" and group["identifiers"] == [] for group in custom["groups"])
-    assert custom["browser_collections"] == []
+    assert [item["form"] for item in custom["browser_collections"]] == ["延误", "取消率", "投诉"]
     assert service.identifier_calls == []
 
 
@@ -314,7 +350,7 @@ def test_live_product_collection_targets_only_bound_token_site(service, monkeypa
 
 def test_database_record_read_preserves_immutable_scope_metadata(monkeypatch):
     from bit import bit_mysql
-    record = {"token_id": 11, "organization_key": "tenant-a", "seller_id": "100", "task_id": "task", "user_id": 7}
+    record = {"token_id": 0, "binding_mode": "browser", "organization_key": "tenant-a", "seller_id": "100", "task_id": "task", "user_id": 7}
     class Cursor:
         def __enter__(self): return self
         def __exit__(self, *_args): pass
@@ -373,3 +409,93 @@ def test_extension_routes_require_permission_and_use_bearer_identity(service, mo
     service.user["access_version"] = 0
     assert client.post("/api/browser-extension/appeal/context", headers=headers, json={"seller_id": "100"}).status_code == 401
     assert client.get("/api/browser-extension/appeal/status?task_id=" + task_id, headers=headers).status_code == 401
+
+
+def browser_params(**extra):
+    return params(context={"binding_mode": "browser", "seller_id": "999", "nickname": "vngbjkk",
+                           "sites": [{"site_id": "MLM", "seller_id": "998"}]},
+                  seller_id="999", **extra)
+
+
+def browser_only(service):
+    def forbidden(*args):
+        pytest.fail("browser runs must not access ERP OAuth stores or credentials")
+    service.scoped_tokens = service.token_loader = service.accounts_loader = forbidden
+    service.identifiers_loader = service.products_loader = forbidden
+    return service
+
+
+def test_browser_run_collects_all_forms_without_any_oauth_access(service):
+    browser_only(service)
+    plan = service.plan(service.user, browser_params(forms=list(appeal.FORMS)))
+    assert plan["shop"] == {"id": 0, "name": "vngbjkk", "seller_id": "999"}
+    assert plan["identity"]["allowed_seller_ids"] == ["998", "999"]
+    assert plan["groups"] == []
+    assert [c["form"] for c in plan["browser_collections"]] == list(appeal.FORMS)
+    plan = service.plan(service.user, {"task_id": plan["task_id"], "browser_identifiers": {
+        "MLM": {"侵权": ["MLM1234567"], "禁限售": ["MLM1234568"],
+                "延误": {"pack_ids": ["2000000012345678"]}, "取消率": [], "投诉": []}}})
+    assert plan["browser_collections"] == []
+    assert [g["form"] for g in plan["groups"]] == ["延误", "侵权", "禁限售"]
+    assert service.status(service.user, plan["task_id"])["shop"]["id"] == 0
+    service.finish(service.user, {"task_id": plan["task_id"], "status": "stopped"})
+    assert all(r["token_id"] == 0 and r["user_id"] == 7 for r in service.written)
+
+
+def test_browser_tasks_remain_bound_to_user_organization_sites_and_ids(service):
+    browser_only(service)
+    plan = service.plan(service.user, browser_params())
+    task_id = plan["task_id"]
+    with pytest.raises(appeal.AppealError, match="本人创建"):
+        service.status({**service.user, "id": 8}, task_id)
+    with pytest.raises(appeal.AppealError, match="企业已变更"):
+        service.status({**service.user, "organization_key": "tenant-b"}, task_id)
+    with pytest.raises(appeal.AppealError, match="站点"):
+        service.plan(service.user, {"task_id": task_id, "browser_identifiers": {"MLB": {"侵权": ["MLB1234567"]}}})
+    with pytest.raises(appeal.AppealError, match="站点无效"):
+        service.plan(service.user, {"task_id": task_id, "browser_identifiers": {"MLM": {"侵权": ["MLB1234567"]}}})
+    with pytest.raises(appeal.AppealError, match="尚未完成采集"):
+        service.finish(service.user, {"task_id": task_id})
+    assert service.written == []
+
+
+def test_browser_ai_copy_uses_only_task_bound_page_product_facts(service):
+    browser_only(service)
+    plan = service.plan(service.user, browser_params(appeal_copy_mode="AI话术模式"))
+    task_id = plan["task_id"]
+    plan = service.plan(service.user, {"task_id": task_id, "browser_identifiers": {"MLM": {"侵权": ["MLM1234567"]}}})
+    request = {"task_id": task_id, "group_id": plan["groups"][0]["group_id"]}
+    with pytest.raises(appeal.AppealError, match="完整商品标题"):
+        service.copy(service.user, request)
+    facts = {"MLM1234567": {"title": "Plain cotton hat", "description": ""}}
+    service.plan(service.user, {"task_id": task_id, "browser_products": facts})
+    def generate(form, ids, key, *, product_loader):
+        assert product_loader(ids) == [{"product_id": "MLM1234567", **facts["MLM1234567"]}]
+        return {"message": "产品编号：MLM1234567，请复核"}
+    service.copy_generator = generate
+    assert "MLM1234567" in service.copy(service.user, request)["message"]
+    with pytest.raises(appeal.AppealError, match="不能修改"):
+        service.plan(service.user, {"task_id": task_id, "browser_products": {"MLM1234567": {"title": "other"}}})
+    with pytest.raises(appeal.AppealError, match="不属于本轮"):
+        service.plan(service.user, {"task_id": task_id, "browser_products": {"MLM0000000": {"title": "other"}}})
+
+
+def test_browser_empty_round_can_finish_without_oauth_and_records_no_data(service):
+    browser_only(service)
+    plan = service.plan(service.user, browser_params())
+    service.plan(service.user, {"task_id": plan["task_id"], "browser_identifiers": {"MLM": {"侵权": []}}})
+    result = service.finish(service.user, {"task_id": plan["task_id"]})
+    assert result["status"] == "completed"
+    assert len(service.written) == 1
+    assert service.written[0]["shop_name"] == "vngbjkk"
+    assert service.written[0]["token_id"] == 0
+
+
+def test_browser_records_are_visible_only_to_creator_in_same_organization(service, monkeypatch):
+    from bit import bit_interface as workbench
+    monkeypatch.setattr(workbench.bit_db_api, "list_mercado_store_tokens", lambda: {"rows": []})
+    row = {"id": 1, "token_id": 0, "binding_mode": "browser", "organization_key": "tenant-a", "user_id": 7,
+           "shop_name": "vngbjkk"}
+    rows = [row, {**row, "id": 2, "user_id": 8}, {**row, "id": 3, "organization_key": "tenant-b"},
+            {**row, "id": 4, "binding_mode": "oauth"}, {**row, "id": 5, "token_id": 11}]
+    assert workbench._filter_store_rows_for_user({"rows": rows}, service.user)["rows"] == [row]

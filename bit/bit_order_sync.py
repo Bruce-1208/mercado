@@ -1321,9 +1321,19 @@ def _financial_backfill_loop():
         if not lock.acquire(timeout=0):
             _financial_backfill_stop_event.wait(60)
             continue
+        release_result = {"requested": 0}
         try:
             result = backfill_order_financials(limit=200)
             quoted_result = bit_mysql.refresh_mercado_order_quoted_freight(limit=200)
+            try:
+                from bit.order_payment_release import sync_pending as sync_payment_releases
+                release_result = sync_payment_releases(limit=120)
+            except _InterpreterShutdownRequested:
+                raise
+            except Exception as exc:
+                if _is_interpreter_shutdown_error(exc):
+                    raise
+                logging.exception("订单资金释放状态同步失败")
             if result["requested"]:
                 logging.info(
                     "订单实际运费每日同步：运单 %s，订单 %s，失败 %s",
@@ -1351,6 +1361,7 @@ def _financial_backfill_loop():
         has_full_batch = (
             int(result.get("requested") or 0) >= 200
             or int(quoted_result.get("requested") or 0) >= 200
+            or int(release_result.get("requested") or 0) >= 120
         )
         wait_seconds = 2 if has_full_batch else 6 * 60 * 60
         _financial_backfill_stop_event.wait(wait_seconds)

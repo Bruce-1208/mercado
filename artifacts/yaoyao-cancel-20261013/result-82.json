@@ -1,0 +1,26 @@
+{
+  "id": 82,
+  "name": "遥遥领先8号店",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3614278504",
+      "before": 0,
+      "local_id": 1342,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLM18015004",
+      "type": "SMART",
+      "site": "MLM",
+      "seller_id": "3614278504",
+      "before": 0,
+      "local_id": 1343,
+      "jobs": [],
+      "remaining": 0
+    }
+  ]
+}

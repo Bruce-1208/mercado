@@ -1,0 +1,137 @@
+[
+  {
+    "params": {},
+    "before_ms": 7939.2,
+    "after_ms": 2289.4,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "page": 2
+    },
+    "before_ms": 7280.4,
+    "after_ms": 2090.3,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "include_summary": false
+    },
+    "before_ms": 905.7,
+    "after_ms": 630.6,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "cost"
+    },
+    "before_ms": 6724.1,
+    "after_ms": 2296.6,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "profit",
+      "sort_dir": "asc"
+    },
+    "before_ms": 8050.7,
+    "after_ms": 2630.9,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "allowed_store_ids": [
+        1,
+        2
+      ],
+      "store_ids": [
+        2
+      ]
+    },
+    "before_ms": 1046.1,
+    "after_ms": 129.9,
+    "total": 3960,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "allowed_store_ids": []
+    },
+    "before_ms": 5.8,
+    "after_ms": 5.0,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "transfer_warehouse": "yiwu"
+    },
+    "before_ms": 3685.6,
+    "after_ms": 1678.4,
+    "total": 40000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "test00000"
+    },
+    "before_ms": 2538.3,
+    "after_ms": 2190.3,
+    "total": 1000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "origin": "yandex"
+    },
+    "before_ms": 6302.6,
+    "after_ms": 1705.2,
+    "total": 793,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "actual_higher"
+    },
+    "before_ms": 7244.2,
+    "after_ms": 1695.9,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_difference_min": "-2",
+      "freight_difference_max": "2"
+    },
+    "before_ms": 7526.4,
+    "after_ms": 1696.2,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "country": "墨西哥",
+      "salesperson": "Person 1"
+    },
+    "before_ms": 6599.2,
+    "after_ms": 1889.0,
+    "total": 27722,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "start_date": "2026-01-10",
+      "end_date": "2026-01-12",
+      "summary_only": true
+    },
+    "before_ms": 385.0,
+    "after_ms": 110.7,
+    "total": 4320,
+    "different_fields": []
+  }
+]

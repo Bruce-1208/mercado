@@ -51,6 +51,7 @@ def test_two_workers_reserving_from_same_revision_only_first_can_commit():
         "expected_ai_original_revision": 4,
     }, connection_factory=lambda: db)
     assert saved_budget(db) == first
+    assert db.row["review_status"] == "approved"
     with pytest.raises(ValueError, match="费用记录已变化"):
         store.update_ai_original_product(1, {
             "source_snapshot_json": snapshot(second), "expected_generation_budget_revision": 3,

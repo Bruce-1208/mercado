@@ -19,7 +19,7 @@ from bit.local_agent_bundle import SOURCE_DIRECTORIES, RESOURCE_DIRECTORIES, ROO
 LABEL = "com.zeshun.windows-agent-build-watch"
 TOOLS = ROOT / ".tools/windows-agent"
 PLIST = Path.home() / "Library/LaunchAgents" / (LABEL + ".plist")
-CORE_FILES = {"local_agent.py", "MercadoLocalAgent.spec", "requirements-agent-windows.txt",
+CORE_FILES = {"local_agent.py", "agent_update.py", "MercadoLocalAgent.spec", "requirements-agent-windows.txt",
               "install-agent-forever.ps1", "scripts/build_windows_agent.py", *ROOT_SOURCE_FILES}
 
 

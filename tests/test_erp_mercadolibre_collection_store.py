@@ -9,10 +9,11 @@ from erp import mercadolibre_collection_store as store
 
 
 class _FakeCursor:
-    def __init__(self, *, update_rowcount=0):
+    def __init__(self, *, update_rowcount=0, selected_rows=None):
         self.queries = []
         self.rowcount = 0
         self.update_rowcount = update_rowcount
+        self.selected_rows = list(selected_rows or [])
         self.lastrowid = 0
 
     def __enter__(self):
@@ -39,12 +40,16 @@ class _FakeCursor:
         return {"Field": "existing"}
 
     def fetchall(self):
+        if self.queries and self.queries[-1][0].startswith("SELECT `id`, `source_type`"):
+            return self.selected_rows
         return []
 
 
 class _FakeConnection:
-    def __init__(self, *, update_rowcount=0):
-        self.fake_cursor = _FakeCursor(update_rowcount=update_rowcount)
+    def __init__(self, *, update_rowcount=0, selected_rows=None):
+        self.fake_cursor = _FakeCursor(
+            update_rowcount=update_rowcount, selected_rows=selected_rows,
+        )
         self.committed = False
         self.rolled_back = False
         self.closed = False
@@ -182,6 +187,9 @@ def test_add_products_keeps_missing_weight_rows_in_collection_list():
             "infringement_keywords": "BrandX",
             "infringement_reason": "需要人工复核",
             "infringement_checked_at": "2026-09-15 10:00:00",
+            "infringement_check_json": '{"decision":"review"}',
+            "category_id": "MLM123",
+            "category_name": "测试分类",
         },
         {
             "id": 2,
@@ -227,6 +235,17 @@ def test_add_products_keeps_missing_weight_rows_in_collection_list():
     assert result["skipped_incomplete_item_ids"] == ["MLM2"]
     assert len(product_inserts) == 1
     assert "`infringement_risk_level`" in product_inserts[0][0]
+    insert_sql, insert_values = product_inserts[0]
+    columns = re.findall(r"`([^`]+)`", insert_sql.split("(", 1)[1].split(") VALUES", 1)[0])
+    assert len(columns) == len(set(columns))
+    saved = dict(zip(columns, insert_values, strict=True))
+    for field in ("infringement_check_json", "category_id", "category_name"):
+        assert saved[field] == rows[0][field]
+        assert f"`{field}` = VALUES(`{field}`)" in insert_sql
+    assert not any(
+        query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` AS products INNER JOIN")
+        for query, _params in connection.fake_cursor.queries
+    )
     assert any(
         query.startswith("INSERT INTO `infringement_risk_checks`")
         and "SELECT 'product_list'" in query
@@ -510,6 +529,7 @@ def test_existing_schema_still_installs_refresh_indexes_once(monkeypatch):
         (store.COLLECTION_TABLE, "(`profitability_updated_at`, `id`)"),
         (store.PRODUCT_TABLE, "(`profitability_updated_at`, `id`)"),
         (store.PRODUCT_TABLE, "(`source_item_id`, `organization_key`)"),
+        (store.PRODUCT_TABLE, "(`collection_item_id`)"),
         (store.PRODUCT_TABLE, "(`last_publish_token_id`)"),
     ]
 
@@ -666,7 +686,7 @@ def test_dimension_only_store_link_sync_does_not_relabel_weight_as_actual():
     )
     assert "products.`weight_basis` = 'mercado_remote_update'" in weight_sql
     assert "products.`shipping_fee_usd` = NULL" in weight_sql
-    guard = "LOWER(TRIM(COALESCE(products.`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    guard = "LOWER(TRIM(COALESCE(products.`profitability_source`, ''))) <> 'purchase_cost_ratio' AND LOWER(TRIM(COALESCE(products.`profitability_source`, ''))) <> 'manual_product_edit'"
     assert f"products.`net_proceeds_usd` = IF({guard}, NULL, products.`net_proceeds_usd`)" in weight_sql
     assert f"products.`profitability_source` = IF({guard}, 'mercado_remote_edit_pending', products.`profitability_source`)" in weight_sql
 
@@ -692,6 +712,24 @@ def test_product_review_status_validates_and_updates_selected_rows():
 
     with pytest.raises(ValueError, match="不支持的审核状态"):
         store.update_product_review_status([1], "published", connection_factory=lambda: None)
+
+
+def test_generic_review_status_cannot_approve_ai_original_rows():
+    connection = _FakeConnection(
+        update_rowcount=1,
+        selected_rows=[{"id": 9, "source_type": "ai_original"}],
+    )
+
+    with pytest.raises(ValueError, match="AI 原创页面逐件审核"):
+        store.update_product_review_status(
+            [9], "approved", connection_factory=lambda: connection,
+        )
+
+    assert not any(
+        query.startswith(f"UPDATE `{store.PRODUCT_TABLE}` SET `review_status`")
+        for query, _params in connection.fake_cursor.queries
+    )
+    assert connection.rolled_back is True
 
 
 def test_product_content_update_validates_persists_and_invalidates_profitability():
@@ -730,11 +768,11 @@ def test_product_content_update_validates_persists_and_invalidates_profitability
     }
     assert "`description_text` = %s" in product_sql
     assert "`volumetric_weight_kg` = CASE" in product_sql
-    guard = "LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    guard = "LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'purchase_cost_ratio' AND LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'manual_product_edit'"
     assert f"`net_proceeds_usd` = IF({guard}, IF(`source_type` = 'zying', `net_proceeds_usd`, NULL), `net_proceeds_usd`)" in product_sql
     assert params[-1] == 9
     assert "c.`price` = p.`price`" in collection_sql
-    assert "c.`profitability_updated_at` = NULL" in collection_sql
+    assert "c.`profitability_updated_at` = IF(" in collection_sql
     assert collection_params == (9,)
     assert connection.committed is True
 
@@ -770,7 +808,10 @@ def test_dimension_only_product_edit_keeps_profitability_snapshot_current():
 
 
 def test_bulk_product_content_update_uses_one_transaction_and_selected_fields_only():
-    connection = _FakeConnection(update_rowcount=3)
+    connection = _FakeConnection(update_rowcount=3, selected_rows=[
+        {"id": row_id, "source_type": "collected", "source_snapshot_json": "{}"}
+        for row_id in (7, 9, 12)
+    ])
 
     result = store.update_product_items(
         [12, 7, 12, 9],
@@ -839,12 +880,12 @@ def test_bulk_collection_measurement_update_mirrors_products_atomically():
     }
     assert "`weight_basis` = 'manual_edit'" in collection_sql
     assert "`volumetric_weight_kg` = CASE" in collection_sql
-    guard = "LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    guard = "LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'purchase_cost_ratio' AND LOWER(TRIM(COALESCE(`profitability_source`, ''))) <> 'manual_product_edit'"
     assert f"`profitability_updated_at` = IF({guard}, NULL, `profitability_updated_at`)" in collection_sql
     assert params[-2:] == (7, 8)
     assert "p.`weight_g` = c.`weight_g`" in product_sql
     assert "p.`volumetric_weight_kg` = c.`volumetric_weight_kg`" in product_sql
-    product_guard = "LOWER(TRIM(COALESCE(p.`profitability_source`, ''))) <> 'purchase_cost_ratio'"
+    product_guard = "LOWER(TRIM(COALESCE(p.`profitability_source`, ''))) <> 'purchase_cost_ratio' AND LOWER(TRIM(COALESCE(p.`profitability_source`, ''))) <> 'manual_product_edit'"
     assert f"p.`profitability_updated_at` = IF({product_guard}, NULL, p.`profitability_updated_at`)" in product_sql
     assert product_params == (7, 8)
     assert connection.committed is True
@@ -1535,10 +1576,9 @@ def test_publish_record_list_supports_time_and_store_group_filters():
         },
         "rows": [],
     }
-    count_query, count_params = connection.fake_cursor.queries[-3]
-    total_query, total_params = connection.fake_cursor.queries[-2]
+    count_query, count_params = connection.fake_cursor.queries[-2]
     rows_query, rows_params = connection.fake_cursor.queries[-1]
-    for query in (count_query, total_query, rows_query):
+    for query in (count_query, rows_query):
         assert "mercado_store_site_settings" in query
         assert "settings.`group_name` = %s" in query
         assert "records.`created_at` >= %s" in query
@@ -1546,7 +1586,6 @@ def test_publish_record_list_supports_time_and_store_group_filters():
     assert count_params == (
         "精品组", "2026-09-12 00:00:00", "2026-09-13 00:00:00"
     )
-    assert total_params == count_params
     assert rows_params == count_params + (500, 0)
 
 
@@ -1559,9 +1598,9 @@ def test_publish_record_salesperson_filters_counts_and_rows_with_store_scope(sal
             group_name="精品组", site_id="MLM", status="failed",
             connection_factory=lambda: connection,
         )
-    count, total, rows = connection.fake_cursor.queries[-3:]
+    count, rows = connection.fake_cursor.queries[-2:]
     expected = (7, 9, 9, "MLM", "精品组")
-    for sql, params in (count, total, rows):
+    for sql, params in (count, rows):
         assert "records.`token_id` IN (%s, %s)" in sql
         assert "records.`token_id` IN (%s)" in sql
         assert "settings.`site_id` = records.`site_id`" in sql
@@ -1573,7 +1612,6 @@ def test_publish_record_salesperson_filters_counts_and_rows_with_store_scope(sal
     if salesperson != "__unassigned__":
         expected += (salesperson,)
     assert count[1] == expected
-    assert total[1] == expected + ("failed",)
     assert rows[1] == expected + ("failed", 500, 0)
 
 
@@ -1594,7 +1632,7 @@ def test_1688_recollection_clears_unverified_old_weight_and_package():
     query, params = next((q, p) for q, p in connection.fake_cursor.queries if q.startswith('INSERT INTO'))
     assert params[6:10] == (None, None, None, None)
     for field in ('weight_g', 'package_length_cm', 'package_width_cm', 'package_height_cm'):
-        assert f'`{field}` = IF(`source_type` = \'ai_original\', VALUES(`{field}`), `{field}`)' in query
+        assert f"`{field}` = IF(`source_type` = 'ai_original', VALUES(`{field}`), `{field}`)" in query
     snapshot = json.loads(params[11])
     assert snapshot['original_1688']['variations'][0]['weight_g'] == 250
     assert connection.committed
@@ -1959,7 +1997,8 @@ def test_pulled_products_use_each_site_salesperson_instead_of_sync_operator():
 @patch.object(store, 'ensure_collection_tables', lambda cursor: None)
 def test_pulled_sync_loads_site_settings_for_secret_token_records():
     connection = _FakeConnection()
-    connection.fake_cursor.fetchall = lambda: [{'site_id': 'MLM', 'salesperson': '店铺负责人'}]
+    connection.fake_cursor.fetchall = lambda: ([{'site_id': 'MLM', 'salesperson': '店铺负责人'}]
+        if 'mercado_store_site_settings' in connection.fake_cursor.queries[-1][0] else [])
     store.upsert_pulled_store_links_to_products(
         {'id': 7, 'organization_key': 'company-a'},
         [dict(id='MLM123', site_id='MLM', title='Product', permalink='https://example.com/p',
@@ -1970,3 +2009,89 @@ def test_pulled_sync_loads_site_settings_for_secret_token_records():
     assert 'mercado_store_site_settings' in queries[0][0]
     rows = next(rows for sql, rows in queries if sql.startswith('INSERT INTO'))
     assert rows[0][-2] == '店铺负责人'
+
+
+@pytest.mark.parametrize("source", ["collected", "pulled", "zying", "ai_original"])
+def test_publish_record_source_filter_and_late_materialization(source):
+    connection = _FakeConnection()
+    with patch.object(store, "ensure_collection_tables"):
+        store.list_product_publish_records(source_type=source, limit=100, offset=100,
+                                          token_ids=[7], connection_factory=lambda: connection)
+    queries = connection.fake_cursor.queries
+    assert len(queries) == 2  # Status counts also provide the filtered total.
+    for sql, params in queries:
+        assert "source_product.`source_type` = %s" in sql
+        assert "records.`token_id` IN (%s)" in sql
+        assert source in params
+    sql, params = queries[-1]
+    assert "LIMIT %s OFFSET %s) AS page_ids" in sql
+    assert "AS source_type" in sql
+    assert params[-2:] == (100, 100)
+
+
+def test_publish_record_paging_executes_with_source_and_scope():
+    import sqlite3
+    database = sqlite3.connect(':memory:')
+    database.row_factory = sqlite3.Row
+    database.executescript(f'''
+        CREATE TABLE {store.PRODUCT_TABLE} (id INTEGER PRIMARY KEY, source_type TEXT);
+        CREATE TABLE mercado_store_site_settings (token_id INTEGER, site_id TEXT, group_name TEXT);
+        CREATE TABLE {store.PUBLISH_RECORD_TABLE} (
+            id INTEGER PRIMARY KEY, product_item_id INTEGER, token_id INTEGER,
+            site_id TEXT, status TEXT, created_at TEXT, started_at TEXT, result_json TEXT);
+        INSERT INTO {store.PRODUCT_TABLE} VALUES (1, 'zying'), (2, 'collected');
+        INSERT INTO mercado_store_site_settings VALUES (7, 'MLM', '测试组');
+        INSERT INTO {store.PUBLISH_RECORD_TABLE} VALUES
+            (1, 1, 7, 'MLM', 'failed', '2026-10-01', NULL, '{{}}'),
+            (2, 1, 7, 'MLM', 'published', '2026-10-02', NULL, '{{}}'),
+            (3, 2, 7, 'MLM', 'failed', '2026-10-03', NULL, '{{}}'),
+            (4, 1, 8, 'MLM', 'failed', '2026-10-04', NULL, '{{}}');
+    ''')
+
+    class Cursor:
+        def __enter__(self):
+            self.cursor = database.cursor()
+            return self
+        def __exit__(self, *args):
+            self.cursor.close()
+        def execute(self, sql, params=()):
+            self.cursor.execute(sql.replace('%s', '?'), params)
+        def fetchall(self):
+            return [dict(row) for row in self.cursor.fetchall()]
+
+    class Connection:
+        cursor = Cursor
+        def commit(self):
+            database.commit()
+        def close(self):
+            pass
+
+    try:
+        with patch.object(store, 'ensure_collection_tables'), patch.object(store.product_access, 'predicate', return_value=('', [])):
+            result = store.list_product_publish_records(source_type='zying', token_ids=[7],
+                                                       limit=1, offset=1, connection_factory=Connection)
+            assert result['total'] == 2
+            assert result['counts']['failed'] == 1
+            assert result['counts']['published'] == 1
+            assert [row['id'] for row in result['rows']] == [1]
+            assert result['rows'][0]['source_type'] == 'zying'
+            assert result['rows'][0]['group_name'] == '测试组'
+            filtered = store.list_product_publish_records(source_type='zying', token_ids=[7],
+                                                          status='published', connection_factory=Connection)
+            assert filtered['total'] == 1
+            assert filtered['counts']['all'] == 2
+            assert [row['id'] for row in filtered['rows']] == [2]
+            history = store.list_product_publish_records(product_item_id=1, token_ids=[7],
+                                                         connection_factory=Connection)
+            assert history['total'] == 2
+            assert history['counts']['all'] == 2
+            assert [row['id'] for row in history['rows']] == [2, 1]
+            scoped_history = store.list_product_publish_records(product_item_id=1, token_ids=[],
+                                                                connection_factory=Connection)
+            assert scoped_history['rows'] == []
+            assert scoped_history['total'] == 0
+            other = store.list_product_publish_records(product_item_id=2, token_ids=[7],
+                                                       connection_factory=Connection)
+            assert [row['id'] for row in other['rows']] == [3]
+    finally:
+        database.close()

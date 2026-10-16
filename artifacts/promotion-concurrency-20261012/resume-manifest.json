@@ -1,0 +1,32 @@
+[
+  {
+    "job_id": "3c2e7d9932374dc280f151233bd533cc",
+    "actor": "admin",
+    "promotion_fk": 710
+  },
+  {
+    "job_id": "f44e654309ec4e3c8285e64b02f5caf0",
+    "actor": "admin",
+    "promotion_fk": 716
+  },
+  {
+    "job_id": "c409cb4e8b014e98b1ec0eb5ceb59191",
+    "actor": "admin",
+    "promotion_fk": 715
+  },
+  {
+    "job_id": "5dbc1afdda674e94822f9bd27ac5c361",
+    "actor": "admin",
+    "promotion_fk": 730
+  },
+  {
+    "job_id": "f1f597da817a4e5dbeb931fb03e1cd75",
+    "actor": "admin",
+    "promotion_fk": 707
+  },
+  {
+    "job_id": "3bf8814f634743aa9be6d2b324aa76ea",
+    "actor": "admin",
+    "promotion_fk": 722
+  }
+]

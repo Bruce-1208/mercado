@@ -1,5 +1,21 @@
 # 泽顺本机 Agent 部署说明
 
+## 1.3.0：用户确认后自动更新主程序
+
+正式 Windows/macOS Agent 检测到新版本后，在状态窗口显示“确定更新”。用户点击一次后，Agent 会等当前任务完成且结果上传结束，再下载并校验新版程序，自动替换和重启。不会要求用户手动下载、解压、覆盖或重新安装。仅更新 Agent，浏览器插件不在此流程内。
+
+- `local-agent.json`、用户数据目录、设备身份、名称、登录凭证和业务版本保持原样；新进程沿用原启动参数及绝对配置路径。
+- 新版在完成本机启动确认前不领取业务任务。独立更新器保留旧程序，替换或启动验证失败时尝试恢复并重启旧版，原因写入 `agent.log`。下载失败会显示错误，可点击重试。
+- 更新事务标记会临时阻止计划任务/LaunchAgent 抢先启动旧进程；无需卸载和重装守护任务。标记超时后失效，避免更新器异常退出导致永久阻止启动。
+- 当前下载整个可执行文件，不做二进制差分；“一键更新”指用户操作流程自动完成。源码运行版不提供程序自更新。
+- 安装目录必须允许当前用户写入；磁盘不足、权限不足、CPU 架构不匹配或校验失败均不会主动退出当前 Agent。
+
+服务端需部署 `/api/local-agents/client-update`，接口使用现有 Agent 凭证鉴权，无需浏览器登录。Windows 发布 `dist/MercadoLocalAgent.exe` 和 `dist/windows-agent-build.json`；macOS 发布 `dist/macos/MercadoLocalAgent` 和 `dist/macos-agent-build.json`。清单必须包含 `agent_version`、`architecture`、`exe_sha256`，且哈希对应实际程序。两个构建脚本会生成清单；未完成发布或文件不匹配时拒绝更新。
+
+**首次启用：** 1.3.0 之前的 Agent 仍需手动覆盖升级一次，以安装更新器。升级到 1.3.0 后，后续主程序版本可点击“确定更新”完成升级；服务端和正式客户端都需要发布，单独更新业务 ZIP 不会增加本功能。
+
+构建后可运行 `python3 scripts/smoke_agent_update.py` 验证 macOS 正式程序，或加 `--windows` 使用项目 Wine 验证 Windows EXE。测试在临时目录替换程序并启动真实 Agent，唯一服务地址为不可用的本机回环端口，不连接生产服务、不执行业务任务；验证启动确认、配置保留和旧程序备份后清理。
+
 Agent 的下载、注册、电脑列表、任务派发、任务控制和浏览器启动仅向企业管理员及超级管理员开放，普通成员即使拥有业务执行权限也不能使用 Agent。企业管理员仍只能操作本企业的 Agent；账号降为普通成员后，原注册凭证及 Agent 通信凭证失效。
 
 售后处理的“启动浏览器”向选定电脑下发 `open_store` 任务，由该电脑的 Agent 按授权店铺名实时匹配并启动本机比特浏览器窗口；页面区分排队、启动中、成功和失败。
@@ -42,13 +58,15 @@ Agent 1.2.7 在状态窗口增加“Agent 名称”和“保存名称”。名�
 
 Agent 1.2.8 区分服务重启期间的连接错误、超时、HTTP 429/5xx 与明确的凭证拒绝。前者继续保留当前业务进程、日志和同一任务的心跳重试，不再因连续 12 分钟的暂时连接故障主动终止；连接恢复后仍执行服务端的停止指令。HTTP 401/403 会立即停止业务进程，未识别的控制响应异常仍保留 12 分钟保护。服务端现有任务租约和业务接口鉴权继续有效，长时间断线导致租约被回收时，重连仍会停止任务。该改动不会重放申诉或重启已经退出的业务进程。升级需要重新构建并替换 Agent 客户端；仅更新业务包不会更新这段通信逻辑。后台任务的部署和恢复范围见[后台任务重启保护](background_task_reliability.md)。
 
+Agent 1.2.10 补齐 Windows 冻结版运行申诉任务所需的 Selenium Chrome WebDriver 子模块，并把该导入加入真实 EXE 冒烟检查。1.2.9 可能在比特浏览器窗口已经打开后报 `selenium.webdriver.chrome.webdriver` 模块缺失；受影响电脑应等待当前任务结束，再下载并替换 1.2.10 客户端。仅更新业务包不能修复冻结 EXE 中缺少的模块。
+
 ## 服务端部署
 
 公网服务器必须以 `server` 角色运行，并保持 `WORKBENCH_SECRET_KEY` 稳定：
 
 ```bash
 export BIT_RUNTIME_ROLE=server
-export BIT_PUBLIC_WORKBENCH_URL=https://wuhanzeshun.com
+export BIT_PUBLIC_WORKBENCH_URL=https://wuhanzeshun.cn
 export BIT_INTERFACE_HOT_RELOAD=0
 export WORKBENCH_SECRET_KEY='replace-with-a-long-stable-random-secret'
 python -m bit.bit_interface --role server
@@ -97,7 +115,7 @@ py -3 -m pip install pyinstaller
 
 构建先在临时目录执行，再检查 x64 GUI EXE 格式、实际启动、Tk 窗口和关键运行依赖，并检查 ZIP。全部成功后原子替换 `dist` 内的文件，同时保留上一版 EXE 和更新 ZIP。构建失败或构建过程中检测到相关源码变化时保留旧包。测试环境为 Wine；业务浏览器操作仍需在目标 Windows 电脑验收。
 
-自动检查执行同一个命令：Agent 主程序、构建配置、依赖清单或业务导入模块变化时重建 EXE；普通业务逻辑变化仅更新业务 ZIP，在线 Agent 继续通过原有心跳自动下载业务代码。Windows EXE 仍需在电脑上退出旧 Agent 后覆盖更新；已安装守护任务的电脑先卸载守护任务，更新后重新安装。新电脑使用控制台带注册凭证的正式安装包。
+自动检查执行同一个命令：Agent 主程序、构建配置、依赖清单或业务导入模块变化时重建 EXE；普通业务逻辑变化仅更新业务 ZIP，在线 Agent 继续通过原有心跳自动下载业务代码。1.3.0 及以后版本可在状态窗口点击“确定更新”，无需手动覆盖或重装守护任务。首次从旧版本升级时仍需退出旧 Agent 后覆盖更新；已安装守护任务的电脑先卸载守护任务，更新后重新安装。新电脑使用控制台带注册凭证的正式安装包。
 
 自动触发使用 macOS 原生 FSEvents 文件事件：仅在 Agent 源码、依赖、构建配置或业务包资源变化后执行打包；连续保存会合并为一次，空闲期间不执行检查或打包。没有定时任务。监听服务随当前用户登录启动，Mac 保持开机并登录即可，不需要 Codex 开启。日志位于 `.tools/windows-agent/watcher.log`。
 

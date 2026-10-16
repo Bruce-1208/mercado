@@ -53,13 +53,8 @@
             // /changed starts a refresh, /saved creates a task snapshot. Both remain user initiated.
             module('weight-dimensions-records'),
             module('mercado-shipping-standards', () => [`/api/mercado-shipping-rates?site_id=${encodeURIComponent(mercadoShippingRateSite)}`]),
-            module('mercado-publish-records', () => {
-                const params = new URLSearchParams({search: publishRecordSearch.value.trim(), status: publishRecordStatus.value,
-                    site_id: publishRecordSite.value, group_name: publishRecordGroup?.value || '', start_date: publishRecordStartDate?.value || '',
-                    end_date: publishRecordEndDate?.value || '', limit: '500'});
-                mercadoSelectedValues(publishRecordStore).forEach(id => params.append('token_id', id));
-                return ['/api/mercado-tokens', `/api/mercado-publish-records?${params}`];
-            }),
+            // Records are paged and live; the page loader owns cancellation and refresh.
+            module('mercado-publish-records', () => ['/api/mercado-tokens']),
             // Starting the separate Yandex service is a POST. Warm its status, keep startup explicit.
             module('yandex', () => ['/api/yandex-console/status']),
             module('appeal', () => ['/api/appeal-phrases']),
@@ -82,6 +77,9 @@
                 created_before: storeLinkAuditDateBoundary(value('store-link-audit-to'), true)})]),
             module('store-links', () => [storeLinks(), '/api/mercado-management-categories', '/api/store-links/sync/status', '/api/store-links/bulk-update/status']),
             frame('size-charts', 'size-charts-frame'), frame('clearance-alerts', 'clearance-alerts-frame'), frame('promotions', 'promotions-frame'),
+            frame('automation-center', 'automation-center-frame'),
+            frame('product-diagnosis', 'product-diagnosis-frame'),
+            frame('price-competition', 'price-competition-frame'),
             module('ad-analysis', () => ['/api/mercado-tokens', '/api/ad-analysis?force=0']),
             module('prohibited-listings', () => ['/api/prohibited-listings?page=1&page_size=100', '/api/prohibited-listings/sync/status']),
             module('store-tokens', () => ['/api/mercado-applications', '/api/mercado-tokens', '/api/mercado-account-groups']),

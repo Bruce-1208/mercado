@@ -5,6 +5,28 @@ from pymysql.err import ProgrammingError, OperationalError
 from bit import account_billing as billing
 
 
+@pytest.mark.parametrize("action,priority", [("get", True), ("list", False),
+                                            ("history", False), ("recharge", False),
+                                            ("adjust", False)])
+def test_only_subscription_read_uses_reserved_auth_connection(monkeypatch, action, priority):
+    from types import SimpleNamespace
+    import bit
+
+    calls = []
+    class ConnectionReached(Exception):
+        pass
+
+    def connect(**kwargs):
+        calls.append(kwargs)
+        raise ConnectionReached()
+
+    monkeypatch.setattr(bit, "bit_mysql", SimpleNamespace(
+        config={"host": "test-db"}, pymysql=SimpleNamespace(connect=connect)), raising=False)
+    with pytest.raises(ConnectionReached):
+        billing.billing_local({"action": action, "actor_id": 10})
+    assert calls == [{"host": "test-db", "_pool_priority": priority}]
+
+
 class SchemaCursor:
     def __init__(self, existing=(), failure=None):
         self.tables = set(existing)

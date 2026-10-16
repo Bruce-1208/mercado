@@ -69,6 +69,9 @@ def test_generate_ai_appeal_copy_uses_manual_token_and_prefixes_ids():
 
     assert result["message"].startswith("产品编号：MLM123\n")
     assert captured["kwargs"]["api_key"] == "manual-secret"
+    assert captured["kwargs"]["model"] == "qwen-max"
+    assert captured["kwargs"]["thinking"] is False
+    assert "thinking_budget" not in captured["kwargs"]
     assert "桌面灯" in captured["messages"][1]["content"]
     assert "不得虚构" in captured["messages"][0]["content"]
 
@@ -106,8 +109,9 @@ def test_model_output_must_be_text(value):
 
 def test_generation_bounds_request_and_hides_provider_secrets():
     def chat(messages, **kwargs):
-        assert kwargs['thinking'] is True
-        assert kwargs['thinking_budget'] == 4096
+        assert kwargs['model'] == 'qwen-max'
+        assert kwargs['thinking'] is False
+        assert 'thinking_budget' not in kwargs
         assert kwargs['max_tokens'] == 8192
         assert kwargs['timeout'] == 120
         assert kwargs['max_retries'] == 0

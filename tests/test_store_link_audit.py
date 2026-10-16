@@ -161,3 +161,46 @@ def test_operation_filter_precedes_pagination():
     assert len(audit.history(limit=500)) == 16
     with pytest.raises(ValueError):
         audit.history(operation_type="delete' OR 1=1 --")
+
+
+def test_corrupt_journal_preserved_and_request_records_in_recovery(monkeypatch, tmp_path):
+    import sqlite3
+    path = tmp_path / 'damaged.sqlite3'
+    damaged = b'broken SQLite journal' * 100
+    path.write_bytes(damaged)
+    monkeypatch.setenv('MERCADO_STORE_LINK_AUDIT_PATH', str(path))
+    app = Flask(__name__)
+    app.secret_key = 'offline-test'
+    audit.install_request_audit(app)
+    calls = []
+
+    @app.post('/api/store-links/bulk-update')
+    @audit.audited
+    def submit():
+        calls.append(True)
+        return {'status': 'success'}, 202
+
+    response = app.test_client().post('/api/store-links/bulk-update', json={'link_ids': [1]})
+    assert response.status_code == 202
+    assert response.json['status'] == 'success'
+    assert calls == [True]
+    assert path.read_bytes() == damaged
+    rows = audit.history(trace_id=response.headers['X-Store-Link-Trace-Id'])
+    assert len(rows) == 4
+    assert audit._context.get() is None
+    with sqlite3.connect(tmp_path / 'damaged.recovery.sqlite3') as db:
+        assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+
+
+def test_audit_locked_database_does_not_switch_journals(monkeypatch):
+    import sqlite3
+    calls = []
+    def locked(path):
+        calls.append(path)
+        exc = sqlite3.OperationalError('database is locked')
+        exc.sqlite_errorcode = sqlite3.SQLITE_BUSY
+        raise exc
+    monkeypatch.setattr(audit, '_connect_path', locked)
+    with pytest.raises(sqlite3.OperationalError):
+        audit.connect()
+    assert len(calls) == 1

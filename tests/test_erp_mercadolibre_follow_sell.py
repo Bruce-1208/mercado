@@ -435,7 +435,7 @@ def test_browser_picture_sources_are_accepted_and_non_product_logos_are_filtered
     ]
 
 
-def test_payload_keeps_missing_brand_and_canonicalizes_spanish_attribute_ids():
+def test_payload_defaults_missing_brand_and_canonicalizes_spanish_attribute_ids():
     source = sample_source()
     source["attributes"] = [
         {"id": "MARCA", "name": "Marca", "value_name": ""},
@@ -448,7 +448,7 @@ def test_payload_keeps_missing_brand_and_canonicalizes_spanish_attribute_ids():
     )
     by_id = {attribute["id"]: attribute for attribute in payload["attributes"]}
 
-    assert by_id["BRAND"]["value_name"] == ""
+    assert by_id["BRAND"]["value_name"] == "Generic"
     assert by_id["GENDER"]["value_name"] == "Sin género"
     assert "MARCA" not in by_id
     assert "G_NERO" not in by_id
@@ -522,11 +522,28 @@ def test_payload_preserves_source_brand_without_adding_a_duplicate():
     assert brands == [{"id": "BRAND", "name": "Marca", "value_name": "Genérica"}]
 
 
-def test_payload_requires_missing_brand_and_model_instead_of_inventing_defaults():
+def test_payload_defaults_brand_but_still_requires_missing_model():
     source = sample_source()
     source["attributes"] = []
-    with pytest.raises(MercadoLibreError, match="BRAND, MODEL"):
+    with pytest.raises(MercadoLibreError, match="MODEL") as error:
         build_user_product_payload(RequiredModelCategoryClient(), source, {}, net_proceeds=20)
+    assert "BRAND" not in str(error.value)
+
+
+@pytest.mark.parametrize("builder", [build_global_payload, build_user_product_payload])
+def test_payload_adds_generic_when_source_brand_is_absent(builder):
+    source = sample_source()
+    source["attributes"] = []
+    payload = builder(CategoryClient(), source, {}, net_proceeds=20)
+    assert [a for a in payload["attributes"] if a["id"] == "BRAND"] == [
+        {"id": "BRAND", "value_name": "Generic"}
+    ]
+    assert source["attributes"] == []
+
+
+def test_brand_default_is_not_added_to_variation_attributes_or_unsupported_category():
+    assert follow_sell_module._copy_attributes([], ensure_brand=False) == []
+    assert follow_sell_module._copy_attributes([], allowed_ids={"MODEL"}) == []
 
 
 def test_payload_still_reports_unknown_required_category_attributes():

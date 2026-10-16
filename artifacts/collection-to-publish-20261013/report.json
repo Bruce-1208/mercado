@@ -1,0 +1,1915 @@
+{
+  "date": "2026-10-13",
+  "scope": "Mercado collection -> product list -> selected store publication, with infringement guards",
+  "summary": {
+    "passed": 300,
+    "failed": 15,
+    "error": 0,
+    "skipped": 0
+  },
+  "live": {
+    "collection": "blocked by Mercado account verification; no new product collected",
+    "candidate": "https://www.mercadolibre.com.mx/capa-medieval-con-capucha-para-cosplay-capa-de-negro/p/MLM2048809280",
+    "candidate_review": "public search metadata only; images and rights not verified",
+    "store": "遥遥领先4号店",
+    "store_status": "UI shows enabled and CBT token valid; publication eligibility not yet verified",
+    "published": false
+  },
+  "tests": [
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_startup_maintenance_runs_in_daemon_threads",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_login_edge_starts_at_mercado_home_only",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_profitability_worker_continues_when_reference_refresh_fails",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_matches_fixed_shipping_before_write_and_wakes_profit_worker",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_workbench_splits_collection_and_product_list_into_separate_modules",
+      "status": "failed",
+      "detail": "assert b'<option value=\"500\" selected>500' in b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...js?v=20261012\"></script>\\n    <script src=\"/static/mercado-product-editor.js?v=20261013-1\"></script>\\n</body>\\n</html>'\n +  where b'<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\...js?v=20261012\"></script>\\n    <script src=\"/static/mercado-product-editor.js?v=20261013-1\"></script>\\n</body>\\n</html>' = <WrapperTestResponse 2060553 bytes [200 OK]>.data"
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_official_shipping_rate_endpoints_list_and_start_refresh",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_api_requires_login",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_finish_status_does_not_label_all_failures_completed",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_duration_is_live_then_stable_after_finish",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_quality_pass_retries_only_rows_missing_actual_weight",
+      "status": "failed",
+      "detail": "assert 'hasUsableActualWeight && row.title && row.main_image_url' in '<!DOCTYPE html>\\n<html lang=\"zh-CN\" data-ui-version=\"2026-10-04-responsive-ui\">\\n<head>\\n    <meta charset=\"UTF-8\">\\n...ipt src=\"{{ url_for(\\'static\\', filename=\\'mercado-product-editor.js\\') }}?v=20261013-1\"></script>\\n</body>\\n</html>\\n'"
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_product_list_select_all_uses_current_page_rows_as_source_of_truth",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_database_write_retries_transient_network_failure",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_start_collection_creates_background_task",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_start_collection_requests_login_setup_cleanup_before_running",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_start_collection_reports_when_login_setup_cannot_close",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_playwright_login_setup_stop_event_closes_temporary_tab",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_playwright_login_setup_starts_background_window",
+      "status": "failed",
+      "detail": "assert 400 == 200\n +  where 400 = <WrapperTestResponse 85 bytes [400 BAD REQUEST]>.status_code"
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_browser_params_default_to_mexico_bit_window",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_browser_windows_endpoint_returns_safe_choices",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_login_setup_uses_selected_edge_browser",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_start_collection_passes_selected_browser_to_worker",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_list_and_batch_add_endpoints",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_management_category_endpoints_support_crud_assignment_and_filtering",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_product_publish_record_list_endpoint_supports_filters[None]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_product_publish_record_list_endpoint_supports_filters[scope1]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_retry_publish_records_starts_grouped_background_task",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_retry_publish_records_rejects_successful_record",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_start_collection_builds_country_url_from_keyword_and_scope",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_product_list_filters_and_review_status_endpoint",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_product_list_supports_zying_category_and_developer_filters",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_product_content_update_endpoint",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_bulk_product_content_update_endpoint",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_bulk_collection_measurement_update_endpoint",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_and_product_delete_endpoints",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_starts_background_task_for_selected_store",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_builds_all_compatible_account_site_targets",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_can_select_targets_by_site_group",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_group_random_publish_assigns_each_product_to_one_account_and_all_its_sites",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_group_polling_publish_moves_to_next_account_every_ten_products",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_group_publish_endpoint_applies_strategy_and_historical_account_ownership",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_multi_target_publish_runner_aggregates_progress_and_results",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_multi_target_publish_runner_uses_retry_rows_and_original_quantities",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_multi_target_publish_runner_skips_historical_success_for_same_target",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_rejects_unsupported_site",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_moves_unapproved_product_to_collection",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_manual_approval_admits_imports_without_moving_them_to_collection[zying]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_manual_approval_admits_imports_without_moving_them_to_collection[collected]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_manual_approval_admits_imports_without_moving_them_to_collection[pulled]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_scheduled_import_uses_the_same_approval_and_risk_screening_flow",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_moves_missing_weight_back_to_collection",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_ignores_missing_weight_and_starts_valid_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_moves_nonpositive_net_to_collection",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_rejects_nonpositive_worker_count",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_batch_publish_endpoint_rejects_cross_site_for_local_store",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_collection_list_passes_salesperson_and_directory_options",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_mercado_category_options_route",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_publish_accepts_unchecked_and_risky_products_for_recorded_screening[None]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_publish_accepts_unchecked_and_risky_products_for_recorded_screening[2]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_publish_attempt_exists_before_screening_and_records_setup_failure[screening]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_publish_attempt_exists_before_screening_and_records_setup_failure[publisher_setup]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_bit_interface_mercado_collection",
+      "test": "test_publish_attempt_exists_before_screening_and_records_setup_failure[none]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_create_task_rejects_non_url_before_database_connection",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_create_task_persists_worker_count_for_task_summary",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_add_products_rejects_invalid_or_empty_ids_before_database_connection",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_zying_detail_snapshot_is_upserted_as_third_product_source",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_add_products_keeps_missing_weight_rows_in_collection_list",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_delete_and_publish_selection_reject_empty_ids_before_database_connection",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_weight_dimension_completeness_uses_current_values_not_scrape_status",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_profitability_updates_exact_collection_duplicate_and_only_newest_product",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_profitability_updates_do_not_overwrite_collection_history[collected]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_profitability_updates_do_not_overwrite_collection_history[pulled]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_profitability_estimator_never_overwrites_source_owned_net_proceeds[zying]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_profitability_estimator_never_overwrites_source_owned_net_proceeds[ai_original]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_profitability_update_uses_input_cas_and_stops_mirror_on_conflict",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_profitability_queue_excludes_source_owned_rows_and_retries_incomplete_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_reference_refresh_clears_only_shipping_and_net_for_safe_recalculation",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_add_products_retries_transient_lock_timeout",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_existing_schema_still_installs_refresh_indexes_once",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column1]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column2]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column3]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column4]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column5]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column6]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column7]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column8]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column9]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_missing_required_column_triggers_schema_migration[missing_column10]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_move_pulled_product_preserves_weight_basis_before_deleting_product[official_api-ok]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_move_pulled_product_preserves_weight_basis_before_deleting_product[plugin_volumetric_fallback-partial]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_dimension_only_store_link_sync_does_not_relabel_weight_as_actual",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_review_status_validates_and_updates_selected_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_content_update_validates_persists_and_invalidates_profitability",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_dimension_only_product_edit_keeps_profitability_snapshot_current",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_bulk_product_content_update_uses_one_transaction_and_selected_fields_only",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_bulk_collection_measurement_update_mirrors_products_atomically",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_pulled_store_link_is_mirrored_as_publish_ready_unreviewed_product",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_failed_refresh_cannot_overwrite_an_existing_complete_item",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_save_calculates_usd_price_from_fixed_database_rate",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_plugin_collection_saves_official_freight_and_net_atomically[600-7.71]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_plugin_collection_saves_official_freight_and_net_atomically[None-None]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_recollection_replaces_stale_profitability_and_weight_basis_atomically",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_volumetric_fallback_upsert_clears_fake_actual_weight",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_unique_index_is_scoped_to_each_task",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_list_can_hide_items_already_added_to_products",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_lists_filter_by_management_category_and_include_category_name",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_assign_management_category_updates_selected_list_and_mirrors_source_items",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_management_category_name_validation_happens_before_connecting",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_list_applies_weight_profit_and_collection_time_filters",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_list_filters_by_actual_weight_status[available-(`weight_g` IS NOT NULL AND `weight_g` > 0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_list_filters_by_actual_weight_status[missing-NOT (`weight_g` IS NOT NULL AND `weight_g` > 0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_list_applies_status_range_and_date_filters_in_database",
+      "status": "failed",
+      "detail": "StopIteration"
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_list_filters_zying_category_and_product_developer",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_list_applies_minute_datetime_range_in_database",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_list_rejects_invalid_filter_ranges_before_connecting",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_exchange_price_backfill_updates_collection_and_product_tables",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_recover_interrupted_tasks_marks_only_prestartup_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_publish_attempt_records_copy_product_details_and_save_failure_reason",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_published_product_ids_are_scoped_to_account_and_site",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_published_product_account_ids_keep_latest_successful_owner",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_existing_user_product_ids_are_reused_across_sites_for_same_account",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_publish_records_can_be_loaded_by_selected_ids_for_retry",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_publish_record_list_supports_time_and_store_group_filters",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_publish_record_salesperson_filters_counts_and_rows_with_store_scope[\\u5f20\\u4e09]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_publish_record_salesperson_filters_counts_and_rows_with_store_scope[__unassigned__]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_publish_record_salesperson_rejects_oversized_name_before_querying",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_1688_recollection_clears_unverified_old_weight_and_package",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_owner_filter_applies_before_pagination[collector_salesperson-$.plugin_snapshot.created_by]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_owner_filter_applies_before_pagination[generator_salesperson-$.ai_original.generated_by]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_list_limits_before_join_and_records_query_stages",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_list_closes_connection_on_query_timeout",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_total_pins_narrow_index_only_without_filters[filters0-True]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_total_pins_narrow_index_only_without_filters[filters1-False]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_total_pins_narrow_index_only_without_filters[filters2-False]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_total_pins_narrow_index_only_without_filters[filters3-False]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_products-list_product_items]",
+      "status": "failed",
+      "detail": "AssertionError: assert '(SELECT `id` FROM `erp_mercadolibre_products` WHERE' in 'SELECT /*+ MAX_EXECUTION_TIME(8000) */ `erp_mercadolibre_products`.*, category.`name` AS `management_category_name`, ...ON category.`id` = `erp_mercadolibre_products`.`management_category_id` ORDER BY `erp_mercadolibre_products`.`id` DESC'"
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_collection_items-list_collection_items]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_pending_review_publish_records_are_saved_and_filterable",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_scope_union_preserves_all_ownership_paths[tokens0--3]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_scope_union_preserves_all_ownership_paths[tokens1--1]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_scope_union_preserves_all_ownership_paths[tokens2--4]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_scope_union_preserves_all_ownership_paths[tokens3--0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_scope_union_preserves_all_ownership_paths[tokens4-zying-2]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_scope_union_preserves_all_ownership_paths[tokens5--0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_salesperson_filter_is_exact_and_applies_before_pagination",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_unassigned_filter_includes_non_personnel_creators",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_collection_personnel_directory_and_unassigned_rows_with_saved_creators",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_count_deadline_still_returns_filtered_page[row_ids0-True]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_count_deadline_still_returns_filtered_page[row_ids1-False]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_count_deadline_still_returns_filtered_page[row_ids2-False]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_count_connection_loss_is_not_hidden",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_category_options_are_permission_scoped_and_not_paginated",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_category_options_empty_scope_never_reads_database",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_parent_category_filter_uses_complete_exact_ids",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_product_salesperson_filter_matches_display_and_directory_respects_scope",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_slow_legacy_salesperson_directory_does_not_block_product_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_pulled_products_use_each_site_salesperson_instead_of_sync_operator",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_collection_store",
+      "test": "test_pulled_sync_loads_site_settings_for_secret_token_records",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_continues_after_an_item_failure_and_records_each_state",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_successful_probe_allows_remaining_products_to_run_concurrently",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_account_listing_restriction_stops_remaining_items",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_validates_quantity_before_contacting_store",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_rejects_products_that_are_not_approved",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_product_publish_issues_reports_all_local_blockers",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_rejects_missing_weight_or_nonpositive_net_before_store_call[changes0-\\u672a\\u586b\\u5199\\u6709\\u6548\\u91cd\\u91cf]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_rejects_missing_weight_or_nonpositive_net_before_store_call[changes1-\\u51c0\\u6536\\u76ca\\u5c1a\\u672a\\u8ba1\\u7b97]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_rejects_missing_weight_or_nonpositive_net_before_store_call[changes2-\\u51c0\\u6536\\u76ca\\u5c0f\\u4e8e\\u7b49\\u4e8e 0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_discounted_net_proceeds_uses_site_percentage_and_rounds_half_up",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_rejects_nonpositive_worker_count_before_contacting_store",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_local_store_cannot_publish_to_another_site",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_product_snapshot_is_refreshed_before_publish",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_embedded_product_snapshot_avoids_publish_write_read_round_trip",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_embedded_zying_snapshot_recovers_legacy_nameid_attributes",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_embedded_zying_snapshot_does_not_publish_minus_one_value_id",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_batch_publish_passes_reusable_user_product_to_follow_sell",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_successful_upload_is_not_reported_failed_when_latest_state_save_fails",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_500_item_publish_orchestration_has_low_local_overhead",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_family_partial_failure_preserves_remote_results_in_publish_record",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_family_result_does_not_expose_one_variants_up_id_for_reuse",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_infringement_is_held_for_review_while_other_products_publish[False]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_infringement_is_held_for_review_while_other_products_publish[True]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_explicitly_removed_zying_attributes_are_not_recovered_from_capture",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_erp_mercadolibre_batch_publish",
+      "test": "test_switching_main_image_keeps_sku_picture_id",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_current_row_hash_is_identical_to_candidate_and_changes_with_final_titles",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_result_state_reads_snapshot_and_never_reuses_changed_content_or_rules",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_review_is_bound_to_content_expiry_and_site",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_item_identity_deduplicates_per_source_not_numeric_id",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_moved_list_json_cannot_replace_current_item_identity",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_private_image_urls_are_rejected_before_network",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_knowledge_version_ignores_pending_and_changes_with_scope_aliases",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_title_image_sends_actual_bytes_and_uses_explicit_vision_model",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_image_failure_never_writes_safe_result",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_empty_titles_and_missing_ai_rows_are_failed_not_zero",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_stop_is_checked_between_batches_and_retains_completed_results",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_scoped_alias_matches_only_current_site",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_precise_candidates_use_current_product_rows_for_every_source",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_ai_writer_preserves_manual_fields_and_stores_failure_metadata",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_manual_review_updates_independent_history_and_snapshot",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_results_include_unchecked_stale_and_failed",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_move_helper_copies_human_review_metadata_with_bound_ids",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_db_api_forwards_precise_items_and_review",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_image_revision_changes_image_hash_even_when_url_is_reused",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_title_only_manual_review_still_invalidates_when_picture_changes",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_saved_result_translations_cannot_override_current_snapshot",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_precise_items_disappearing_before_candidate_read_are_task_failures_only",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_local_generated_image_route_reads_only_known_bounded_asset",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_collection_and_transferred_product_generated_copy_share_current_hash",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_collection_candidate_selects_current_generated_copy",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_infringement_screening",
+      "test": "test_product_and_collection_scope_context_comes_from_current_plugin_snapshot",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_service_detects_only_selected_current_ids_and_titles",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_cached_valid_screening_reuses_result_without_model_credential",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_cancel_while_waiting_for_execution_capacity",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_filtered_selection_reads_all_pages_and_risk_filter_then_paginates",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_existing_valid_result_reuses_cache_but_content_changes_queue_scan",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_task_and_selected_product_permissions_are_account_scoped",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_failed_retry_selects_only_unfinished_products",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_cancelled_queue_keeps_completed_snapshots_and_releases_active_items",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_normal_execution_never_persists_credential",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_service_rejects_missing_credential_before_creating_task",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_restart_marks_only_unfinished_items_interrupted",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_same_item_cannot_have_two_active_tasks",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_requires_risk_disposition_independent_of_ordinary_review[0-None]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_requires_risk_disposition_independent_of_ordinary_review[1-\\u7591\\u4f3c]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_requires_risk_disposition_independent_of_ordinary_review[2-\\u9ad8\\u98ce\\u9669]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_rejects_unchecked_failed_and_changed_content",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_scoped_authorization_requires_current_content_site_evidence_and_expiry",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_manual_block_is_enforced_even_when_ai_low",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_collection_tasks_reject_already_moved_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_credential_revoked_after_queue_does_not_fall_back_to_environment_key",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_error_logs_and_callback_results_cannot_persist_credentials",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_new_retry_activity_wins_when_task_timestamps_are_identical",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_historical_failed_task_cannot_override_new_database_result",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_filtered_selection_respects_current_product_visibility_on_every_page",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_detail_links_precise_matched_rule_ids_including_alias_hits",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_manual_block_applies_to_its_declared_site",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_auto_check_completes_before_returning_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_auto_check_rejects_existing_active_task",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_auto_check_failure_never_returns_publishable_rows",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_publication_existing_high_risk_reaches_individual_review_gate",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_final_draft_preflight_screens_actual_outgoing_title_and_target",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_final_draft_preflight_blocks_changed_content_and_final_title_risk",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_collection_risk_filters_keep_salesperson_scope",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_detection_cannot_modify_coworker_products[selected]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_detection_cannot_modify_coworker_products[filtered]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_service",
+      "test": "test_detection_cannot_modify_coworker_products[unchecked]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_local_path_blocks_all_missing_fields_before_create_and_keeps_evidence",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_unknown_optional_attribute_has_a_visible_mapping_report",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_id_and_name_conflict_cannot_be_hidden_by_id_matching",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_format_constraints_block_create[attribute0-definition0-invalid_unit]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_format_constraints_block_create[attribute1-definition1-invalid_number]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_format_constraints_block_create[attribute2-definition2-invalid_length]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_format_constraints_block_create[attribute3-definition3-read_only]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_lost_or_unmapped_variation_dimensions_never_reach_platform[UNKNOWN]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_lost_or_unmapped_variation_dimensions_never_reach_platform[COLOR]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_duplicate_sku_combinations_block_without_merging_stock",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_preview_and_submit_use_identical_payload_and_checkpoint_before_post",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_draft_invalidates_on_all_material_changes[product]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_draft_invalidates_on_all_material_changes[quantity]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_draft_invalidates_on_all_material_changes[schema]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_draft_invalidates_on_all_material_changes[tamper]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_draft_invalidates_on_all_material_changes[expired]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_checkpoint_failure_stops_remote_publication",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_concurrent_reports_do_not_mix_source_evidence",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_exact_unit_conversion_preserves_original_evidence",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_explicit_correction_is_scoped_to_draft_and_keeps_original_snapshot",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_invalid_manual_corrections_never_bypass_checks[evidence]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_invalid_manual_corrections_never_bypass_checks[category_id]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_invalid_manual_corrections_never_bypass_checks[value_name]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_manual_correction_choices_come_from_failed_draft_schema",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_expired_retry_reuses_evidence_but_checks_new_rules",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercadolibre_publication_preflight",
+      "test": "test_retry_cannot_apply_manual_facts_to_changed_source",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_routes",
+      "test": "test_preview_checks_account_access_before_reading_products",
+      "status": "failed",
+      "detail": "assert 503 == 403\n +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code"
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_routes",
+      "test": "test_preview_persists_server_generated_draft_and_returns_only_report_and_revision",
+      "status": "failed",
+      "detail": "assert 503 == 200\n +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code"
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_routes",
+      "test": "test_preview_rejects_unbounded_work",
+      "status": "failed",
+      "detail": "assert 503 == 400\n +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code"
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_routes",
+      "test": "test_publish_loads_owned_server_draft_and_passes_it_to_worker",
+      "status": "failed",
+      "detail": "AssertionError: {'code': 'database_unavailable', 'message': '数据库暂时不可用，请稍后重试', 'status': 'error'}\nassert 503 == 200\n +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code"
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_valid_measurements_attributes_and_zero_shipping_have_no_warning",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[None]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[ ]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[0]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[-1]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[NaN]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[Infinity]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_invalid_weight_and_partial_dimensions_are_named[broken]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_volumetric_fallback_does_not_count_as_actual_weight",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_missing_net_names_calculation_inputs_and_preserves_negative_results",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_partial_and_variant_attributes_are_reported_and_alternate_evidence_is_used",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_malformed_snapshot_does_not_hide_missing_attributes",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality",
+      "test": "test_list_and_detail_report_the_same_missing_fields",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_both_lists_render_clickable_risk_and_single_item_detection[collection]",
+      "status": "failed",
+      "detail": "AssertionError: assert 14 == 15\n +  where 14 = count()\n +    where count = <Locator frame=<Frame name= url='http://console.test/'> selector='#mercado-list-head th'>.count\n +      where <Locator frame=<Frame name= url='http://console.test/'> selector='#mercado-list-head th'> = locator('#mercado-list-head th')\n +        where locator = <Page url='http://console.test/'>.locator"
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_both_lists_render_clickable_risk_and_single_item_detection[products]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_selected_task_keeps_scope_filter_snapshot_and_page",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_detail_escapes_evidence_and_requires_scoped_release",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_mobile_dialog_stays_inside_viewport_and_range_is_explicit",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_cross_page_ranges_send_explicit_filters_without_page_limit[filtered]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_cross_page_ranges_send_explicit_filters_without_page_limit[unchecked]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_publish_readiness_retains_risky_product_and_checks_review_sites",
+      "status": "failed",
+      "detail": "AssertionError: assert '侵权风险待处理，保留产品列表' in '本页已选择 1 件 · 1 件侵权风险待处理，将在上架记录中显示拦截原因'"
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_task_failures_offer_details_and_retry_only_unfinished",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_infringement_browser",
+      "test": "test_review_permission_is_separate_and_candidates_preserve_manual_rules",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_browser",
+      "test": "test_preflight_shows_reports_and_invalidates_after_settings_change",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_browser",
+      "test": "test_report_escapes_untrusted_collected_values",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_browser",
+      "test": "test_user_can_complete_a_missing_attribute_and_recheck[1440]",
+      "status": "failed",
+      "detail": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.\nCall log:\n  - waiting for get_by_label(\"型号\", exact=True)"
+    },
+    {
+      "suite": "tests.test_mercado_attribute_preflight_browser",
+      "test": "test_user_can_complete_a_missing_attribute_and_recheck[390]",
+      "status": "failed",
+      "detail": "playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.\nCall log:\n  - waiting for get_by_label(\"型号\", exact=True)"
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality_browser",
+      "test": "test_collection_hover_preview_and_visible_missing_fields[1440]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality_browser",
+      "test": "test_collection_hover_preview_and_visible_missing_fields[390]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality_browser",
+      "test": "test_collection_hover_preview_and_visible_missing_fields[320]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_mercado_collection_quality_browser",
+      "test": "test_stale_salesperson_option_is_removed_and_query_resets",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_advanced_filters_keep_values_and_show_active_count",
+      "status": "failed",
+      "detail": "AssertionError: assert '已设置 1 项' in '高级筛选 (1)'\n +  where '高级筛选 (1)' = inner_text()\n +    where inner_text = <Locator frame=<Frame name= url='http://console.test/'> selector='#tab-orders .zs-advanced-filters > summary'>.inner_text"
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_product_filters_and_selection_gate[1440]",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_product_filters_and_selection_gate[390]",
+      "status": "failed",
+      "detail": "AssertionError: assert False\n +  where False = is_visible()\n +    where is_visible = <Locator frame=<Frame name= url='http://console.test/'> selector='#mercado-review-filter'>.is_visible\n +      where <Locator frame=<Frame name= url='http://console.test/'> selector='#mercado-review-filter'> = locator('#mercado-review-filter')\n +        where locator = <Page url='http://console.test/'>.locator"
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_review_preserves_settings_and_selection_changes_invalidate_it",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_invalid_stock_cannot_reach_review",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_group_review_and_cancel_do_not_publish",
+      "status": "passed",
+      "detail": ""
+    },
+    {
+      "suite": "tests.test_console_workflow_browser",
+      "test": "test_past_schedule_stays_in_settings",
+      "status": "passed",
+      "detail": ""
+    }
+  ],
+  "diagnostics": {
+    "attribute_completion_browser": "UI says 请选择兼容的目标账号和站点; no preflight request was sent (CALLS []). Failed test cannot establish an attribute input defect.",
+    "attribute_preflight_routes": "4 tests returned database_unavailable under network-isolated runner; test identity/catalog mocks need further isolation.",
+    "other_failures": "Includes changed column count, filter label/visibility, SQL shape, default page size and collection startup expectation; not all are established production bugs."
+  }
+}

@@ -18,8 +18,8 @@ def publishing_page(console_page):
     page.on("pageerror", lambda error: errors.append(str(error)))
     image = "https://images.test/real-product.png"
     page.route("https://images.test/**", lambda route: route.fulfill(content_type="image/svg+xml", body='<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="white"/><rect x="50" y="40" width="100" height="120" rx="8" fill="#b7cade"/></svg>'))
-    draft = {"template_id": "standard", "status": "completed", "title": "Metal Desk Organizer", "description": "Metal desk storage.", "bullet_points": ["Three compartments"], "main_image_url": image, "validation": {"errors": [], "warnings": []}}
-    rows = [{"id": product_id, "title": f"金属收纳盒 {product_id}", "source_type": "ai_original", "review_status": "approved", "weight_g": 300, "package_length_cm": 20, "package_width_cm": 15, "package_height_cm": 10, "original_1688": {"title": f"金属收纳盒 {product_id}", "main_image_url": image}, "marketplace_listings": {"amazon": {**draft, "target_platform": "amazon"}, "yandex": {**draft, "target_platform": "yandex", "title": "Органайзер для стола", "description": "Металлический органайзер для стола."}}} for product_id in (1, 2)]
+    draft = {"template_id": "standard", "status": "completed", "review_status": "approved", "title": "Metal Desk Organizer", "description": "Metal desk storage.", "bullet_points": ["Three compartments"], "main_image_url": image, "validation": {"errors": [], "warnings": []}}
+    rows = [{"id": product_id, "title": f"金属收纳盒 {product_id}", "source_type": "ai_original", "review_status": "approved", "weight_g": 300, "weight_basis": "ai_original_manual", "net_proceeds_usd": 8, "package_length_cm": 20, "package_width_cm": 15, "package_height_cm": 10, "original_1688": {"title": f"金属收纳盒 {product_id}", "main_image_url": image}, "marketplace_listings": {"amazon": {**draft, "target_platform": "amazon"}, "yandex": {**draft, "target_platform": "yandex", "title": "Органайзер для стола", "description": "Металлический органайзер для стола."}}} for product_id in (1, 2)]
     backend = {"jobs": [], "preview": None, "fail_preview": False, "config": None, "polls": 0}
 
     def api(route):
@@ -88,7 +88,10 @@ def publishing_page(console_page):
 def select_and_fill(page, platform, count=2):
     page.locator("#ai-original-platform").select_option(platform)
     page.wait_for_function("document.getElementById('aip-store').value !== ''")
-    page.wait_for_function("aiOriginalRows.length === 2")
+    page.wait_for_function(
+        "platform => aiOriginalTargetPlatform() === platform && aiOriginalRows.length === 2 && aiOriginalRows.every(row => row.marketplace_listings?.[platform])",
+        arg=platform,
+    )
     for index in range(count):
         page.locator('#ai-original-grid input[type="checkbox"]').nth(index).check()
     page.locator("#aip-category").fill("HOME_ORGANIZER" if platform == "amazon" else "12345")
@@ -109,7 +112,7 @@ def test_preview_confirm_poll_and_live_status(publishing_page, platform, width):
     assert not page.locator(".ai-original-publish-panel").is_visible()
     page.locator("#aip-schema-load").click()
     page.wait_for_function("document.getElementById('aip-schema').textContent.includes('真实材质')")
-    assert "material" in page.locator("#aip-schema").inner_text()
+    assert "material" in page.locator("#aip-schema").text_content()
     page.locator("#aip-prepare").click()
     page.locator("#aip-preview").wait_for(state="visible")
     assert page.locator("#aip-confirm").is_enabled()
@@ -161,6 +164,33 @@ def test_invalid_preview_stale_selection_and_duplicate_identifiers_block_submiss
     assert not page.locator("#aip-preview").is_visible()
     awaitable = page.evaluate("AiOriginalPublisher.confirmPublish()")
     assert not any(item["path"].endswith("/publish") for item in requests)
+    assert not errors
+
+
+def test_unreviewed_platform_product_stays_on_card_but_not_in_publish_form(publishing_page):
+    page, _backend, _requests, errors = publishing_page
+    page.locator("#ai-original-platform").select_option("amazon")
+    page.wait_for_function("aiOriginalTargetPlatform() === 'amazon' && aiOriginalRows.length === 2 && aiOriginalRows.every(row => row.marketplace_listings?.amazon) && document.getElementById('aip-store').value !== ''")
+    page.wait_for_timeout(50)
+    page.evaluate("""() => {
+      aiOriginalLoadSequence++;
+      aiOriginalLoadController?.abort();
+      aiOriginalRows[0].marketplace_listings.amazon.review_status = 'unreviewed';
+      renderAiOriginalProducts();
+    }""")
+
+    first_card = page.locator('.ai-original-card[data-original-product-id="1"]')
+    page.wait_for_function("document.querySelector('.ai-original-card[data-original-product-id=\"1\"] .ai-original-badge')?.textContent.trim() === '待审核'")
+    assert first_card.locator(".ai-original-badge").inner_text() == "待审核"
+    first_card.locator('input[type="checkbox"]').check()
+    assert page.locator('#aip-products [data-product="1"]').count() == 0
+    assert "忽略 1 件未通过" in page.locator("#aip-selected-count").inner_text()
+    assert page.locator("#aip-prepare").is_disabled()
+
+    second_card = page.locator('.ai-original-card[data-original-product-id="2"]')
+    second_card.locator('input[type="checkbox"]').check()
+    assert page.locator('#aip-products [data-product="2"]').count() == 1
+    assert page.locator("#aip-prepare").is_enabled()
     assert not errors
 
 

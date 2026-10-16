@@ -10,15 +10,17 @@ function setup(prepared = {}) {
     document: {
       addEventListener() {}, querySelectorAll() { return []; }, querySelector() { return null; },
       getElementById(id) {
-        if (!nodes.has(id)) nodes.set(id, {value: '', checked: false, selectedOptions: [],
+        if (!nodes.has(id)) nodes.set(id, {value: '', checked: false, selectedOptions: [], dataset: {},
           showModal() {}, close() {}, querySelectorAll() { return []; }, querySelector() { return null; }});
         return nodes.get(id);
       },
     },
-    window: {location: {origin: 'http://localhost'}},
+    window: {catalogOperationMarkup(_row, markup) { return markup; }, location: {origin: 'http://localhost'}},
     localStorage: {getItem() { return null; }, removeItem() {}},
   });
   const run = code => vm.runInContext(code, context);
+  run(fs.readFileSync(path.join(__dirname, '../bit/static/sku-matrix.js'), 'utf8'));
+  run('globalThis.ZeshunSku = window.ZeshunSku');
   run(fs.readFileSync(path.join(__dirname, '../bit/static/ai-original-products.js'), 'utf8'));
   run(`loadAiOriginalCategoryAttributes = async () => {};
     aiOriginalRows = [{id: 1, category_id: 'CBT123', category_name: 'Costumes', ai_status: 'failed',

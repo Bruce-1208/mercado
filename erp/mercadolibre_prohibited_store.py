@@ -237,7 +237,7 @@ def mark_prohibited_sync_finished(
 
 def list_due_prohibited_token_ids(
     *,
-    interval_hours: int = 24,
+    interval_hours: int = 12,
     retry_minutes: int = 60,
     limit: int = 1000,
     connection_factory: Callable[[], Any] | None = None,
@@ -252,13 +252,15 @@ def list_due_prohibited_token_ids(
     try:
         with connection.cursor() as cursor:
             ensure_prohibited_tables(cursor)
+            from erp.mercadolibre_overview_sync_settings import due_enterprise_predicate
+            enterprise_sql, enterprise_args = due_enterprise_predicate(cursor, "prohibited_listings")
             cursor.execute(
                 f"""
                 SELECT tokens.`id`
                 FROM `mercado_store_tokens` AS tokens
                 LEFT JOIN `{PROHIBITED_SYNC_STATE_TABLE}` AS state
                   ON state.`token_id` = tokens.`id`
-                WHERE tokens.`enabled` = 1
+                WHERE tokens.`enabled` = 1 AND ({enterprise_sql})
                   AND (
                     state.`requested_at` IS NOT NULL
                     OR state.`last_completed_at` IS NULL
@@ -271,7 +273,7 @@ def list_due_prohibited_token_ids(
                          tokens.`id` ASC
                 LIMIT %s
                 """,
-                (due_before, retry_before, max(1, min(int(limit or 1000), 1000))),
+                (*enterprise_args, due_before, retry_before, max(1, min(int(limit or 1000), 1000))),
             )
             return [int(row["id"]) for row in cursor.fetchall()]
     finally:

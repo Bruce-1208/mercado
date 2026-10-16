@@ -85,12 +85,15 @@ class _Connection:
             "source_snapshot_json", "source_json", "description_json", "page_snapshot_json",
             "plugin_snapshot_json", "review_status", "added_at", "product_developer_id",
             "product_developer_name", "management_category_id", "ai_weight_price_json",
-            "added_to_products",
+            "added_to_products", "organization_key", "owner_user_id", "owner_name", "visibility",
         }
         fields.update(column for column, _definition in store.INFRINGEMENT_RESULT_COLUMN_DEFINITIONS)
         definitions = ", ".join(f"`{field}`" for field in sorted(fields))
         for table in (store.PRODUCT_TABLE, store.COLLECTION_TABLE):
             self.db.execute(f"CREATE TABLE `{table}` (`id` INTEGER PRIMARY KEY, `source_item_id` UNIQUE, {definitions})")
+        self.db.execute("CREATE TABLE mercado_store_site_settings (token_id, site_id, salesperson)")
+        self.db.execute("CREATE TABLE erp_mercadolibre_product_sku_members (product_id INTEGER PRIMARY KEY,parent_id,original_snapshot_json)")
+        self.db.execute("CREATE TABLE erp_mercadolibre_product_sku_groups (product_id INTEGER PRIMARY KEY,group_key,group_title,sku_label)")
         self.db.execute("CREATE TABLE erp_mercadolibre_store_links (id INTEGER, item_id, price, weight_g, net_proceeds_usd)")
 
     def cursor(self):
@@ -128,7 +131,7 @@ def _row(*, row_id=1, item_id="MLM1", source_type="collected", purchased=True):
                 "zying_net_proceeds_usd": TARGET,
                 "source_1688_overrides": {"net_proceeds_usd": TARGET, "price": 14},
                 "ai_original": {"status": "pending"}}
-    return dict(id=row_id, source_item_id=item_id, source_type=source_type, collection_item_id=1,
+    return dict(id=row_id, source_item_id=item_id, source_type=source_type, collection_item_id=1, organization_key="default",
                 title="Product", price=100, currency_id="USD", weight_g=500, weight_basis="plugin_actual",
                 category_id="MLM1", source_url="https://example.test/1", updated_at=SAVED_AT,
                 profitability_updated_at=SAVED_AT, profitability_source="purchase_cost_ratio" if purchased else "official",

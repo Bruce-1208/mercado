@@ -75,7 +75,7 @@ def test_current_shop_binding_and_agent_parameters(popup):
     message = popup.evaluate("messages.find(m => m.type === 'START_APPEAL')")
     assert message == {"type": "START_APPEAL", "tabId": 7, "params": {
         "sites": ["MLM", "MLB"], "forms": ["延误", "侵权"],
-        "mode": "AI客服", "appeal_copy_mode": "AI话术模式", "loop_count": "1", "message": "自定义话术",
+        "mode": "AI客服", "appeal_copy_mode": "AI话术模式", "loop_count": "1", "message": "自定义话术", "screenshot_mode": False,
     }}
     assert popup.locator("#appeal-start").is_disabled()
     assert popup.locator("#appeal-refresh").is_disabled()

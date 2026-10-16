@@ -9,6 +9,7 @@ import os
 import tempfile
 import threading
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -49,31 +50,47 @@ def _translate_names(language: str, names: set[str]) -> dict[str, str]:
         return {name: name for name in names}
     with _translation_lock:
         cache = _load_translations(language)
-        missing = sorted(name for name in names if name and name not in cache)
+        missing = sorted(name for name in names if name and not re.search(r"[\u3400-\u9fff]", str(cache.get(name) or "")))
         batches: list[list[str]] = []
         batch: list[str] = []
         size = 0
         for name in missing:
-            if batch and size + len(name) + 1 > 3500:
+            if batch and (size + len(name) + 1 > 1500 or len(batch) >= 40):
                 batches.append(batch)
                 batch, size = [], 0
             batch.append(name)
             size += len(name) + 1
         if batch:
             batches.append(batch)
-        for batch in batches:
+        def translate(text):
             response = requests.get(
                 _TRANSLATE_URL,
-                params={"client": "gtx", "sl": language, "tl": "zh-CN", "dt": "t", "q": "\n".join(batch)},
-                timeout=30,
+                params={"client": "gtx", "sl": language, "tl": "zh-CN", "dt": "t", "q": text},
+                timeout=(3, 10),
             )
             response.raise_for_status()
-            payload = response.json()
-            translated = "".join(str(part[0] or "") for part in payload[0] if isinstance(part, list) and part)
-            lines = translated.splitlines()
-            if len(lines) != len(batch) or any(not line.strip() for line in lines):
-                raise ValueError("分类名称中文翻译结果不完整")
-            cache.update(zip(batch, lines))
+            return "".join(str(part[0] or "") for part in response.json()[0] if isinstance(part, list) and part)
+
+        def valid(value):
+            return bool(re.search(r"[\u3400-\u9fff]", value))
+
+        for batch in batches:
+            try:
+                lines = translate("\n".join(batch)).splitlines()
+                if len(lines) == len(batch) and all(valid(line) for line in lines):
+                    cache.update((name, line.strip()) for name, line in zip(batch, lines))
+                    continue
+                # Translators may merge newline-separated labels. Never assign
+                # shifted translations to categories; retry each label separately.
+                for name in batch:
+                    try:
+                        translated = translate(name).strip()
+                        if valid(translated):
+                            cache[name] = translated
+                    except (requests.RequestException, ValueError, IndexError, TypeError):
+                        logging.warning("分类名称暂未翻译：%s", name)
+            except (requests.RequestException, ValueError, IndexError, TypeError):
+                logging.warning("分类中文名称批次暂不可用，保留已完成的翻译", exc_info=True)
         if missing:
             try:
                 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -162,23 +179,29 @@ def category_paths_for_ids(category_ids: list[str], *, fast: bool = False) -> di
                 continue
             if saved_paths is not None:
                 if paths is None or any(category_id not in saved_paths for category_id in site_ids) or any(
-                    node.get("name") not in translations
+                    not re.search(r"[\u3400-\u9fff]", str(translations.get(node.get("name")) or ""))
                     for category_id in site_ids for node in saved_paths.get(category_id, [])
                 ):
                     _warm_category_paths(site, site_ids)
                 result.update({category_id: saved_paths[category_id] for category_id in site_ids if category_id in saved_paths})
                 continue
         if paths is None:
-            response = requests.get(
-                f"https://api.mercadolibre.com/sites/{site}/categories/all",
-                timeout=30,
-                headers={"Accept": "application/json"},
-            )
-            response.raise_for_status()
-            catalog: Any = response.json()
-            if not isinstance(catalog, dict):
-                raise ValueError("美客多分类目录格式无效")
-            paths = {}
+            try:
+                response = requests.get(
+                    f"https://api.mercadolibre.com/sites/{site}/categories/all",
+                    timeout=30,
+                    headers={"Accept": "application/json"},
+                )
+                response.raise_for_status()
+                catalog: Any = response.json()
+                if not isinstance(catalog, dict):
+                    raise ValueError("美客多分类目录格式无效")
+            except (requests.RequestException, ValueError):
+                # Some sites do not expose the bulk catalog. Resolve the actual
+                # product categories individually instead of aborting all paths.
+                logging.warning("整站分类目录不可用，改为按商品分类读取：%s", site, exc_info=True)
+                catalog = {}
+            paths = dict(_read_saved_paths(site, allow_expired=True) or {})
             for category_id, category in catalog.items():
                 if not isinstance(category, dict):
                     continue
@@ -235,7 +258,7 @@ def category_paths_for_ids(category_ids: list[str], *, fast: bool = False) -> di
         for site in {category_id[:3] for category_id in result}:
             site_ids = [category_id for category_id in result if category_id.startswith(site)]
             translations = translated_by_language[_site_language(site)]
-            if any(node["name"] not in translations for category_id in site_ids for node in result[category_id]):
+            if any(not re.search(r"[\u3400-\u9fff]", str(translations.get(node["name"]) or "")) for category_id in site_ids for node in result[category_id]):
                 _warm_category_paths(site, site_ids)
     return {
         category_id: [{**node, "name_source": node["name"],
@@ -270,3 +293,27 @@ def category_filter_ids(value: str) -> list[str]:
     if len(result) > 20000:
         raise ValueError("分类范围过大，请继续选择下一级分类")
     return sorted(result)
+
+
+@lru_cache(maxsize=512)
+def _category_children_cached(site: str, parent: str, hour: int):
+    url = (f"https://api.mercadolibre.com/categories/{parent}" if parent
+           else f"https://api.mercadolibre.com/sites/{site}/categories")
+    response = requests.get(url, timeout=(3, 15))
+    response.raise_for_status()
+    payload = response.json()
+    rows = payload.get("children_categories", []) if parent else payload
+    if not isinstance(rows, list):
+        raise ValueError("分类目录格式无效")
+    return [{"id": str(row["id"]), "name": str(row["name"])} for row in rows]
+
+
+def category_children(site: str, parent: str = ""):
+    site, parent = site.strip().upper(), parent.strip().upper()
+    if site not in {"CBT", "MLM", "MLB", "MLC", "MCO", "MLA", "MLU", "MPE", "MEC", "MLV"}:
+        raise ValueError("请选择有效的美客多站点")
+    if parent and (not _CATEGORY_ID.fullmatch(parent) or not parent.startswith(site)):
+        raise ValueError("分类编号与站点不一致")
+    rows = _category_children_cached(site, parent, int(time.time() // 3600))
+    names = _translate_names(_site_language(site), {row["name"] for row in rows})
+    return [{**row, "name_zh": names.get(row["name"], "")} for row in rows]

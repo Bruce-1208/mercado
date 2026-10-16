@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="0.196" timestamp="2026-10-12T16:39:59.814013+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_preview_checks_account_access_before_reading_products" time="0.015"><failure message="assert 503 == 403&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_attribute_preflight_routes.py:21: in test_preview_checks_account_access_before_reading_products
+    assert response.status_code == 403
+E   assert 503 == 403
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_preview_persists_server_generated_draft_and_returns_only_report_and_revision" time="0.009"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_attribute_preflight_routes.py:45: in test_preview_persists_server_generated_draft_and_returns_only_report_and_revision
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_preview_rejects_unbounded_work" time="0.004"><failure message="assert 503 == 400&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_attribute_preflight_routes.py:57: in test_preview_rejects_unbounded_work
+    assert response.status_code == 400
+E   assert 503 == 400
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_routes" name="test_publish_loads_owned_server_draft_and_passes_it_to_worker" time="0.006"><failure message="AssertionError: {'code': 'database_unavailable', 'message': '数据库暂时不可用，请稍后重试', 'status': 'error'}&#10;assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_attribute_preflight_routes.py:84: in test_publish_loads_owned_server_draft_and_passes_it_to_worker
+    assert response.status_code == 200, response.json
+E   AssertionError: {'code': 'database_unavailable', 'message': '数据库暂时不可用，请稍后重试', 'status': 'error'}
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase></testsuite></testsuites>

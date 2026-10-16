@@ -5,7 +5,7 @@ import local_agent
 from bit.local_agent_distribution import published_agent_version
 
 
-@pytest.mark.parametrize('latest,expected', [('1.2.10', '1.2.10'), ('1.2.9', ''), ('1.2.8', ''), ('garbage', ''), ('', '')])
+@pytest.mark.parametrize('latest,expected', [('1.3.1', '1.3.1'), ('1.3.0', ''), ('1.2.9', ''), ('garbage', ''), ('', '')])
 def test_heartbeat_update_is_numeric_and_optional(tmp_path, latest, expected):
     args = local_agent.build_argument_parser().parse_args(['--data-dir', str(tmp_path), '--token', 'test-token'])
     agent = local_agent.LocalAgent(local_agent.AgentConfig(args))

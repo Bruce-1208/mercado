@@ -1,0 +1,56 @@
+[
+  {
+    "job_id": "57c103c728b44d26ba6880e652b8b257",
+    "promotion_fk": 707,
+    "status": "partial",
+    "total_count": 1,
+    "success_count": 0,
+    "failed_count": 0,
+    "unknown_count": 1
+  },
+  {
+    "job_id": "5ab8d137ea57452dac5b540199ea079a",
+    "promotion_fk": 730,
+    "status": "partial",
+    "total_count": 1,
+    "success_count": 0,
+    "failed_count": 0,
+    "unknown_count": 1
+  },
+  {
+    "job_id": "f2a3999c87d14ab2886a35c4c1cd3b50",
+    "promotion_fk": 710,
+    "status": "partial",
+    "total_count": 1,
+    "success_count": 0,
+    "failed_count": 0,
+    "unknown_count": 1
+  },
+  {
+    "job_id": "91fc4e36fef9446f8b4ede04873aab7b",
+    "promotion_fk": 715,
+    "status": "partial",
+    "total_count": 1,
+    "success_count": 0,
+    "failed_count": 0,
+    "unknown_count": 1
+  },
+  {
+    "job_id": "9811d70a08f3462ca1d68fca03aed998",
+    "promotion_fk": 722,
+    "status": "partial",
+    "total_count": 888,
+    "success_count": 0,
+    "failed_count": 0,
+    "unknown_count": 888
+  },
+  {
+    "job_id": "3fde8a0ae03847358f96552ab95aeb9c",
+    "promotion_fk": 716,
+    "status": "partial",
+    "total_count": 1362,
+    "success_count": 0,
+    "failed_count": 0,
+    "unknown_count": 1362
+  }
+]

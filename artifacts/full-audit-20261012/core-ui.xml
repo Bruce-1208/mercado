@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="28" failures="0" skipped="0" tests="28" time="150.588" timestamp="2026-10-12T16:38:41.499599+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_console_ui_browser" name="test_api_reputation_shop_name_and_database_refresh[success]" time="10.741"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_api_reputation_shop_name_and_database_refresh[partial]" time="0.119"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_reputation_columns_toggle_numeric_sort_and_keep_missing_values_last" time="10.202"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_reputation_defaults_to_site_seven_day_orders_and_toggles_sort" time="0.152"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_reputation_warning_hover_preserves_latest_message_full_text" time="10.216"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_long_reputation_warning_hover_stays_in_view_and_can_scroll_to_end" time="0.121"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_algorithm_strategy_preserves_selected_task_types" time="10.238"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_picker_search_preserves_selection_and_handles_dynamic_options" time="0.142"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_picker_keyboard_and_bulk_selection" time="10.269"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_filter_layout_and_popup_fit_viewport[1440]" time="0.123"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_filter_layout_and_popup_fit_viewport[1024]" time="10.211"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_filter_layout_and_popup_fit_viewport[390]" time="0.121"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_order_density_switch_and_compact_bulk_toolbar" time="10.235"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_background_export_queues_polls_and_downloads_without_navigation" time="0.123"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_background_export_stops_after_permission_revoked" time="10.241"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_clearance_alerts_opens_as_lazy_workspace_tab" time="0.136"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_size_charts_opens_as_lazy_workspace_tab_and_keeps_editor_state" time="10.490"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_standard_size_chart_library_download_and_measured_rows" time="0.146"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_standard_shoe_sizes_use_official_numeric_units_without_conversion" time="10.352"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_filled_builtin_download_save_and_upload_to_other_store" time="0.133"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_ui_browser" name="test_reputation_store_notices_appear_in_matching_warning_cell" time="10.640"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error><error message="failed on teardown with &quot;FileNotFoundError: Browser.close: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:235: in console_browser
+    browser.close()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14261: in close
+    return mapping.from_maybe_impl(self._sync(self._impl_obj.close(reason=reason)))
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:241: in close
+    raise e
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:238: in close
+    await self._channel.send("close", None, {"reason": reason})
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.close: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_advanced_filters_keep_values_and_show_active_count" time="10.817"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_product_filters_and_selection_gate[1440]" time="0.122"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_product_filters_and_selection_gate[390]" time="10.219"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_review_preserves_settings_and_selection_changes_invalidate_it" time="0.131"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_invalid_stock_cannot_reach_review" time="10.260"><error message="failed on setup with &quot;playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.&#10;Call log:&#10;  - navigating to &quot;http://console.test/&quot;, waiting until &quot;load&quot;&quot;">tests/test_console_ui_browser.py:286: in console_page
+    page.goto("http://console.test/")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:9019: in goto
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:556: in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:153: in goto
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.goto: Timeout 10000ms exceeded.
+E   Call log:
+E     - navigating to "http://console.test/", waiting until "load"</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_group_review_and_cancel_do_not_publish" time="0.123"><error message="failed on setup with &quot;FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'&quot;">tests/test_console_ui_browser.py:272: in console_page
+    page = console_browser.new_page(viewport={"width": 1440, "height": 1000})
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+artifacts/full-audit-20261012/run_regression.py:112: in bounded_page
+    page = _native(self, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:14198: in new_page
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_browser.py:230: in new_page
+    return await self._connection.wrap_api_call(inner, title="Create page")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   FileNotFoundError: Browser.new_page: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: Route.fulfill: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png'</error></testcase><testcase classname="tests.test_console_workflow_browser" name="test_past_schedule_stays_in_settings" time="1.632" /></testsuite></testsuites>

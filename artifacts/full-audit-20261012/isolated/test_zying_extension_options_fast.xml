@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="7" skipped="0" tests="9" time="0.158" timestamp="2026-10-12T16:40:57.242311+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_zying_extension_options_fast" name="test_web_selector_refresh_preserves_page_developer_sync" time="0.009"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:53: in test_web_selector_refresh_preserves_page_developer_sync
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_page_only_refresh_uses_history_without_api_or_redundant_sync" time="0.003"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:69: in test_page_only_refresh_uses_history_without_api_or_redundant_sync
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_page_only_refresh_uses_cached_directory_without_history" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:82: in test_page_only_refresh_uses_cached_directory_without_history
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_history_failure_keeps_current_categories_available" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:95: in test_history_failure_keeps_current_categories_available
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_page_only_cache_does_not_suppress_legacy_directory_lookup" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:107: in test_page_only_cache_does_not_suppress_legacy_directory_lookup
+    assert first.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_web_options_still_require_extension_login_and_view_permission" time="0.002"><failure message="assert 503 == 403&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:131: in test_web_options_still_require_extension_login_and_view_permission
+    assert response.status_code == 403
+E   assert 503 == 403
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_zying_extension_options_fast" name="test_cached_directory_is_token_scoped_copied_and_expires" time="0.001" /><testcase classname="tests.test_zying_extension_options_fast" name="test_web_options_remain_local_while_task_endpoints_keep_worker_owner" time="0.002" /><testcase classname="tests.test_zying_extension_options_fast" name="test_worker_start_seeds_page_developers_before_starting_collection" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_zying_extension_options_fast.py:204: in test_worker_start_seeds_page_developers_before_starting_collection
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase></testsuite></testsuites>

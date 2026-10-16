@@ -1,0 +1,32 @@
+{
+  "item_id": "MLM3483596525",
+  "before": [
+    {
+      "id": "P-MLM17611046",
+      "type": "DEAL",
+      "status": "started",
+      "start_date": "2026-08-17T00:00:00-06:00",
+      "finish_date": "2026-11-12T00:00:00-06:00",
+      "name": "Activa Tus Descuentos  ",
+      "allow_combination": false
+    },
+    {
+      "id": "",
+      "type": "PRICE_DISCOUNT",
+      "status": "candidate",
+      "start_date": "",
+      "finish_date": "",
+      "allow_combination": false
+    },
+    {
+      "id": "P-MLM17923024",
+      "type": "DEAL",
+      "status": "candidate",
+      "start_date": "2026-11-12T22:00:00-06:00",
+      "finish_date": "2026-12-01T00:00:00-06:00",
+      "name": "Buen Fin 26",
+      "allow_combination": false
+    }
+  ],
+  "error": "平台仍返回已参与活动，取消尚未确认，停止修改净收益"
+}

@@ -74,3 +74,29 @@ test('duplicate starts share a single running loop', async () => {
   await first;
   assert.equal(f.api.length,1);
 });
+
+test('popup filter values reach the purchase task API through the real message handler',async()=>{
+  let listener;
+  const event=()=>({addListener(){},removeListener(){}});
+  const area=()=>({get(_keys,cb){cb({});},set(_values,cb){cb?.();},remove(_keys,cb){cb?.();}});
+  const context=vm.createContext({URL,setTimeout,clearTimeout,importScripts(){},chrome:{
+    storage:{local:area(),session:area(),sync:area()},
+    runtime:{onInstalled:event(),onStartup:event(),onMessage:{addListener(fn){listener=fn;}},lastError:null,getURL:path=>`extension:///${path}`},
+    alarms:{onAlarm:event(),create(){}},contextMenus:{onClicked:event(),removeAll(cb){cb?.();},create(){}},
+    tabs:{},windows:{onRemoved:event()}
+  }});
+  vm.runInContext(source,context);
+  vm.runInContext(`
+    globalThis.calls=[];
+    purchaseTrackingRequest=async()=>null;
+    openPurchaseTrackingLogin=async request=>({ok:true,request});
+    apiRequest=async(path,options)=>{calls.push({path,body:options.body&&JSON.parse(options.body)});return {request_id:'test'};};
+  `,context);
+  const message={type:'OPEN_PURCHASE_TRACKING_LOGIN',date_start:'2026-10-01',date_end:'2026-10-03',
+    order_status:'@找货',platform:'pdd',salesperson:'小王',group_name:'一组'};
+  const response=await new Promise(resolve=>listener(message,{},resolve));
+  assert.equal(response.ok,true);
+  assert.equal(context.calls[0].path,'/api/browser-extension/purchase-tracking/start');
+  assert.deepEqual(JSON.parse(JSON.stringify(context.calls[0].body)),{
+    platform:'pdd',date_start:'2026-10-01',date_end:'2026-10-03',order_status:'@找货',salesperson:'小王',group_name:'一组'});
+});

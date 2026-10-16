@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 from erp.store_link_audit import audited, contextual_target, record
+from collections import Counter
 from contextlib import contextmanager
 import json
 import logging
 import os
 from pathlib import Path
+import re
 import sqlite3
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Iterable, Mapping
 
 from bit import bit_mysql
@@ -22,6 +24,7 @@ from bit.bit_runtime_lock import InterProcessLock
 from bit.store_link_item_lock import store_link_item_locks
 from bit.bit_store_link_sync import (
     STORE_LINK_DETAIL_ATTRIBUTES,
+    SITE_ITEM_URLS,
     _client_and_token,
 )
 from erp.mercadolibre_collection_store import (
@@ -54,6 +57,23 @@ PACKAGE_FIELDS = (
     ("package_width_cm", "PACKAGE_WIDTH", "cm"),
     ("package_height_cm", "PACKAGE_HEIGHT", "cm"),
 )
+REMOTE_DELETE_VERIFY_DELAYS = (0, 0.25, 0.75, 1.5)
+
+
+def _is_site_listing_id(value: object, site_id: object = "") -> bool:
+    """Accept only a known Mercado site listing, never a CBT parent ID."""
+    item_id = str(value or "").strip().upper()
+    match = re.fullmatch(r"([A-Z]{3})\d+", item_id)
+    if not match or match.group(1) not in SITE_ITEM_URLS:
+        return False
+    expected = str(site_id or "").strip().upper()
+    return not expected or expected == match.group(1)
+
+
+def _site_listing_retention_reason(value: object) -> str:
+    item_id = str(value or "").strip().upper()
+    return ("CBT 父商品不支持直接删除，已安全保留" if item_id.startswith("CBT") else
+            "站点商品编号与站点不匹配或站点不受支持，已安全保留")
 
 _state_guard = threading.RLock()
 _recovery_guard = threading.Lock()
@@ -64,7 +84,7 @@ REMOTE_UPDATE_RECOVERY_LOCK_KEY = "mercado_store_link_remote_update_recovery"
 _PENDING_STATUSES = ("queued", "starting", "running")
 _SAVED_ROW_FIELDS = (
     "id", "token_id", "store_name", "item_id", "site_id", "status",
-    "is_current", "currency_id", *STORE_LINK_REMOTE_UPDATE_FIELDS,
+    "is_current", "currency_id", "net_ratio_base_usd", *STORE_LINK_REMOTE_UPDATE_FIELDS,
 )
 _update_state = {
     "running": False,
@@ -74,6 +94,7 @@ _update_state = {
     "total_links": 0,
     "processed_links": 0,
     "success_count": 0,
+    "retained_count": 0,
     "partial_count": 0,
     "failed_count": 0,
     "current_item": "",
@@ -146,25 +167,42 @@ def _json(value) -> str:
 
 def store_link_remote_update_status() -> dict[str, Any]:
     state = _state_snapshot()
+    pending_count = 0
+    recent_batches = []
     if _queue_path().exists():
         with _queue_connection() as database:
-            row = database.execute("SELECT state_json FROM tasks ORDER BY created DESC,id DESC LIMIT 1").fetchone()
+            database.execute("BEGIN")
+            pending_count = database.execute(
+                "SELECT COUNT(*) FROM tasks WHERE status IN ('queued','starting','running')"
+            ).fetchone()[0]
+            row = database.execute(
+                "SELECT state_json FROM tasks WHERE status IN ('queued','starting','running') "
+                "ORDER BY created,rowid LIMIT 1"
+            ).fetchone()
+            if not row:
+                row = database.execute("SELECT state_json FROM tasks ORDER BY created DESC,rowid DESC LIMIT 1").fetchone()
+            for finished in database.execute(
+                "SELECT state_json FROM tasks WHERE status NOT IN ('queued','starting','running') "
+                "ORDER BY created DESC,rowid DESC LIMIT 5"
+            ):
+                saved = json.loads(finished["state_json"])
+                recent_batches.append({key: saved.get(key) for key in (
+                    "task_id", "message", "status", "finished_at",
+                )})
         if row:
             state = json.loads(row["state_json"])
+            state["running"] = pending_count > 0
+    state["pending_batches"] = pending_count
+    state["queued_batches"] = max(0, pending_count - 1)
+    state["recent_batches"] = recent_batches
     return state
 
 
 def _enqueue_task(rows, changes, state) -> tuple[bool, dict]:
-    # Serialize submissions across processes. Only one unfinished bulk edit is
-    # accepted, matching the existing one-task UI without losing a racing start.
+    # Commit each batch independently; submissions never replace worker state.
+    # The singleton drain preserves submission order, including overlapping items.
     with _queue_connection() as database:
         database.execute("BEGIN IMMEDIATE")
-        existing = database.execute(
-            "SELECT state_json FROM tasks WHERE status IN ('queued','starting','running') "
-            "ORDER BY created,id LIMIT 1"
-        ).fetchone()
-        if existing:
-            return False, json.loads(existing["state_json"])
         database.execute("INSERT INTO tasks VALUES (?,?,?,?,?)",
                          (state["task_id"], "queued", time.time(), _json(changes), _json(state)))
         database.executemany("INSERT INTO items(task_id,link_id,row_json) VALUES(?,?,?)", [
@@ -230,7 +268,7 @@ def _normalize_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
         if status not in STORE_LINK_REMOTE_UPDATE_STATUSES:
             raise ValueError("店铺链接状态只能是 active 或 paused")
         result["status"] = status
-    for field in STORE_LINK_REMOTE_UPDATE_FIELDS:
+    for field in (*STORE_LINK_REMOTE_UPDATE_FIELDS, "net_proceeds_ratio"):
         if field not in changes or changes[field] in (None, ""):
             continue
         try:
@@ -240,9 +278,31 @@ def _normalize_changes(changes: Mapping[str, Any]) -> dict[str, Any]:
         if not value.is_finite() or value <= 0:
             raise ValueError(f"{field} 必须大于 0")
         result[field] = value
+    if "net_proceeds_ratio" in result and {"price", "net_proceeds_usd"}.intersection(result):
+        raise ValueError("净收益比例不能与固定售价或固定净收益同时填写")
     if not result:
         raise ValueError("请至少填写一个需要修改的字段")
     return result
+
+
+def _resolve_net_ratio(row: Mapping[str, Any], changes: Mapping[str, Any]) -> dict[str, Any]:
+    resolved = dict(changes)
+    if "net_proceeds_ratio" not in resolved:
+        return resolved
+    ratio = resolved.pop("net_proceeds_ratio")
+    # Freeze the submission snapshot so retries never compound a previous write.
+    raw = row.get("net_ratio_base_usd", row.get("net_proceeds_usd"))
+    try:
+        base = Decimal(str(raw))
+        if not base.is_finite() or base <= 0:
+            raise ValueError("当前净收益必须大于 0，无法按比例调价")
+        target = (base * ratio / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if not target.is_finite() or target <= 0:
+            raise ValueError("比例调价后的净收益须至少为 USD 0.01")
+    except (InvalidOperation, TypeError) as exc:
+        raise ValueError("当前净收益缺失或无效，无法按比例调价") from exc
+    resolved["net_proceeds_usd"] = target
+    return resolved
 
 
 def _api_number(value: Decimal) -> int | float:
@@ -317,6 +377,7 @@ def _update_one_link(
     errors: list[str] = []
     remote_groups: list[str] = []
     try:
+        changes = _resolve_net_ratio(row, changes)
         groups = _desired_group_changes(row, changes)
     except Exception as exc:
         return {
@@ -449,6 +510,7 @@ def run_store_link_remote_update(
         total_links=total_links,
         processed_links=len(results),
         success_count=sum(row["status"] == "success" for row in results),
+        retained_count=sum(row["status"] == "retained" for row in results),
         partial_count=sum(row["status"] == "partial" for row in results),
         failed_count=sum(row["status"] == "error" for row in results),
         current_item="",
@@ -464,16 +526,26 @@ def run_store_link_remote_update(
 
     token_records: dict[int, dict[str, Any]] = {}
     token_errors: dict[int, str] = {}
-    for token_id in sorted({int(row["token_id"]) for row in rows}):
-        try:
-            token_record = dict(bit_mysql.get_mercado_store_token(token_id) or {})
-            if not token_record:
-                raise ValueError("店铺授权不存在")
-            _client, token_record = _client_and_token(token_record)
-            token_records[token_id] = token_record
-        except Exception as exc:
-            token_errors[token_id] = str(exc)
+    token_ids = sorted({int(row["token_id"]) for row in rows})
 
+    def prepare_token(token_id):
+        token_record = dict(bit_mysql.get_mercado_store_token(token_id) or {})
+        if not token_record:
+            raise ValueError("店铺授权不存在")
+        return _client_and_token(token_record)[1]
+
+    # Authorize different shops concurrently, with the same bounded budget as
+    # item updates. Each shop is still prepared only once per batch.
+    with ThreadPoolExecutor(max_workers=max(1, min(STORE_LINK_REMOTE_UPDATE_WORKERS, len(token_ids)))) as executor:
+        preparations = {executor.submit(contextual_target(prepare_token), token_id): token_id for token_id in token_ids}
+        for future in as_completed(preparations):
+            token_id = preparations[future]
+            try:
+                token_records[token_id] = future.result()
+            except Exception as exc:
+                token_errors[token_id] = str(exc)
+
+    counts = Counter(row["status"] for row in results)
     worker_count = max(1, min(STORE_LINK_REMOTE_UPDATE_WORKERS, len(rows)))
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = {}
@@ -492,6 +564,7 @@ def run_store_link_remote_update(
                 _checkpoint_item(task_id, result)
                 record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
                 results.append(result)
+                counts[result["status"]] += 1
                 _append_log(f"{item_id} 失败：{result['errors'][0]}")
                 continue
             futures[executor.submit(contextual_target(_update_one_link_locked), row, token_records[token_id], changes)] = row
@@ -516,8 +589,11 @@ def run_store_link_remote_update(
             _checkpoint_item(task_id, result)
             record("remote_update_item", result["status"], {"result": result, "task_id": _update_state.get("task_id")})
             results.append(result)
+            counts[result["status"]] += 1
             if result["status"] == "success":
                 _append_log(f"{item_id} 后台{action}成功：{', '.join(result.get('remote_groups') or [])}")
+            elif result["status"] == "retained":
+                _append_log(f"{item_id} 已安全保留：{result.get('retention_reason') or '不满足删除条件'}")
             else:
                 details = list(result.get("errors") or [])
                 if result.get("warning"):
@@ -526,9 +602,10 @@ def run_store_link_remote_update(
             processed = len(results)
             _state_update(
                 processed_links=processed,
-                success_count=sum(row["status"] == "success" for row in results),
-                partial_count=sum(row["status"] == "partial" for row in results),
-                failed_count=sum(row["status"] == "error" for row in results),
+                success_count=counts["success"],
+                retained_count=counts["retained"],
+                partial_count=counts["partial"],
+                failed_count=counts["error"],
                 results=list(results[-200:]),
                 message=f"正在{action}美客多后台链接 {processed}/{total_links}",
             )
@@ -537,14 +614,16 @@ def run_store_link_remote_update(
     failed = sum(row["status"] == "error" for row in results)
     partial = sum(row["status"] == "partial" for row in results)
     success = sum(row["status"] == "success" for row in results)
+    retained = sum(row["status"] == "retained" for row in results)
     status = "completed" if not failed and not partial else "partial"
-    message = f"后台{action}完成：成功 {success}，部分成功 {partial}，失败 {failed}"
+    message = f"后台{action}完成：成功 {success}，安全保留 {retained}，部分成功 {partial}，失败 {failed}"
     _state_update(
         running=False,
         status=status,
         message=message,
         processed_links=len(results),
         success_count=success,
+        retained_count=retained,
         partial_count=partial,
         failed_count=failed,
         current_item="",
@@ -576,6 +655,17 @@ def _run_background(rows: list[dict[str, Any]], changes: dict[str, Any], task_id
             if not task or task["status"] not in _PENDING_STATUSES:
                 return
             rows, changes, previous_results = task["rows"], task["changes"], task["results"]
+            # A preceding batch may have changed package fields or deleted the
+            # link since submission. Use its committed values for omitted fields.
+            if rows:
+                current = {int(row["id"]): row for row in get_store_links_by_ids(
+                    [row["id"] for row in rows]
+                )}
+                for row in rows:
+                    latest = current.get(int(row["id"]))
+                    if latest:
+                        for field in ("status", *STORE_LINK_REMOTE_UPDATE_FIELDS):
+                            row[field] = latest.get(field)
         run_store_link_remote_update(rows, changes, task_id=task_id, previous_results=previous_results)
     except Exception as exc:
         _state_update(
@@ -601,50 +691,45 @@ def start_store_link_remote_update(
     ids = _link_ids(link_ids)
     normalized = {"status": "deleted"} if delete else _normalize_changes(changes)
     rows = get_store_links_by_ids(ids)
-    with _state_guard:
-        current_state = store_link_remote_update_status()
-        if current_state.get("running"):
-            return False, current_state
-        state = dict(current_state)
-        state.update(
-            running=True,
-            task_id=uuid.uuid4().hex,
-            status="queued",
-            message="美客多后台删除任务已排队" if delete else "美客多后台修改任务已排队",
-            total_links=len(rows),
-            processed_links=0,
-            success_count=0,
-            partial_count=0,
-            failed_count=0,
-            current_item="",
-            started_at=_now_text(),
-            finished_at="",
-            changes={
-                key: (float(value) if isinstance(value, Decimal) else value)
-                for key, value in normalized.items()
-            },
-            results=[],
-            logs=[],
-        )
-        created, state = _enqueue_task(rows, normalized, state)
-        _update_state.update(state)
-    if not created:
-        return False, state
+    if "net_proceeds_ratio" in normalized:
+        rows = [{**row, "net_ratio_base_usd": row.get("net_proceeds_usd")} for row in rows]
+    state = dict(
+        running=True,
+        task_id=uuid.uuid4().hex,
+        status="queued",
+        message="美客多后台删除任务已排队" if delete else "美客多后台修改任务已排队，可继续提交下一批",
+        total_links=len(rows),
+        processed_links=0,
+        success_count=0,
+        retained_count=0,
+        partial_count=0,
+        failed_count=0,
+        current_item="",
+        started_at=_now_text(),
+        finished_at="",
+        changes={
+            key: (float(value) if isinstance(value, Decimal) else value)
+            for key, value in normalized.items()
+        },
+        results=[],
+        logs=[],
+    )
+    _enqueue_task(rows, normalized, state)
     try:
         start_store_link_remote_update_recovery()
         _recovery_wakeup.set()
-    except Exception as exc:
-        _state_update(running=False, status="queued", message=f"任务已保存，后台启动失败：{exc}")
-        _persist_task_state(state["task_id"])
-        raise
-    return True, store_link_remote_update_status()
+    except Exception:
+        # Submission already committed. Report acceptance rather than inviting
+        # a duplicate retry; another recovery worker/startup can drain it.
+        logging.exception("店铺链接修改任务已保存，后台调度暂时不可用")
+    return True, state
 
 
 def _resume_next_task() -> bool:
     with _queue_connection() as database:
         pending = database.execute(
             "SELECT id,state_json FROM tasks WHERE status IN ('queued','starting','running') "
-            "ORDER BY created,id LIMIT 1"
+            "ORDER BY created,rowid LIMIT 1"
         ).fetchone()
     if not pending:
         return False
@@ -678,6 +763,10 @@ def _remote_update_recovery_loop() -> None:
                 while True:
                     try:
                         recovered = _resume_next_task()
+                        if recovered and _state_snapshot().get("status") not in _PENDING_STATUSES:
+                            # Successful batches drain immediately. Only idle or
+                            # interrupted work needs a retry delay.
+                            continue
                     except Exception:
                         recovered = True
                         logging.exception("恢复店铺链接后台修改任务失败，将自动重试")
@@ -720,8 +809,10 @@ def _delete_one_link(row, token, *, required_title=None, max_sold_quantity=None)
         "applied_fields": [], "errors": [], "remote_groups": ["删除链接"],
     }
     try:
-        if not item_id.startswith("ML") or not item_id[3:].isdigit():
-            raise ValueError("只能删除所选站点链接，不能通过此操作删除 CBT 父商品")
+        if not _is_site_listing_id(item_id, row.get("site_id")):
+            result["status"] = "retained"
+            result["retention_reason"] = _site_listing_retention_reason(item_id)
+            return result
         client = MercadoLibreClient(str(token.get("access_token") or ""))
         def read_item():
             item = client.get_marketplace_item(item_id)
@@ -733,6 +824,26 @@ def _delete_one_link(row, token, *, required_title=None, max_sold_quantity=None)
             return (item.get("deleted") is True
                     or item.get("status") == "deleted"
                     or "deleted" in (item.get("sub_status") or []))
+
+        def wait_until(predicate):
+            latest = None
+            for delay in REMOTE_DELETE_VERIFY_DELAYS:
+                if delay:
+                    time.sleep(delay)
+                latest = read_item()
+                if predicate(latest):
+                    return latest
+            return latest
+
+        def update_item(changes):
+            try:
+                return client.update_global_item(item_id, changes)
+            except Exception as exc:
+                text = str(exc)
+                if "field_not_updatable" in text.lower() or "not modifiable" in text.lower():
+                    raise ValueError(
+                        f"平台当前不允许修改该链接（审核中或字段不可修改）：{text}") from exc
+                raise
 
         def retention_reason(item):
             if required_title is not None and str(item.get("title") or "").strip() != required_title:
@@ -761,22 +872,24 @@ def _delete_one_link(row, token, *, required_title=None, max_sold_quantity=None)
         if not is_deleted(item):
             if retain(item):
                 return result
+            if item.get("status") == "under_review":
+                raise ValueError("链接正在平台审核中，当前不可暂停或删除；审核结束后可重试")
             if item.get("status") not in {"paused", "closed"}:
                 previous_status = item.get("status")
-                client.update_global_item(item_id, {"status": "paused"})
-                item = read_item()
+                update_item({"status": "paused"})
+                item = wait_until(lambda value: value.get("status") in {"paused", "closed"})
                 if item.get("status") not in {"paused", "closed"}:
                     raise ValueError("平台未确认链接已暂停，未继续删除")
                 if retain(item):
                     # Sales/title may have changed while the pause was confirmed.
                     # Restore the status so a protected link is actually retained.
-                    client.update_global_item(item_id, {"status": previous_status})
-                    restored = read_item()
+                    update_item({"status": previous_status})
+                    restored = wait_until(lambda value: value.get("status") == previous_status)
                     if restored.get("status") != previous_status:
                         raise ValueError("保留链接后恢复原状态未确认，请核验平台状态")
                     return result
-            client.update_global_item(item_id, {"deleted": True})
-            item = read_item()
+            update_item({"deleted": True})
+            item = wait_until(is_deleted)
             if not is_deleted(item):
                 raise ValueError("已提交删除，但平台尚未确认已删除；保留记录，可重试核验")
         result["applied_fields"] = ["status"]

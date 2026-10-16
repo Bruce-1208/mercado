@@ -71,7 +71,8 @@ def test_untrusted_image_and_source_urls_are_rejected(url):
 @pytest.fixture
 def detail_client(monkeypatch):
     from bit import bit_interface as web
-    current = {"id": 7, "username": "collector", "access_version": 1, "organization_key": "wuhan-zeshun"}
+    current = {"id": 7, "username": "collector", "access_version": 1,
+               "permissions": ["catalog.view"], "organization_key": "wuhan-zeshun"}
     monkeypatch.setattr(web, "get_current_workbench_user", lambda: current)
     monkeypatch.setattr(web, "_workbench_billing_blocked", lambda actor: None)
     monkeypatch.setattr(web, "workbench_selected_organization", lambda *args: "wuhan-zeshun")

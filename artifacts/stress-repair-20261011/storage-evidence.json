@@ -1,0 +1,18 @@
+{
+  "timezone": "log timestamps UTC; add 8 hours for Asia/Shanghai",
+  "user_confirmed_no_unplug_or_sleep": true,
+  "events": [
+    "2026-10-11T14:45:42.554768Z 115281 [ERROR] [MY-012596] [InnoDB] Error number 6 means 'Device not configured'",
+    "2026-10-11T14:45:42.555224Z 115281 [ERROR] [MY-012646] [InnoDB] File ./mercado/erp_mercadolibre_products.ibd: 'read' returned OS error 106. Cannot continue operation",
+    "2026-10-11T14:45:42.555732Z 115281 [ERROR] [MY-012981] [InnoDB] Cannot continue operation.",
+    "2026-10-11T14:46:13.877457Z 0 [System] [MY-010116] [Server] /opt/homebrew/opt/mysql@8.0/bin/mysqld (mysqld 8.0.42) starting as process 84575",
+    "2026-10-11T14:46:15.808046Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '0.0.0.0' port: 33060, socket: /tmp/mysqlx.sock",
+    "2026-10-11T14:46:15.808056Z 0 [System] [MY-010931] [Server] /opt/homebrew/opt/mysql@8.0/bin/mysqld: ready for connections. Version: '8.0.42'  socket: '/tmp/mysql.sock'  port: 3306  Homebrew.",
+    "2026-10-11T14:55:35.202497Z 181 [ERROR] [MY-012596] [InnoDB] Error number 6 means 'Device not configured'",
+    "2026-10-11T14:55:35.202586Z 181 [ERROR] [MY-012646] [InnoDB] File ./mercado/erp_mercadolibre_products.ibd: 'read' returned OS error 106. Cannot continue operation",
+    "2026-10-11T14:55:35.203655Z 181 [ERROR] [MY-012981] [InnoDB] Cannot continue operation.",
+    "2026-10-11T14:56:06.085933Z 0 [System] [MY-010116] [Server] /opt/homebrew/opt/mysql@8.0/bin/mysqld (mysqld 8.0.42) starting as process 88729",
+    "2026-10-11T14:56:07.352683Z 0 [System] [MY-011323] [Server] X Plugin ready for connections. Bind-address: '0.0.0.0' port: 33060, socket: /tmp/mysqlx.sock",
+    "2026-10-11T14:56:07.352698Z 0 [System] [MY-010931] [Server] /opt/homebrew/opt/mysql@8.0/bin/mysqld: ready for connections. Version: '8.0.42'  socket: '/tmp/mysql.sock'  port: 3306  Homebrew."
+  ]
+}

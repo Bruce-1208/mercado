@@ -111,3 +111,60 @@ def test_generation_exception_still_releases_lock():
             raise ValueError("invalid source")
     assert connection.closed
     assert "RELEASE_LOCK" in connection.queries[-1][0]
+
+
+@pytest.mark.parametrize("limit,reserved,expected", [(6, 1, 2), (12, 1, 5), (6, 2, 1)])
+def test_generation_workers_leave_room_for_checkpoints_and_ui(monkeypatch, limit, reserved, expected):
+    from erp.ai_original_cost_control import generation_worker_limit
+    monkeypatch.setenv("MYSQL_POOL_MAX_CONNECTIONS", str(limit))
+    monkeypatch.setenv("MYSQL_POOL_AUTH_RESERVED", str(reserved))
+    assert generation_worker_limit() == expected
+
+
+def test_generation_admission_waits_before_taking_database_connection(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    from erp import ai_original_cost_control as control
+    monkeypatch.setenv("MYSQL_POOL_MAX_CONNECTIONS", "6")
+    monkeypatch.setenv("MYSQL_POOL_AUTH_RESERVED", "1")
+    started = threading.Event()
+    opened = threading.Event()
+    def queued():
+        started.set()
+        def connect():
+            opened.set()
+            return FakeConnection()
+        with product_generation_lock(3, connection_factory=connect):
+            pass
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with product_generation_lock(1, connection_factory=FakeConnection):
+            with product_generation_lock(2, connection_factory=FakeConnection):
+                future = executor.submit(queued)
+                assert started.wait(2)
+                assert not opened.wait(.1)
+            future.result(timeout=2)
+        assert opened.is_set()
+    assert control._active_generations == 0
+
+
+def test_connection_failure_returns_generation_slot():
+    from erp import ai_original_cost_control as control
+    def unavailable():
+        raise TimeoutError("pool busy")
+    with pytest.raises(TimeoutError):
+        with product_generation_lock(1, connection_factory=unavailable):
+            pass
+    assert control._active_generations == 0
+
+
+def test_task_reports_budgeted_concurrency_and_finishes_queue(monkeypatch):
+    from test_ai_original_batch_isolation import worker, row
+    monkeypatch.setenv('MYSQL_POOL_MAX_CONNECTIONS', '6')
+    monkeypatch.setenv('MYSQL_POOL_AUTH_RESERVED', '1')
+    items = [row(pid) for pid in range(1, 5)]
+    fixture = worker(monkeypatch, items)
+    fixture.run(items, workers=3, model='qwen3.7-flash')
+    assert fixture.state['worker_count'] == 2
+    assert fixture.state['completed_count'] == 4
+    assert fixture.state['failed_count'] == 0
+    assert not fixture.state['running']

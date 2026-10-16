@@ -1,0 +1,617 @@
+{
+  "scope": "Real standalone HTML/CSS/JS; empty API stubs. Errors can be fixture shape mismatches; no business/backend throughput measured.",
+  "results": [
+    {
+      "template": "ai_weight_price",
+      "width": 1440,
+      "loadMs": 74.69999999995343,
+      "domNodes": 466,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/owners"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/config"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/categories"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/tasks"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/logs"
+        }
+      ],
+      "html_bytes": 79698
+    },
+    {
+      "template": "infraction_dashboard",
+      "width": 1440,
+      "loadMs": 74.20000000018626,
+      "domNodes": 145,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/official-infractions/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/api/official-infractions/sync/status"
+        }
+      ],
+      "html_bytes": 63790
+    },
+    {
+      "template": "product_diagnosis",
+      "width": 1440,
+      "loadMs": 43.5999999998603,
+      "domNodes": 119,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/product-diagnosis"
+        }
+      ],
+      "html_bytes": 5753
+    },
+    {
+      "template": "clearance_alerts",
+      "width": 1440,
+      "loadMs": 50.5,
+      "domNodes": 178,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/clearance-alerts"
+        }
+      ],
+      "html_bytes": 10163
+    },
+    {
+      "template": "mercado_promotions",
+      "width": 1440,
+      "loadMs": 60.300000000046566,
+      "domNodes": 257,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/promotions/stores"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotions/jobs"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotions/jobs"
+        }
+      ],
+      "html_bytes": 77661
+    },
+    {
+      "template": "price_competition",
+      "width": 1440,
+      "loadMs": 51.5,
+      "domNodes": 105,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/price-competition/stores"
+        },
+        {
+          "method": "GET",
+          "path": "/api/price-competition"
+        }
+      ],
+      "html_bytes": 5856
+    },
+    {
+      "template": "size_charts",
+      "width": 1440,
+      "loadMs": 75,
+      "domNodes": 384,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/size-charts/templates"
+        },
+        {
+          "method": "GET",
+          "path": "/api/size-charts/options"
+        },
+        {
+          "method": "GET",
+          "path": "/api/size-charts/records"
+        },
+        {
+          "method": "GET",
+          "path": "/api/size-charts/batch"
+        }
+      ],
+      "html_bytes": 16112
+    },
+    {
+      "template": "automation_center",
+      "width": 1440,
+      "loadMs": 40.10000000009313,
+      "domNodes": 105,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/automation-center"
+        }
+      ],
+      "html_bytes": 11751
+    },
+    {
+      "template": "account_billing",
+      "width": 1440,
+      "loadMs": 76,
+      "domNodes": 251,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/billing/me"
+        },
+        {
+          "method": "GET",
+          "path": "/api/print-wallet/accounts"
+        }
+      ],
+      "html_bytes": 10663
+    },
+    {
+      "template": "ai_billing",
+      "width": 1440,
+      "loadMs": 56.699999999953434,
+      "domNodes": 119,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/ai-billing"
+        }
+      ],
+      "html_bytes": 5888
+    },
+    {
+      "template": "print_wallet",
+      "width": 1440,
+      "loadMs": 50.800000000046566,
+      "domNodes": 96,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/print-wallet/accounts"
+        }
+      ],
+      "html_bytes": 4113
+    },
+    {
+      "template": "employee_tasks",
+      "width": 1440,
+      "loadMs": 50.199999999953434,
+      "domNodes": 69,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/employee-tasks"
+        }
+      ],
+      "html_bytes": 5044
+    },
+    {
+      "template": "integration_settings",
+      "width": 1440,
+      "loadMs": 57.0999999998603,
+      "domNodes": 277,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/account-integrations"
+        },
+        {
+          "method": "GET",
+          "path": "/api/account-integrations/balance"
+        }
+      ],
+      "html_bytes": 24535
+    },
+    {
+      "template": "account_profile",
+      "width": 1440,
+      "loadMs": 61.10000000009313,
+      "domNodes": 64,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/account/profile"
+        }
+      ],
+      "html_bytes": 3535
+    },
+    {
+      "template": "login",
+      "width": 1440,
+      "loadMs": 38.60000000009313,
+      "domNodes": 43,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [],
+      "html_bytes": 11122
+    },
+    {
+      "template": "register",
+      "width": 1440,
+      "loadMs": 47.800000000046566,
+      "domNodes": 58,
+      "documentWidth": 1440,
+      "longTasks": [],
+      "errors": [],
+      "requests": [],
+      "html_bytes": 12947
+    },
+    {
+      "template": "ai_weight_price",
+      "width": 390,
+      "loadMs": 65.10000000009313,
+      "domNodes": 466,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/owners"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/config"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/categories"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/status"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/tasks"
+        },
+        {
+          "method": "GET",
+          "path": "/api/ai-weight-price/logs"
+        }
+      ],
+      "html_bytes": 79698
+    },
+    {
+      "template": "infraction_dashboard",
+      "width": 390,
+      "loadMs": 53.0999999998603,
+      "domNodes": 145,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/official-infractions/dashboard"
+        },
+        {
+          "method": "GET",
+          "path": "/api/official-infractions/sync/status"
+        }
+      ],
+      "html_bytes": 63790
+    },
+    {
+      "template": "product_diagnosis",
+      "width": 390,
+      "loadMs": 84,
+      "domNodes": 119,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/product-diagnosis"
+        }
+      ],
+      "html_bytes": 5753
+    },
+    {
+      "template": "clearance_alerts",
+      "width": 390,
+      "loadMs": 59.39999999990687,
+      "domNodes": 178,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/clearance-alerts"
+        }
+      ],
+      "html_bytes": 10163
+    },
+    {
+      "template": "mercado_promotions",
+      "width": 390,
+      "loadMs": 67.4000000001397,
+      "domNodes": 257,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/promotions/stores"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotions"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotions/jobs"
+        },
+        {
+          "method": "GET",
+          "path": "/api/promotions/jobs"
+        }
+      ],
+      "html_bytes": 77661
+    },
+    {
+      "template": "price_competition",
+      "width": 390,
+      "loadMs": 50.60000000009313,
+      "domNodes": 105,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/price-competition/stores"
+        },
+        {
+          "method": "GET",
+          "path": "/api/price-competition"
+        }
+      ],
+      "html_bytes": 5856
+    },
+    {
+      "template": "size_charts",
+      "width": 390,
+      "loadMs": 101.10000000009313,
+      "domNodes": 384,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/size-charts/templates"
+        },
+        {
+          "method": "GET",
+          "path": "/api/size-charts/options"
+        },
+        {
+          "method": "GET",
+          "path": "/api/size-charts/records"
+        },
+        {
+          "method": "GET",
+          "path": "/api/size-charts/batch"
+        }
+      ],
+      "html_bytes": 16112
+    },
+    {
+      "template": "automation_center",
+      "width": 390,
+      "loadMs": 41.39999999990687,
+      "domNodes": 105,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/automation-center"
+        }
+      ],
+      "html_bytes": 11751
+    },
+    {
+      "template": "account_billing",
+      "width": 390,
+      "loadMs": 54.60000000009313,
+      "domNodes": 251,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/billing/me"
+        },
+        {
+          "method": "GET",
+          "path": "/api/print-wallet/accounts"
+        }
+      ],
+      "html_bytes": 10663
+    },
+    {
+      "template": "ai_billing",
+      "width": 390,
+      "loadMs": 59.60000000009313,
+      "domNodes": 119,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/ai-billing"
+        }
+      ],
+      "html_bytes": 5888
+    },
+    {
+      "template": "print_wallet",
+      "width": 390,
+      "loadMs": 63.800000000046566,
+      "domNodes": 96,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/print-wallet/accounts"
+        }
+      ],
+      "html_bytes": 4113
+    },
+    {
+      "template": "employee_tasks",
+      "width": 390,
+      "loadMs": 53.60000000009313,
+      "domNodes": 69,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/employee-tasks"
+        }
+      ],
+      "html_bytes": 5044
+    },
+    {
+      "template": "integration_settings",
+      "width": 390,
+      "loadMs": 57.39999999990687,
+      "domNodes": 277,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/account-integrations"
+        },
+        {
+          "method": "GET",
+          "path": "/api/account-integrations/balance"
+        }
+      ],
+      "html_bytes": 24535
+    },
+    {
+      "template": "account_profile",
+      "width": 390,
+      "loadMs": 77.69999999995343,
+      "domNodes": 64,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/account/profile"
+        }
+      ],
+      "html_bytes": 3535
+    },
+    {
+      "template": "login",
+      "width": 390,
+      "loadMs": 44.39999999990687,
+      "domNodes": 43,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [],
+      "html_bytes": 11122
+    },
+    {
+      "template": "register",
+      "width": 390,
+      "loadMs": 34.199999999953434,
+      "domNodes": 58,
+      "documentWidth": 390,
+      "longTasks": [],
+      "errors": [],
+      "requests": [],
+      "html_bytes": 12947
+    }
+  ]
+}

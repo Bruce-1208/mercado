@@ -65,7 +65,7 @@ def test_restart_skips_checkpointed_items_and_restores_original_task_progress(qu
     accepted, original = update.start_store_link_remote_update([18, 19], {"price": "12.5"})
     assert accepted
     update._checkpoint_item(original["task_id"], result(link(18)))
-    update._state_update(status="running")
+    update._state_update(**{**original, "status": "running"})
     update._persist_task_state(original["task_id"])
     reset_process_state(monkeypatch)
     calls = []
@@ -84,17 +84,21 @@ def test_restart_skips_checkpointed_items_and_restores_original_task_progress(qu
     assert update.resume_pending_store_link_remote_updates() is False
 
 
-def test_cross_process_submission_reuses_pending_task(queue, monkeypatch):
+def test_cross_process_submission_accepts_independent_pending_batches(queue, monkeypatch):
     accepted, first = update.start_store_link_remote_update([18], {"price": "12.5"})
     assert accepted
     # A second process has independent memory but shares the durable queue.
     reset_process_state(monkeypatch)
     accepted, duplicate = update.start_store_link_remote_update([19], {"price": "20"})
-    assert accepted is False
-    assert duplicate["task_id"] == first["task_id"]
+    assert accepted is True
+    assert duplicate["task_id"] != first["task_id"]
     with sqlite3.connect(queue) as database:
-        assert database.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 1
-        assert database.execute("SELECT link_id FROM items").fetchone()[0] == 18
+        assert database.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == 2
+        assert {row[0] for row in database.execute("SELECT link_id FROM items")} == {18, 19}
+    status = update.store_link_remote_update_status()
+    assert status["task_id"] == first["task_id"]
+    assert status["pending_batches"] == 2
+    assert status["queued_batches"] == 1
 
 
 def test_stale_process_memory_does_not_block_submission_after_another_worker_finishes(queue, monkeypatch):
@@ -258,3 +262,140 @@ def test_same_item_waits_until_snapshot_is_written_but_other_items_continue(queu
         same.result(timeout=2)
     assert writes.index("old snapshot") < writes.index(18)
     assert not list((queue.parent / "locks").glob("mercado_listing_*.lockdir"))
+
+
+def test_submit_while_worker_is_writing_preserves_both_batches(queue, monkeypatch):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    entered, release = threading.Event(), threading.Event()
+    writes = []
+
+    def change(row, token, changes):
+        if changes["price"] == Decimal("12.5"):
+            entered.set()
+            assert release.wait(5)
+        writes.append(changes["price"])
+        return result(row)
+
+    monkeypatch.setattr(update, "_update_one_link", change)
+    _, first = update.start_store_link_remote_update([18], {"price": "12.5"})
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        running = pool.submit(update.resume_pending_store_link_remote_updates)
+        try:
+            assert entered.wait(3)
+            before = update._state_snapshot()
+            accepted, second = update.start_store_link_remote_update([18], {"price": "20"})
+            assert accepted and second["task_id"] != first["task_id"]
+            assert update._state_snapshot() == before
+            status = update.store_link_remote_update_status()
+            assert status["task_id"] == first["task_id"]
+            assert status["queued_batches"] == 1
+        finally:
+            release.set()
+        assert running.result(timeout=3)
+    assert update._load_task(first["task_id"])["status"] == "completed"
+    status = update.store_link_remote_update_status()
+    assert status["running"] and status["task_id"] == second["task_id"]
+    assert status["recent_batches"][0]["task_id"] == first["task_id"]
+    reset_process_state(monkeypatch)
+    assert update.resume_pending_store_link_remote_updates()
+    assert writes == [Decimal("12.5"), Decimal("20")]
+    assert not update.store_link_remote_update_status()["running"]
+
+
+def test_queued_package_change_keeps_previous_batch_values(queue, monkeypatch):
+    current = link(18)
+    monkeypatch.setattr(update, "get_store_links_by_ids", lambda ids: [dict(current)])
+    packages = []
+
+    def change(row, token, changes):
+        packages.append(update._package_payload(row, changes))
+        current.update(changes)
+        return result(row)
+
+    monkeypatch.setattr(update, "_update_one_link", change)
+    update.start_store_link_remote_update([18], {"weight_g": 500})
+    update.start_store_link_remote_update([18], {"package_length_cm": 20})
+    assert update.resume_pending_store_link_remote_updates()
+    assert update.resume_pending_store_link_remote_updates()
+    assert {item["id"]: item["value_name"] for item in packages[1]["attributes"]} == {
+        "PACKAGE_WEIGHT": "500 g", "PACKAGE_LENGTH": "20 cm",
+        "PACKAGE_WIDTH": "10 cm", "PACKAGE_HEIGHT": "10 cm",
+    }
+
+
+def test_successful_queue_drains_without_inter_batch_wait(queue, monkeypatch):
+    writes, delays = [], []
+    monkeypatch.setattr(update, "_update_one_link", lambda row, *_: (writes.append(row["id"]) or result(row)))
+    update.start_store_link_remote_update([18], {"price": 12})
+    update.start_store_link_remote_update([19], {"price": 20})
+
+    class StopWhenIdle:
+        def wait(self, seconds):
+            delays.append(seconds)
+            assert writes == [18, 19]
+            raise SystemExit()
+
+    monkeypatch.setattr(update, "_recovery_wakeup", StopWhenIdle())
+    with pytest.raises(SystemExit):
+        update._remote_update_recovery_loop()
+    assert delays == [10]
+
+
+def test_token_preparation_for_different_shops_is_parallel(queue, monkeypatch):
+    import threading
+    barrier = threading.Barrier(2)
+    prepared = []
+    monkeypatch.setattr(update, "get_store_links_by_ids", lambda ids: [{**link(i), "token_id": i} for i in ids])
+
+    def prepare(token_id):
+        barrier.wait(timeout=3)
+        prepared.append(token_id)
+        return {"id": token_id, "access_token": "mock"}
+
+    monkeypatch.setattr(update.bit_mysql, "get_mercado_store_token", prepare)
+    monkeypatch.setattr(update, "_update_one_link", lambda row, *_: result(row))
+    update.start_store_link_remote_update([18, 19], {"price": 12})
+    assert update.resume_pending_store_link_remote_updates()
+    assert set(prepared) == {18, 19}
+    assert update.store_link_remote_update_status()["success_count"] == 2
+
+
+def test_scheduler_start_failure_still_acknowledges_durable_submission(queue, monkeypatch):
+    monkeypatch.setattr(update, "start_store_link_remote_update_recovery",
+                        lambda: (_ for _ in ()).throw(RuntimeError("thread unavailable")))
+    accepted, task = update.start_store_link_remote_update([18], {"price": 12})
+    assert accepted
+    assert update._load_task(task["task_id"])["status"] == "queued"
+
+
+def test_racing_submissions_are_all_saved_with_their_own_payload(queue):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        tasks = list(pool.map(lambda i: update.start_store_link_remote_update([i], {"price": i}), range(18, 26)))
+    assert all(accepted for accepted, _ in tasks)
+    assert len({state["task_id"] for _, state in tasks}) == 8
+    for _, state in tasks:
+        task = update._load_task(state["task_id"])
+        assert task["rows"][0]["id"] == task["changes"]["price"]
+    assert update.store_link_remote_update_status()["pending_batches"] == 8
+
+
+def test_failed_batch_keeps_its_results_and_does_not_block_next_batch(queue, monkeypatch):
+    def change(row, token, changes):
+        if row["id"] == 18:
+            raise ValueError("模拟平台拒绝修改")
+        return result(row)
+
+    monkeypatch.setattr(update, "_update_one_link", change)
+    _, first = update.start_store_link_remote_update([18], {"price": 12})
+    _, second = update.start_store_link_remote_update([19], {"price": 20})
+    assert update.resume_pending_store_link_remote_updates()
+    assert update._load_task(first["task_id"])["state"]["failed_count"] == 1
+    assert update.store_link_remote_update_status()["task_id"] == second["task_id"]
+    assert update.resume_pending_store_link_remote_updates()
+    status = update.store_link_remote_update_status()
+    assert status["status"] == "completed"
+    assert {batch["status"] for batch in status["recent_batches"]} == {"partial", "completed"}

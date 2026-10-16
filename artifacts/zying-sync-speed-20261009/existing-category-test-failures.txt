@@ -1,0 +1,42 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+___ test_mercado_destination_and_existing_product_change_in_one_transaction ____
+
+offline_schema = None
+
+    def test_mercado_destination_and_existing_product_change_in_one_transaction(offline_schema):
+        connection = _CategoryConnection()
+        assert store.upsert_collection_items(
+            88, [{**PRODUCT, "management_category_id": 23}],
+            connection_factory=lambda: connection,
+        ) == 1
+        assert "FOR UPDATE" in connection.queries[0][0]
+        insert_sql, values = next((s, p) for s, p in connection.queries if s.startswith("INSERT"))
+        assert "`collected_at`, `management_category_id`" in insert_sql
+        assert "`management_category_id` = VALUES(`management_category_id`)" in insert_sql
+>       assert values[-1] == 23
+E       AssertionError: assert 'enterprise' == 23
+
+tests/test_browser_extension_management_categories.py:191: AssertionError
+________ test_zying_destination_is_written_only_with_valid_product_rows ________
+
+offline_schema = None
+
+    def test_zying_destination_is_written_only_with_valid_product_rows(offline_schema):
+        connection = _CategoryConnection()
+        result = store.upsert_zying_products_to_products(
+            [{"product_id": "801623017", "title": "产品", "management_category_id": 23},
+             {"product_id": "801623018", "title": "", "management_category_id": 99}],
+            connection_factory=lambda: connection,
+        )
+        assert result == {"count": 1, "skipped": 1}
+        insert_sql, rows = next((s, p) for s, p in connection.queries if s.startswith("INSERT"))
+        assert "`product_developer_name`, `management_category_id`" in insert_sql
+>       assert rows[0][-1] == 23
+E       AssertionError: assert 'enterprise' == 23
+
+tests/test_browser_extension_management_categories.py:235: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_browser_extension_management_categories.py::test_mercado_destination_and_existing_product_change_in_one_transaction
+FAILED tests/test_browser_extension_management_categories.py::test_zying_destination_is_written_only_with_valid_product_rows
+2 failed in 0.13s

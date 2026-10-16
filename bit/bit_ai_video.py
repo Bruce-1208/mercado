@@ -128,12 +128,19 @@ def storage_root() -> Path:
     return root
 
 
-def _settings_path() -> Path:
+def _settings_path(user_id=None) -> Path:
+    owner = int(user_id or 0)
+    if owner < 0:
+        raise ValueError("无效的配置账号")
+    if owner:
+        directory = storage_root() / "account-settings"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory / f"{owner}.json"
     return storage_root() / "settings.json"
 
 
-def _load_saved_settings() -> dict:
-    path = _settings_path()
+def _load_saved_settings(user_id=None) -> dict:
+    path = _settings_path(user_id)
     if not path.is_file():
         return {}
     with _settings_lock:
@@ -144,8 +151,8 @@ def _load_saved_settings() -> dict:
     return value if isinstance(value, dict) else {}
 
 
-def _common_config() -> dict:
-    saved = _load_saved_settings()
+def _common_config(user_id=None) -> dict:
+    saved = _load_saved_settings(user_id)
     return {
         "public_base_url": str(
             saved.get("public_base_url")
@@ -157,15 +164,15 @@ def _common_config() -> dict:
 
 
 def _provider_config(provider: str, user_id=None) -> dict:
-    saved = _load_saved_settings()
+    saved = _load_saved_settings(user_id)
     account = _account_credentials(user_id)
     if provider == SEEDANCE_PROVIDER:
         return {
             "api_key": str(
                 account.get("seedance_api_key")
                 or saved.get("seedance_api_key")
-                or os.environ.get("AI_VIDEO_SEEDANCE_API_KEY")
-                or os.environ.get("ARK_API_KEY")
+                or (os.environ.get("AI_VIDEO_SEEDANCE_API_KEY") if not user_id else "")
+                or (os.environ.get("ARK_API_KEY") if not user_id else "")
                 or ""
             ).strip(),
             "region": str(
@@ -194,14 +201,14 @@ def _provider_config(provider: str, user_id=None) -> dict:
         else:
             wan_key = (
                 saved.get("wan_api_key") or saved.get("api_key")
-                or os.environ.get("AI_VIDEO_WAN_API_KEY")
-                or os.environ.get("AI_VIDEO_API_KEY")
-                or os.environ.get("DASHSCOPE_API_KEY")
+                or (os.environ.get("AI_VIDEO_WAN_API_KEY") if not user_id else "")
+                or (os.environ.get("AI_VIDEO_API_KEY") if not user_id else "")
+                or (os.environ.get("DASHSCOPE_API_KEY") if not user_id else "")
             )
             workspace_id = (
                 saved.get("wan_workspace_id") or saved.get("workspace_id")
-                or os.environ.get("AI_VIDEO_WAN_WORKSPACE_ID")
-                or os.environ.get("AI_VIDEO_WORKSPACE_ID")
+                or (os.environ.get("AI_VIDEO_WAN_WORKSPACE_ID") if not user_id else "")
+                or (os.environ.get("AI_VIDEO_WORKSPACE_ID") if not user_id else "")
             )
         return {
             "api_key": str(wan_key or "").strip(),
@@ -260,8 +267,8 @@ def _local_transcode_tools() -> tuple[str, str] | None:
     return (str(bundled), "") if bundled else None
 
 
-def save_provider_settings(changes: dict) -> dict:
-    current = _load_saved_settings()
+def save_provider_settings(changes: dict, user_id=None) -> dict:
+    current = _load_saved_settings(user_id)
     key_aliases = {
         "seedance_api_key": "seedance_api_key",
         "wan_api_key": "wan_api_key",
@@ -315,7 +322,7 @@ def save_provider_settings(changes: dict) -> dict:
         endpoint = str(current.get(key) or "")
         if endpoint and not endpoint.startswith("https://"):
             raise ValueError("自定义模型地址必须使用 HTTPS")
-    path = _settings_path()
+    path = _settings_path(user_id)
     temporary = path.with_suffix(".json.tmp")
     with _settings_lock:
         temporary.write_text(
@@ -323,7 +330,7 @@ def save_provider_settings(changes: dict) -> dict:
         )
         os.chmod(temporary, 0o600)
         os.replace(temporary, path)
-    return provider_settings()
+    return provider_settings(user_id)
 
 
 def _safe_id(value: object) -> str:
@@ -428,7 +435,7 @@ def _public_job(job: dict) -> dict:
 def provider_settings(user_id=None) -> dict:
     seedance = _provider_config(SEEDANCE_PROVIDER, user_id)
     wan = _provider_config(WAN_PROVIDER, user_id)
-    public_base = _common_config()["public_base_url"]
+    public_base = _common_config(user_id)["public_base_url"]
     seedance_configured = _provider_is_configured(SEEDANCE_PROVIDER, user_id)
     wan_configured = _provider_is_configured(WAN_PROVIDER, user_id)
     public_base_configured = public_base.startswith(("https://", "http://"))
@@ -1205,7 +1212,7 @@ def _asset_signature(job_id: str, asset_id: str, expires: int) -> str:
 
 
 def signed_asset_url(job_id: str, asset: dict, expires: int | None = None) -> str:
-    base_url = _common_config()["public_base_url"]
+    base_url = _common_config(_job_owner(get_job(job_id)))["public_base_url"]
     if not base_url.startswith(("https://", "http://")):
         raise RuntimeError("请配置 AI_VIDEO_PUBLIC_BASE_URL，使模型能够读取视频素材")
     expires = int(expires or time.time() + 2 * 60 * 60)
@@ -1323,7 +1330,7 @@ def _provider_headers(provider: str, async_request: bool = False, job=None) -> d
 
 
 def _asset_provider_url(job: dict, asset: dict, *, inline_images: bool) -> str:
-    public_base = _common_config()["public_base_url"]
+    public_base = _common_config(_job_owner(job))["public_base_url"]
     if asset.get("kind") == "image" and inline_images and not public_base:
         path = _job_dir(job["id"]) / "assets" / asset["stored_name"]
         encoded = base64.b64encode(path.read_bytes()).decode("ascii")
@@ -1633,7 +1640,7 @@ def _validate_provider_result(result: dict) -> None:
 def _provider_unavailable_reason(provider: str, job: dict) -> str:
     if not _provider_is_configured(provider, _job_owner(job)):
         return "未配置供应商凭证"
-    public_base = _common_config()["public_base_url"]
+    public_base = _common_config(_job_owner(job))["public_base_url"]
     if provider == SEEDANCE_PROVIDER and not public_base:
         return "Seedance 参考素材需要 AI_VIDEO_PUBLIC_BASE_URL"
     if provider == WAN_PROVIDER and not public_base and any(

@@ -1,0 +1,1 @@
+tests/test_zeshun_browser_extension.py::test_extension_files_referenced_by_manifest_exist

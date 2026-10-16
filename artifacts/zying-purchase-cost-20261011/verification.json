@@ -1,0 +1,12 @@
+{
+  "web_orders": true,
+  "orders_service": true,
+  "plugin_version": "1.8.75",
+  "rules": [
+    "numbered purchases only",
+    "sum distinct purchase amounts",
+    "overwrite including empty fields"
+  ],
+  "focused_tests": "64 passed; 8 unrelated Agent route tests deselected",
+  "reader_extension_excel_tests": "44 passed"
+}

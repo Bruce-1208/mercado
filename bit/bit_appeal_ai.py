@@ -54,8 +54,11 @@ import random
 
 from bit.bit_utils import get_latest_modified_file, get_bit_path, parser_delay_date, get_now_time, getWindowidByName
 from bit.bit_api import *
+from bit import ziniao_browser
 from bit.bit_collection_control import env_int
 from bit.bit_runtime_lock import create_window_lease, current_thread_window_lease
+from bit.appeal_evidence import ORDER_FORMS, validate_package_message
+from bit.bit_db_api import get_appeal_package_ids
 from bit.bit_appeal_phrases import (
     get_current_appeal_phrase,
     render_appeal_phrase,
@@ -108,7 +111,7 @@ except Exception:
     )
 
 # 聊天记录入库接口；AI 与人工客服回复都会通过这个接口记录。
-CHAT_INFO_API_URL = "https://wuhanzeshun.com/api/v1/chat"
+CHAT_INFO_API_URL = "https://wuhanzeshun.cn/api/v1/chat"
 
 # 美客多帮助中心入口，AI 客服悬浮窗通常挂在这些页面中。
 HELP_URL = "https://global-selling.mercadolibre.com/help"
@@ -200,7 +203,7 @@ SITE_OPTION_MENU_OPTIONS = (
 
 CANCELLATION_DEFAULT_APPEAL_TEMPLATE = """尊敬的平台审核专员：
 
-1. 订单编号：{order_ids}
+1. 包裹号：{order_ids}
 
 2. 订单取消原因：页面显示【Mercado Libre取消的包裹，我们已取消此交易】，本次订单为平台系统主动取消交易，并非我方卖家主动发起订单取消。
 
@@ -347,6 +350,8 @@ def connect_bit_browser(window_id):
                 driver.implicitly_wait(0)
                 driver.set_page_load_timeout(60)
                 driver.set_script_timeout(30)
+                if ziniao_browser.is_ziniao(window_id):
+                    ziniao_browser.check_ip(driver, data.get("ipDetectionPage"))
             except BaseException:
                 # Selenium 4.41 does not create ``Service.process`` until the
                 # driver subprocess has started.  Calling stop() after an
@@ -820,6 +825,15 @@ def select_mercado_site_fast(driver, name, site):
 
 def build_appeal_message(window_id, name, site, form, message, nickname):
     """根据申诉类型构造首条发送给 AI 客服的申诉话术。"""
+    if form in ORDER_FORMS:
+        if form not in {"延误", "延误率"}:
+            raise ValueError("订单类申诉请使用核实包裹号的分组处理入口")
+        packages = get_appeal_package_ids(name, site, get_delay_orders_download_list(window_id, name, site))[:5]
+        if not packages:
+            return ""
+        text = render_appeal_phrase(message or get_current_appeal_phrase() or "请核查延误责任。",
+                                   nickname=nickname, order_ids="、".join(packages), appeal_type=form)
+        return validate_package_message(text, packages)
     if message:
         return message
 
@@ -2278,9 +2292,9 @@ def _prepare_group_conversation(driver, name, site, group_index):
         driver.switch_to.default_content()
         if not verify_selected_site(driver, site):
             raise AppealExecutionError("发送前校验发现站点已经改变", "pre_send_failed")
-    if getattr(driver, "_bit_ai_reset_before_group", False) or (
+    if not getattr(driver, "_bit_screenshot_mode", False) and (getattr(driver, "_bit_ai_reset_before_group", False) or (
         group_index > 1 and (group_index - 1) % AI_GROUPS_PER_CONVERSATION == 0
-    ):
+    )):
         if not restart_ai_conversation(driver, name, site):
             raise AppealExecutionError("未能建立新的客服会话", "pre_send_failed")
         setattr(driver, "_bit_ai_reset_before_group", False)
@@ -2356,6 +2370,8 @@ def send_infraction_message_with_retry(
     result = execution_result("pre_send_failed")
     latest_chat = []
     try:
+        if appeal_kind in ORDER_FORMS:
+            huashu = validate_package_message(huashu, str(infraction_ids).split("、"))
         _prepare_group_conversation(driver, name, site, group_index)
         message, site_answers = huashu, 0
         while True:
@@ -2470,12 +2486,21 @@ def send_infraction_message_with_retry(
             result.update(status="failed", execution_status="failed", error=str(exc),
                           message=STATUS_LABELS["failed"])
     finally:
+        if getattr(driver, "_bit_screenshot_mode", False):
+            try:
+                from bit.appeal_evidence import save_chat_screenshot
+                result["screenshot_path"] = save_chat_screenshot(driver, name, site, appeal_kind, group_index)
+            except Exception as exc:
+                result["screenshot_error"] = str(exc)
+                print(f"客服截图保存失败（保留窗口，不重复发送）：{exc}<br>")
         append_chat_log(name, site, "group_result", message=huashu,
                         response=result.get("response", ""), chat=latest_chat,
                         extra={**base_extra, "result": result})
     print(f"{get_now_time()} {name} {site} 第 {group_index}/{total_groups} 组：{result['message']}<br>")
     if result.get("reply_status") in {"reply_timeout", "needs_human"} or result.get("post_send_status"):
         setattr(driver, "_bit_ai_reset_before_group", True)
+        if getattr(driver, "_bit_screenshot_mode", False):
+            result["needs_human"] = True
     return result
 
 
@@ -3475,6 +3500,7 @@ def shensu(
     name, site, form, message, validate_open=False, infraction_ids=None,
     prohibited_ids=None, stop_event=None, window_id=None,
     ai_script_mode=False, dashscope_api_key="", appeal_copy_mode="普通模式",
+    screenshot_mode=False,
 ):
     """返回执行状态；收到回复不等于平台已批准申诉。"""
     print(f"{name} {site} 开始进行{form}申诉，自定义话术为{message}<br>")
@@ -3484,7 +3510,7 @@ def shensu(
     driver, owned_window_lease = None, None
     window_id = str(window_id or "").strip()
     appeal_error, failure_status = "", ""
-    skip_close_tab = False
+    skip_close_tab = bool(screenshot_mode)
     outcome = execution_result("no_data")
     started = time.monotonic()
     appeal_copy_mode = (
@@ -3510,6 +3536,10 @@ def shensu(
                 raise AppealExecutionError("窗口正在被其他任务占用", "window_busy")
         driver, res = connect_bit_browser(window_id)
         name = res.get("data", {}).get("name") or name
+        driver._bit_screenshot_mode = bool(screenshot_mode)
+        if screenshot_mode:
+            driver.switch_to.new_window("tab")
+            releaseBrowserLease(window_id)
         # 登录恢复预算属于整次申诉，而不是某一次页面打开；后续重新打开
         # Help/客服入口不能把同一轮自动登录再次提交。
         driver._bit_appeal_login_attempts = 0
@@ -3572,7 +3602,7 @@ def shensu(
             records = get_appeal_log_records()
             outcome.update(result_from_logs(records, error=appeal_error, status=failure_status))
             outcome["elapsed_seconds"] = round(time.monotonic() - started, 2)
-            if failure_status == "login_required":
+            if failure_status == "login_required" and not screenshot_mode:
                 # open_mercado_backend_page 已经会记录登录异常；这里再以申诉结果
                 # 为边界补写一次，覆盖业务处理中途发现登录页的兼容调用点。
                 login_record = {
@@ -3619,6 +3649,11 @@ def shensu(
             stop_appeal_log_collection()
             try:
                 if driver is not None:
+                    if screenshot_mode:
+                        try:
+                            releaseBrowserLease(window_id)
+                        except Exception as exc:
+                            print(f"{get_now_time()} {name} {site} 保留截图窗口时更新占用状态失败：{exc}<br>")
                     if not skip_close_tab:
                         close_current_tab_keep_browser(driver, name, site)
                     # Stop the driver service without quitting the user's BitBrowser.
@@ -3633,7 +3668,7 @@ def shensu(
                     try:
                         # Standalone appeals own the complete window. Batch
                         # appeals leave this to their outer shop lease instead.
-                        close_result = closeBrowser(window_id, lease=owned_window_lease)
+                        close_result = {"success": True} if screenshot_mode else closeBrowser(window_id, lease=owned_window_lease)
                         if not isinstance(close_result, dict) or close_result.get("success") is not True:
                             print(f"{get_now_time()} {name} 窗口关闭未确认，后台将继续回收：{close_result}<br>")
                     except Exception as exc:
@@ -3872,7 +3907,7 @@ def handle_delay(
     appeal_copy_mode="普通模式",
 ):
     """延误与其他申诉共用发送确认、站点问答和结果记录。"""
-    orders = get_delay_orders_download_list(window_id, name, site)
+    orders = get_appeal_package_ids(name, site, get_delay_orders_download_list(window_id, name, site))
     if not orders:
         return
     groups = [orders[i:i + 5] for i in range(0, len(orders), 5)]
@@ -3915,7 +3950,7 @@ def handle_cancellation(
 ):
     """处理取消率申诉：从声誉 Metrics 读取全部取消订单，按侵权规则分组处理。"""
     group_size = 10
-    cancellation_orders = get_cancellation_orders(driver, name, site)
+    cancellation_orders = get_cancellation_orders(driver, name, site, package_ids=True)
     if not cancellation_orders:
         print(f"{get_now_time()} {name} {site} 没有可以申诉的取消订单<br>")
         return
@@ -4017,7 +4052,7 @@ def handle_complaint(
 ):
     """处理投诉申诉：读取全部销售单号，每两个一组提交给 AI 客服。"""
     group_size = COMPLAINT_GROUP_SIZE
-    complaint_orders = get_complaint_orders(driver, name, site)
+    complaint_orders = get_complaint_orders(driver, name, site, package_ids=True)
     if not complaint_orders:
         print(f"{get_now_time()} {name} {site} 没有影响声誉的投诉销售单<br>")
         return
@@ -4055,7 +4090,7 @@ def handle_complaint(
                 appeal_type="投诉",
             )
             if selected_phrase
-            else f"销售单号：{complaint_ids}\n{COMPLAINT_DEFAULT_APPEAL_MESSAGE}"
+            else f"包裹号：{complaint_ids}\n{COMPLAINT_DEFAULT_APPEAL_MESSAGE}"
         )
         print(
             f"{get_now_time()} {name} {site} 开始发送第 {index}/{len(groups)} 组"
@@ -4140,6 +4175,7 @@ def get_delay_orders_random(name, site, nums):
                     order_list.append(order_num)
         print(get_now_time() + name + site + "最近15天的延误个数:", len(order_list))
 
+        order_list = get_appeal_package_ids(name, site, order_list)
         if len(order_list) >= nums:
             order_random = str(random.sample(order_list, nums))
         else:
@@ -4192,6 +4228,7 @@ def get_delay_orders_download_random(window_id,name, site, nums):
     order_random = ""
     try:
         order_list = get_delay_orders_download_list(window_id, name, site)
+        order_list = get_appeal_package_ids(name, site, order_list)
         if len(order_list) >= nums:
             order_random = str(random.sample(order_list, nums))
         else:

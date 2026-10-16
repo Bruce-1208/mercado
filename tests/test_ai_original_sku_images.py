@@ -116,6 +116,8 @@ def test_completed_legacy_draft_repairs_only_images_and_updates_publish_snapshot
     snapshot = json.loads(row['source_snapshot_json'])
     snapshot['original_1688'] = {'source_1688_item_id': '123456', 'variations': sku_rows()}
     snapshot['ai_original']['variations'] = deepcopy(sku_rows())
+    for index, variation in enumerate(snapshot['ai_original']['variations']):
+        variation['attribute_combinations'] = [{'id': 'MODEL', 'value_name': str(index)}]
     snapshot['ai_original']['title_es'] = 'Título corregido manualmente'
     row['source_snapshot_json'] = snapshot
     original = deepcopy(snapshot['original_1688'])
@@ -194,3 +196,90 @@ def test_completed_recollection_persists_only_missing_photos(monkeypatch):
     assert db.row['net_proceeds_usd'] == Decimal('22')
     assert fresh['ai_original']['edit_revision'] == 1
     assert db.committed
+
+
+def test_recollection_supplements_missing_facts_without_replacing_existing_data():
+    snapshot = {'original_1688': {'description_text': 'Reviewed source text', 'weight_g': 100,
+        'images': [{'url': 'https://cbu01.alicdn.com/a.jpg'}],
+        'properties': [{'name': '材质', 'value_name': 'Steel'}]},
+        'ai_original': {'status': 'completed', 'title_es': 'Reviewed title'}}
+    result = images.merge_recollected_sku_images(snapshot, {
+        'description_text': 'New text', 'weight_g': 200, 'package_length_cm': 15,
+        'images': ['https://cbu01.alicdn.com/b.jpg'],
+        'properties': [{'name': '材质', 'value_name': 'Plastic'}, {'name': '颜色', 'value_name': 'Blue'}],
+        'variations': [{'sku_id': '1', 'image_url': 'https://cbu01.alicdn.com/sku.jpg'}]})
+    assert result['original_1688']['weight_g'] == 100
+    assert result['original_1688']['package_length_cm'] == 15
+    assert result['original_1688']['description_text'] == 'Reviewed source text'
+    assert result['original_1688']['properties'] == [{'name': '材质', 'value_name': 'Steel'}, {'name': '颜色', 'value_name': 'Blue'}]
+    assert result['original_1688']['variations'][0]['sku_id'] == '1'
+    assert len(result['original_1688']['images']) == 2
+    assert result['ai_original'] == snapshot['ai_original']
+    assert 'package_length_cm' not in snapshot['original_1688']
+
+
+@pytest.mark.parametrize('gallery_key', ['images', 'pictures'])
+def test_product_gallery_does_not_substitute_missing_variant_photos(gallery_key):
+    original = {gallery_key: [{'secure_url': 'https://cbu01.alicdn.com/first.jpg'},
+                               {'url': 'https://cbu01.alicdn.com/second.jpg'}],
+                'variations': [{'sku_id': 'red', 'images': ['https://cbu01.alicdn.com/red.jpg',
+                                                         'https://cbu01.alicdn.com/red-detail.jpg']},
+                               {'sku_id': 'blue'}]}
+    before = deepcopy(original)
+    rows = images.restore_product_variation_image_sources(
+        [{'sku_id': 'red'}, {'sku_id': 'blue'}, {'seller_sku': 'legacy'}], original)
+    assert rows[0]['image_url'].endswith('/red.jpg')
+    assert all(not v.get('image_url') for v in rows[1:])
+    assert original == before
+
+
+def test_finished_white_cover_without_retained_source_can_resume(local_images):
+    options, downloads = local_images
+    ready = {'sku_id': '1', 'image_url': '/images/old-ai-white.jpg',
+             'white_image_url': '/images/old-ai-white.jpg',
+             'image_generation_method': 'local_background_removal'}
+    rows, _ = images.prepare_variation_white_images([ready, sku_rows()[0]], item_id='1', **options)
+    assert rows[0] == ready and len(downloads) == 1
+
+
+@pytest.mark.parametrize('name,values', [('尺码', ['S', 'M']), ('颜色', ['Red', 'Blue']), ('款式', ['A', 'B'])])
+def test_missing_variant_photos_require_explicit_confirmation(name, values, local_images):
+    options, downloads = local_images
+    source = {'main_image_url': 'https://cbu01.alicdn.com/cover.jpg',
+              'images': ['https://cbu01.alicdn.com/detail.jpg'],
+              'variations': [{'sku_id': str(i), 'attribute_combinations': [{'name': name, 'value_name': value}]}
+                             for i, value in enumerate(values)]}
+    restored = images.restore_product_variation_image_sources(source['variations'], source)
+    with pytest.raises(ValueError, match='SKU 1 缺少采集主图'):
+        images.prepare_variation_white_images(restored, item_id='123', **options)
+    assert downloads == []
+
+
+def test_gallery_cover_does_not_clear_multiple_sku_missing_source_blocker():
+    from erp.ai_original_state import source_input_state
+    draft = {'status': 'failed', 'failed_step': 'sku_images', 'variations': [{'sku_id': '1'}, {'sku_id': '2'}],
+             'input_blockers': [{'field': 'sku_images', 'sku_indices': [1, 2]}]}
+    assert source_input_state(draft, {'images': ['https://cbu01.alicdn.com/first.jpg']})['input_blockers'][0]['sku_indices'] == [1, 2]
+    assert source_input_state(draft, {'images': ['/images/old-ai-white.jpg']})['input_blockers'][0]['sku_indices'] == [1, 2]
+
+
+def test_failed_sku_image_retry_uses_confirmed_own_images_without_regenerating_copy(monkeypatch, local_images):
+    options, downloads = local_images
+    row = _ai_row()
+    snapshot = json.loads(row['source_snapshot_json'])
+    variations = [{'sku_id': str(i), 'image_url': f'https://cbu01.alicdn.com/{color}.jpg',
+                   'attribute_combinations': [{'id': 'COLOR', 'value_name': color}]}
+                  for i, color in enumerate(['Red', 'Blue'])]
+    snapshot['original_1688'] = {'source_1688_item_id': '123456', 'variations': variations,
+                               'images': ['https://cbu01.alicdn.com/first.jpg', 'https://cbu01.alicdn.com/detail.jpg']}
+    snapshot['ai_original'].update(status='failed', failed_step='sku_images', variations=deepcopy(variations),
+                                   preparation={'version': 1, 'sku_images_only': True})
+    row['source_snapshot_json'] = snapshot
+    monkeypatch.setattr(products, 'generate_marketplace_copy', lambda *a, **kw: pytest.fail('must not regenerate copy'))
+    monkeypatch.setattr(products, 'complete_marketplace_category', lambda *a, **kw: pytest.fail('must not regenerate category'))
+    result = products.prepare_ai_original_product(row, **options)
+    saved = json.loads(result['source_snapshot_json'])
+    assert result['ai_original']['status'] == 'completed'
+    assert downloads == ['https://cbu01.alicdn.com/Red.jpg', 'https://cbu01.alicdn.com/Blue.jpg']
+    assert all(images.variation_white_image_ready(v) for v in saved['source']['variations'])
+    assert saved['original_1688'] == snapshot['original_1688']

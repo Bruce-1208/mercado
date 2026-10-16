@@ -112,6 +112,12 @@ def test_invalid_source_edit_rejected_before_opening_connection(changes):
 
 
 def test_edit_preserves_collected_ai_skus_and_updates_publish_inputs(row):
+    snapshot = json.loads(row["source_snapshot_json"])
+    snapshot["marketplace_listings"] = {
+        "amazon": {"status": "completed", "review_status": "approved"},
+        "yandex": {"status": "completed", "review_status": "approved"},
+    }
+    row["source_snapshot_json"] = json.dumps(snapshot)
     connection = ProductConnection(row)
     saved = store.update_1688_product(7, {
         "weight_g": "320", "package_length_cm": "22", "package_width_cm": "12",
@@ -119,8 +125,15 @@ def test_edit_preserves_collected_ai_skus_and_updates_publish_inputs(row):
     }, connection_factory=lambda: connection)
     before = json.loads(row["source_snapshot_json"])
     after = json.loads(saved["source_snapshot_json"])
+    persisted = json.loads(connection.cursor_object.row["source_snapshot_json"])
     for field in ("original_1688", "ai_original", "source", "plugin_snapshot"):
-        assert after[field] == before[field]
+        assert persisted[field] == before[field]
+        for key, value in before[field].items():
+            assert after[field][key] == value
+    for draft in (after["ai_original"], after["source"]):
+        assert draft["weight_g"] == 320
+        assert draft["package_length_cm"] == 22
+        assert draft["net_proceeds_usd"] == 15
     assert saved["source_purchase_price_cny"] == saved["price"] == 30
     assert saved["source_weight_g"] == saved["weight_g"] == 320
     assert saved["source_package_length_cm"] == saved["package_length_cm"] == 22
@@ -129,6 +142,7 @@ def test_edit_preserves_collected_ai_skus_and_updates_publish_inputs(row):
     assert saved["source_net_calculation_price_cny"] == 30
     assert saved["suggested_net_proceeds_usd"] == 6
     assert saved["suggested_net_price_basis"] == "manual_purchase_price"
+    assert {draft["review_status"] for draft in after["marketplace_listings"].values()} == {"unreviewed"}
     assert "FOR UPDATE" in connection.cursor_object.queries[0][0]
     update_sql = connection.cursor_object.queries[1][0]
     assert "`source_type` = 'ai_original'" in update_sql
@@ -200,6 +214,10 @@ def test_stale_ai_snapshot_save_keeps_latest_source_overrides(row):
 def test_recollection_keeps_explicit_source_edits_and_clears_other_raw_weights(row, status):
     snapshot = json.loads(row["source_snapshot_json"])
     snapshot["ai_original"]["status"] = status
+    snapshot["marketplace_listings"] = {
+        "amazon": {"status": "completed", "review_status": "approved"},
+        "yandex": {"status": "completed", "review_status": "approved"},
+    }
     snapshot["source_1688_overrides"] = {"price": 30, "weight_g": 320, "package_length_cm": None, "net_proceeds_usd": 15}
     row["source_snapshot_json"] = json.dumps(snapshot)
     connection = ProductConnection(row)
@@ -214,6 +232,7 @@ def test_recollection_keeps_explicit_source_edits_and_clears_other_raw_weights(r
     assert saved["package_length_cm"] is None
     assert saved["package_width_cm"] is None
     assert saved["net_proceeds_usd"] == 15
+    assert {saved["marketplace_listings"][name]["review_status"] for name in ("amazon", "yandex")} == {"unreviewed"}
     assert connection.committed
 
 
@@ -382,6 +401,11 @@ def test_list_omits_duplicate_ai_payloads_but_preserves_supplier_detail():
 
 
 def test_bulk_source_edit_keeps_raw_snapshot_and_ai_draft(row):
+    before = json.loads(row["source_snapshot_json"])
+    before["marketplace_listings"] = {
+        "amazon": {"status": "completed", "review_status": "approved"},
+    }
+    row["source_snapshot_json"] = json.dumps(before)
     connection = ProductConnection(row)
     result = store.update_1688_product_items([7, 7], {"weight_g": 650, "package_width_cm": 14},
                                               connection_factory=lambda: connection)
@@ -390,6 +414,7 @@ def test_bulk_source_edit_keeps_raw_snapshot_and_ai_draft(row):
     assert snapshot["original_1688"] == original["original_1688"]
     assert snapshot["ai_original"] == original["ai_original"]
     assert snapshot["source_1688_overrides"] == {"weight_g": 650, "package_width_cm": 14}
+    assert snapshot["marketplace_listings"]["amazon"]["review_status"] == "unreviewed"
     assert connection.cursor_object.row["package_length_cm"] == 20
     assert result == {"requested": 1, "changed": 1, "updated_fields": ["weight_g", "package_width_cm"]}
     assert connection.committed and connection.closed

@@ -96,7 +96,7 @@ def test_public_registration_fixes_company_role_and_pending_state(monkeypatch):
         "wechat_id": "wechat-new", "phone": "13800138000", "role_key": "super_admin",
         "organization_key": "other-company", "is_active": True})
     sql, params = inserts[0]
-    assert "'member', 0" in sql
+    assert "'basic_member', 0" in sql
     assert params[6] == "wuhan-zeshun"
 
 

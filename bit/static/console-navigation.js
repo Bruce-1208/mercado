@@ -177,10 +177,13 @@
         const selected = event.target.closest('.tab-button, a[href]');
         if (!drawerIsOpen() || !selected || !nav.contains(selected)) return;
         setDrawerOpen(false);
-        // Move focus out of the hidden drawer after a workspace selection.
+        // Move focus out of the hidden drawer after any navigation selection.
         if (selected.dataset.tab) {
             const active = document.querySelector('.workspace-tab.active:not([hidden])');
             (active || toggle).focus({preventScroll: true});
+        } else {
+            // Standalone links open another tab; keep the original mobile page focused outside the closed drawer.
+            toggle.focus({preventScroll: true});
         }
     });
     const focusableNavigation = () => [toggle, ...sidebar.querySelectorAll(

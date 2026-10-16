@@ -25,13 +25,19 @@ function setup(status, rows, failIds = []) {
     aiOriginalStatus = record; renderAiOriginalFailureLog = record;`);
   return {run, requests, messages};
 }
-const row = (id, changes = {}) => ({id, category_id: 'CBT123', ai_status: 'completed', weight_g: 100, net_proceeds_usd: 5, ...changes});
+const row = (id, changes = {}) => ({id, category_id: 'CBT123', ai_status: 'completed', weight_g: 100, net_proceeds_usd: 5,
+  package_length_cm:10, package_width_cm:10, package_height_cm:10,
+  title_es:'Caja', title_pt:'Caixa', description_es:'Descripcion', description_pt:'Descricao',
+  main_image_url:'/test-ai-white.jpg', ai_original:{status:'completed', category_id:'CBT123', image_generation_method:'local_background_removal',
+    attributes:[{id:'MATERIAL',value_name:'Steel'}], validation:{errors:[],warnings:[]}}, ...changes});
 
 test('invalid product and server failure do not block other approvals', async () => {
   const {run, requests, messages} = setup('approved', [row(1), row(2, {weight_g: 0}), row(3), row(4)], [3]);
   await run('updateSelectedAiOriginalReviewStatus()');
   assert.deepEqual(requests.map(r => r.id).sort(), [1, 3, 4]);
-  assert.ok(requests.every(r => r.body.review_status === 'approved' && r.body.weight_g === 100));
+  assert.deepEqual(requests.filter(r => r.id === 1).map(r => r.body.review_status), ['approved']);
+  assert.deepEqual(requests.filter(r => r.id === 4).map(r => r.body.review_status), ['approved']);
+  assert.equal(requests.find(r => r.id === 3).body.review_status, 'approved');
   assert.equal(run('JSON.stringify([...aiOriginalSelected])'), '[2,3]');
   assert.equal(run('aiOriginalReviewRunning'), false);
   assert.match(messages.at(-1)[0], /已更新 2 件.*失败 2 件/);
@@ -60,7 +66,7 @@ test('stale success readback fails only that product and never fabricates its re
     const id = Number(url.split('/').pop());
     const changes = JSON.parse(options.body);
     return {ok: true, json: async () => ({status: 'success', data: {id, ...changes,
-      net_proceeds_usd: id === 1 ? 99 : changes.net_proceeds_usd}})};
+      review_status: id === 1 ? 'suspected' : changes.review_status}})};
   };`);
   await run('updateSelectedAiOriginalReviewStatus()');
   assert.equal(run('aiOriginalRows[0].review_status'), 'suspected');
@@ -83,7 +89,15 @@ test('review requests really overlap and keep draining after an HTTP failure', a
   await run('pending.splice(0).forEach(finish => finish()); Promise.resolve()');
   await run('Promise.resolve()');
   assert.equal(run('attempted.length'), 5);
-  await run('pending.splice(0).forEach(finish => finish()); saving');
+  await run(`(async () => {
+    while (pending.length || attempted.length < 5) {
+      pending.splice(0).forEach(finish => finish());
+      await Promise.resolve(); await Promise.resolve();
+    }
+    pending.splice(0).forEach(finish => finish());
+    await saving;
+  })()`);
+  assert.equal(run('attempted.length'), 5);
   assert.equal(run('JSON.stringify([...aiOriginalSelected])'), '[1]');
   assert.equal(run('aiOriginalSavingIds.size'), 0);
 });

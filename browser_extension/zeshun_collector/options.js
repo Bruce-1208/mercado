@@ -1,12 +1,12 @@
 "use strict";
 
 const DEFAULTS = {
-  consoleUrl: "https://wuhanzeshun.com",
+  consoleUrl: "https://wuhanzeshun.cn",
   openConsoleAfterCollect: false
 };
 const LEGACY_DEFAULT_CONSOLE_URL = "http://127.0.0.1:5000";
 const CONSOLE_URL_DEFAULT_MIGRATION_KEY = "consoleUrlDefaultMigration";
-const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 1;
+const CONSOLE_URL_DEFAULT_MIGRATION_VERSION = 2;
 const urlInput = document.getElementById("console-url");
 const usernameInput = document.getElementById("username");
 const passwordInput = document.getElementById("password");
@@ -145,9 +145,12 @@ document.getElementById("open-integrations").addEventListener("click", async () 
 syncGet(["consoleUrl", "openConsoleAfterCollect", CONSOLE_URL_DEFAULT_MIGRATION_KEY]).then(async values => {
   if (Number(values[CONSOLE_URL_DEFAULT_MIGRATION_KEY] || 0) < CONSOLE_URL_DEFAULT_MIGRATION_VERSION) {
     const updates = {[CONSOLE_URL_DEFAULT_MIGRATION_KEY]: CONSOLE_URL_DEFAULT_MIGRATION_VERSION};
-    if (!values.consoleUrl || values.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) {
+    const oldLocalDefault = values.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL
+      && Number(values[CONSOLE_URL_DEFAULT_MIGRATION_KEY] || 0) < 1;
+    const oldPublicDefault = /^https?:\/\/(www\.)?wuhanzeshun\.com\/*$/i.test(values.consoleUrl || "");
+    if (!values.consoleUrl || oldLocalDefault || oldPublicDefault) {
       updates.consoleUrl = DEFAULTS.consoleUrl;
-      if (values.consoleUrl === LEGACY_DEFAULT_CONSOLE_URL) {
+      if (values.consoleUrl) {
         await runtimeMessage({type: "LOGOUT"}).catch(() => {});
       }
       values.consoleUrl = DEFAULTS.consoleUrl;

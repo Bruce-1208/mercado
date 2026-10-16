@@ -148,7 +148,9 @@ def test_partial_offer_cancellation_keeps_failed_offer_enrolled(store):
     assert store.list_items_page(pk, enrolled='1')['total'] == 1
 
 
-def test_successful_items_are_visible_and_filterable_before_batch_finishes(store):
+def test_successful_items_are_visible_and_filterable_before_batch_finishes(store, monkeypatch):
+    # This assertion observes a specific completion order; pool independence has separate coverage.
+    monkeypatch.setenv("BIT_PROMOTION_WORKERS", "1")
     from datetime import datetime, timedelta, timezone
     from erp.mercadolibre_store_link_store import _marker_filter_keys
 

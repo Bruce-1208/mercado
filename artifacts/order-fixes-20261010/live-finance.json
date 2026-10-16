@@ -1,0 +1,133 @@
+{
+  "country_counts": {
+    "墨西哥": 1
+  },
+  "group_counts": {
+    "遥遥领先": 1
+  },
+  "origin_counts": {
+    "token": 1
+  },
+  "page": 1,
+  "page_size": 50,
+  "pages": 1,
+  "rows": [
+    {
+      "actual_freight_usd": null,
+      "amount": 5.01,
+      "amount_local": 91.33,
+      "balance": 1.98,
+      "balance_cny": 13.25,
+      "buyer": "DAVIDGTZ11",
+      "category": "",
+      "cny_exchange_rate_date": "%Y-%m-%d",
+      "cny_exchange_rate_match": "nearest_previous",
+      "cny_exchange_rate_missing": 0,
+      "cost": 9.88,
+      "country": "墨西哥",
+      "currency_id": "MXN",
+      "data_origin": "token",
+      "discount_rate": 95.0,
+      "exchange_rate_date": "%Y-%m-%d",
+      "exchange_rate_match": "order_implied",
+      "exchange_rate_missing": 0,
+      "exchange_rate_to_usd": 0.054856016643,
+      "exchange_rate_usd_to_cny": 6.692129216491,
+      "fee": 0.78,
+      "freight": null,
+      "freight_checked_at": null,
+      "freight_currency_id": null,
+      "freight_local": null,
+      "freight_missing": 1,
+      "freight_pending_shipment": 1,
+      "freight_source": "",
+      "freight_variance_usd": null,
+      "group_name": "遥遥领先",
+      "id": "2000018902497054",
+      "image_url": "https://http2.mlstatic.com/D_986937-CBT104004662759_012026-O.jpg",
+      "income": 33.53,
+      "last_updated": "2026-10-10 15:43:30",
+      "logistics_company": null,
+      "merged_order_ids": [
+        "2000018902497054"
+      ],
+      "order_number": "2000015452694991",
+      "order_remark": null,
+      "ordered_at": "2026-10-10 15:41:47",
+      "pack_id": "2000015452694991",
+      "paid_amount_usd": 5.01,
+      "platform_currency_id": "USD",
+      "platform_shipping_id": "48222102546",
+      "platform_status": "待打印",
+      "platform_tracking_number": "311197540931",
+      "product_id": "MLM3512810577",
+      "product_url": "https://articulo.mercadolibre.com.mx/MLM-3512810577-set-educativo-de-juego-de-mesa-con-silla-de-equilibrio-36-p-_JM",
+      "profit": 3.37,
+      "purchase_order": "261010-428364347761287",
+      "purchase_remark": null,
+      "purchase_tracking": null,
+      "quantity": 1,
+      "quoted_freight_checked_at": "2026-10-10 22:03:26",
+      "quoted_freight_currency_id": "USD",
+      "quoted_freight_local": 2.25,
+      "quoted_freight_source": "shipment_costs",
+      "quoted_freight_usd": 2.25,
+      "quoted_freight_weight_g": null,
+      "refund": 0,
+      "remark": "{\"order_status\": \"paid\", \"order_status_detail\": null, \"shipment_status\": \"ready_to_ship\", \"shipment_substatus\": \"printed\", \"shipment_last_updated\": \"2026-10-10T03:56:00.150-04:00\"}",
+      "sale_fee_source": "order_item_quantity",
+      "salesperson": "管理员",
+      "shipping_deadline": "2026-10-15 15:42:30",
+      "shop_name": "遥遥领先17",
+      "sku_items": [
+        {
+          "image_url": "https://http2.mlstatic.com/D_986937-CBT104004662759_012026-O.jpg",
+          "order_id": "2000018902497054",
+          "product_id": "MLM3512810577",
+          "product_url": "https://articulo.mercadolibre.com.mx/MLM-3512810577-set-educativo-de-juego-de-mesa-con-silla-de-equilibrio-36-p-_JM",
+          "quantity": 1,
+          "seller_sku": "584725880",
+          "title": "Set Educativo De Juego De Mesa Con Silla De Equilibrio, 36 P",
+          "variation": "",
+          "variation_id": ""
+        }
+      ],
+      "source": "美客多 Token",
+      "status": "找货-已采购",
+      "store_id": 93,
+      "title": "Set Educativo De Juego De Mesa Con Silla De Equilibrio, 36 P",
+      "transfer_warehouse": "shahu",
+      "workflow_status": "找货-已采购"
+    }
+  ],
+  "salesperson_counts": {
+    "管理员": 1
+  },
+  "status_counts": {
+    "找货-已采购": 1
+  },
+  "store_counts": [
+    {
+      "count": 1,
+      "id": 93,
+      "name": "遥遥领先17"
+    }
+  ],
+  "summary": {
+    "amount": 5.01,
+    "balance": 1.98,
+    "balance_cny": 13.25,
+    "cny_exchange_rate_missing_count": 0,
+    "cost": 9.88,
+    "cost_missing_count": 0,
+    "exchange_rate_missing_count": 0,
+    "fee": 0.78,
+    "freight": 0,
+    "freight_missing_count": 1.0,
+    "income": 33.53,
+    "profit": 3.37,
+    "settlement_missing_count": 0
+  },
+  "summary_pending": false,
+  "total": 1
+}

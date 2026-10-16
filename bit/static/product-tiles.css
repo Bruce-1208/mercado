@@ -189,8 +189,21 @@
     height: 660px;
     min-height: 660px;
     max-height: 660px;
-    grid-template-rows: 42px 106px 220px minmax(0, 1fr);
+    /* Source metadata includes ownership, SKU count and the supplier link.
+       Let it fit its content so the copy panel cannot cover the link. */
+    grid-template-rows: 42px minmax(106px, max-content) 220px minmax(0, 1fr);
     contain-intrinsic-height: 660px;
+}
+#tab-ai-original-products .ai-original-source > a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--zs-height-compact);
+    margin-top: 0;
+}
+@media (max-width: 650px) {
+    #tab-ai-original-products .ai-original-source > a {
+        min-height: var(--zs-height-touch);
+    }
 }
 #tab-ai-original-products .ai-original-source h4 {
     display: -webkit-box;
@@ -278,7 +291,7 @@
     grid-column: 1 / -1;
     grid-row: 3;
 }
-#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="泽顺业务员"] {
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td[data-label="采集业务员"] {
     grid-column: 3 / -1;
     grid-row: 1;
     padding-right: 20px;
@@ -291,8 +304,8 @@
     color: #728095;
     font-size: 11px;
 }
-#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="泽顺业务员"], [data-label="商品编号"]) strong { font-weight: 400; }
-#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="标题"], [data-label="泽顺业务员"], [data-label="商品编号"], [data-label="采集详情"])::before { display: none; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="采集业务员"], [data-label="商品编号"]) strong { font-weight: 400; }
+#mercado-list-module.collection-mode #mercado-list-body .market-collection-row > td:is([data-label="标题"], [data-label="采集业务员"], [data-label="商品编号"], [data-label="采集详情"])::before { display: none; }
 #mercado-list-module.collection-mode .market-product-title {
     display: block;
     -webkit-line-clamp: unset;
@@ -351,3 +364,8 @@
 #mercado-list-module .market-collection-detail-link { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #edf1f5; padding-top: 10px; color: #2563eb; font-size: 13px; text-decoration: none; }
 #mercado-list-module .market-collection-detail-link:hover { color: #1d4ed8; text-decoration: underline; }
 #mercado-list-module .market-collection-detail-link:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+/* Keep the internal product number directly beneath its cover image. */
+#mercado-list-module.product-mode .market-card-main { grid-template-columns: calc(var(--zs-space-4) * 5) minmax(0, 1fr); }
+#mercado-list-module.product-mode .market-card-media { min-width: 0; }
+#mercado-list-module.product-mode .market-card-media .market-product-number { display: block; margin-top: var(--zs-space-1); text-align: center; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }

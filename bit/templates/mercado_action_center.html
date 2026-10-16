@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>今日必办 · 泽顺运营中心</title>
-  <script src="{{ url_for('static', filename='action-center-preload.js') }}?v=20261011-multi-filters" data-account="{{ [current_user.organization_key or '', current_user.id or current_user.username or ''] | tojson | forceescape }}"></script>
+  <script src="{{ url_for('static', filename='action-center-preload.js') }}?v=20261012-hourly-preload" data-account="{{ [current_user.organization_key or '', current_user.id or current_user.username or ''] | tojson | forceescape }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='employee-tasks.css') }}">
   <style>
     :root{font-family:Inter,"Microsoft YaHei",system-ui,sans-serif;color:#172033;background:#f3f6fb;font-synthesis:none}
@@ -32,8 +32,9 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261012-system">
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
-    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261016-module-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261016-module-ui">
+    <script defer src="{{ url_for('static', filename='compact-filters.js') }}?v=20261016-module-ui"></script>
 </head>
 <body class="zs-standalone">
   <main class="shell">
@@ -105,7 +106,6 @@
   <script src="{{ url_for('static', filename='action-center-filters.js') }}?v=20261011-multi-filters"></script>
   <script>
     const canExecute = {{ can_execute | tojson }};
-    const autoRefreshMs = 60 * 60 * 1000;
     let claimRows = [];
     let claimData = {};
     let actionData = {rows: [], events: []};
@@ -140,7 +140,6 @@
     }
     let loadGeneration = 0;
     let taskRefreshTimer = null;
-    let lastLoadedAt = 0;
     const $ = id => document.getElementById(id);
     function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
     function safeHref(value) { const path = String(value || '/'); return path.startsWith('/') && !path.startsWith('//') ? path : '/'; }
@@ -320,7 +319,6 @@
         renderTasks(); renderEvents(); renderPagination();
         if(typeof window !== 'undefined') window.TodayBatch?.render('events', actionData.events||[]);
         if(actionData.errors?.length) { $('error').textContent='部分内容未能核实：'+actionData.errors.join('；'); $('error').style.display='block'; }
-        lastLoadedAt=Date.now();
         if (actionData.refreshing && !document.hidden) taskRefreshTimer=setTimeout(() => loadData(false, true), 3000);
       } catch(error) { if (generation !== loadGeneration) return; $('error').textContent=`加载失败：${error.message||error}`; $('error').style.display='block'; $('purchase-count').textContent='—'; $('purchase-tasks').innerHTML='<div class="empty">暂时无法读取采购必办，请稍后重试。</div>'; $('tasks').innerHTML='<div class="empty">暂时无法读取待办，请稍后重试。</div>'; $('rights-count').textContent='—'; $('rights-cases').innerHTML='<div class="empty">暂时无法读取待回复案件，请稍后重试。</div>'; }
       finally {if (generation === loadGeneration) $('refresh').disabled=false;}
@@ -346,10 +344,12 @@
       storePage=1;eventPage=1;for(const key in contentPages) delete contentPages[key];loadData();
     });
     $('refresh').addEventListener('click',() => loadData(true)); $('filter').addEventListener('change',()=>{for(const key in contentPages) delete contentPages[key];loadData();}); loadData();
-    setInterval(() => { if (!document.hidden) loadData(); }, autoRefreshMs);
+    window.startTodayAutoRefresh?.(() => loadData(true));
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && Date.now()-lastLoadedAt>30000) loadData();
-      else {
+      if (!document.hidden) {
+        if (actionData.refreshing) loadData(false, true);
+        if (claimData.refreshing) loadClaims();
+      } else {
         if (claimTimer !== null) clearTimeout(claimTimer);
         if (taskRefreshTimer !== null) clearTimeout(taskRefreshTimer);
       }

@@ -1,0 +1,8 @@
+{
+  "version": "1.8.84",
+  "browser_tests": "28 passed; mocked procurement pages; desktop 1440 and mobile 390 widths",
+  "runner_tests": "8 passed",
+  "broader_extension_tests": "14 passed, 19 failed, 2 errors: backend tests blocked by local MySQL access and unrelated existing product-collection source assertions",
+  "live_1688_verified": false,
+  "archive_files": 35
+}

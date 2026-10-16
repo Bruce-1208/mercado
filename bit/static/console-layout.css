@@ -77,6 +77,18 @@ body.zs-console :is(.zs-filter-panel, .zs-advanced-grid) :is(.field, .order-filt
 }
 body.zs-console .zs-simple-filters > .search { grid-column: auto; }
 body.zs-console .zs-advanced-grid .datetime-range-field { grid-column: span 2; }
+/* A range may occupy one advanced-filter column. Wrap its two dates locally. */
+body.zs-console .zs-compact-filters .datetime-range-field .market-filter-range {
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: var(--zs-space-2);
+}
+body.zs-console .zs-compact-filters .datetime-range-field .datetime-control {
+    flex: 1 1 160px;
+    min-width: 0;
+    max-width: 100%;
+}
 body.zs-console .zs-filter-panel :is(input:not([type="checkbox"]):not([type="radio"]), select, .market-multi-trigger) { width: 100%; }
 body.zs-console :is(.order-filter-actions, .market-filter-actions, .store-link-audit-filter-actions) { gap: 8px; flex-wrap: wrap; }
 body.zs-console .wdr-filters { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
@@ -105,7 +117,9 @@ body.zs-console :is(.overview-hero, .overview-bottom-grid) { margin-bottom: var(
 }
 @media (min-width: 761px) and (max-width: 1100px) {
     body.zs-console:not(.sidebar-collapsed) { --sidebar-width: 200px; }
-    body.zs-console { --zs-page-inset: 16px; }
+    body.zs-console { --zs-page-inset: 16px; --topbar-height: calc(var(--zs-height-compact) * 3); }
+    /* Enterprise selection adds a control: wrap toolbar actions on laptop widths. */
+    body.zs-console .topbar-tools { min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: var(--zs-space-2); }
     body.zs-console .sidebar .nav-label { display: inline; }
     body.zs-console:not(.sidebar-collapsed) .sidebar .tab-button { justify-content: flex-start; }
     body.zs-console #mercado-product-filters.zs-simple-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -361,3 +375,138 @@ body.zs-console .model-balance-alert { padding: 10px 14px; gap: 10px; border-lef
 body.zs-console .model-balance-copy p { margin: 3px 0; }
 body.zs-console .model-balance-actions { gap: 10px; }
 body.zs-console .tab-page:not(#tab-orders) > .panel + .panel { margin-top: var(--zs-layout-gap); }
+
+/* Ordinary catalog filters stay on one row; narrow screens scroll this region. */
+body.zs-console #mercado-product-filters .zs-common-filter-row {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: var(--zs-space-2);
+    min-width: 0;
+    overflow-x: auto;
+    padding: var(--zs-space-1);
+}
+body.zs-console #mercado-product-filters .zs-common-filter-row > :is(.market-filter-field, .zs-common-date-filter) {
+    flex: 1 0 140px;
+    min-width: 140px;
+}
+body.zs-console #mercado-product-filters .zs-common-filter-row > .market-filter-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+}
+
+/* Orders: reclaim filter and status space on laptop displays, with an explicit restore control. */
+body.zs-console #tab-orders.order-list-focus #order-filter-region,
+body.zs-console #tab-orders.order-list-focus #order-summary-region,
+body.zs-console:has(#tab-orders.active.order-list-focus) #model-balance-alert { display: none; }
+body.zs-console #tab-orders.order-list-focus > .tab-heading { flex-wrap: nowrap; }
+body.zs-console #tab-orders.order-list-focus .order-heading-tools { flex-wrap: nowrap; overflow-x: auto; min-width: 0; }
+body.zs-console #tab-orders.order-list-focus .order-heading-tools > button { flex-shrink: 0; }
+
+/* Immersion removes only shell chrome; the active module and dialogs retain their layout. */
+body.zs-console.workbench-immersive { --sidebar-width: 0px; }
+body.zs-console.workbench-immersive > .topbar,
+body.zs-console.workbench-immersive .workspace-tabs,
+body.zs-console.workbench-immersive .sidebar,
+body.zs-console.workbench-immersive .sidebar-backdrop,
+body.zs-console.workbench-immersive .sidebar-overlay,
+body.zs-console.workbench-immersive .zs-nav-backdrop,
+body.zs-console.workbench-immersive #model-balance-alert { display: none; }
+body.zs-console.workbench-immersive .page { display: block; margin: 0; padding: var(--zs-space-1); max-width: none; }
+body.zs-console.workbench-immersive .content { min-width: 0; margin: 0; width: 100%; }
+body.zs-console.workbench-immersive .tab-page.active > .tab-heading { padding-right: 100px; }
+#workbench-immersive-exit, #order-rows-restore { position: fixed; z-index: 80; right: var(--zs-space-2); top: var(--zs-space-1); min-height: var(--zs-height-touch); background: var(--zs-card); }
+#workbench-immersive-exit[hidden], #order-rows-restore[hidden] { display: none; }
+body.zs-console #tab-orders.order-rows-only > .tab-heading,
+body.zs-console #tab-orders.order-rows-only #order-board > .order-pagination { display: none; }
+body.zs-console.workbench-rows-only .page { padding: 0; }
+body.zs-console #tab-orders.order-rows-only #order-board > .order-table-wrap { padding-bottom: 52px; }
+#order-rows-restore { top: auto; bottom: max(var(--zs-space-2), env(safe-area-inset-bottom)); }
+.order-mobile-remark { display: none; }
+@media (max-width: 760px) {
+    body.zs-console #tab-orders > .tab-heading { display: block; padding: var(--zs-space-1); }
+    body.zs-console #tab-orders .order-heading-tools { margin-top: var(--zs-space-1); overflow-x: auto; flex-wrap: nowrap; }
+    body.zs-console #tab-orders .order-heading-tools > button { flex-shrink: 0; }
+    body.zs-console #tab-orders #order-list-focus-toggle { font-size: var(--zs-text-small); }
+    body.zs-console #tab-orders #order-board .order-table { display: block; min-width: 0; width: 100%; table-layout: auto; }
+    body.zs-console #tab-orders #order-board .order-table :is(colgroup,thead) { display: none; }
+    body.zs-console #tab-orders #order-table-body { display: block; }
+    body.zs-console #tab-orders #order-table-body > tr { display: grid; grid-template-columns: var(--zs-height-touch) minmax(0,1fr) 96px; column-gap: var(--zs-space-1); padding: var(--zs-space-1); border-bottom: 1px solid var(--zs-stroke); }
+    body.zs-console #tab-orders #order-table-body > tr > td { display: none; position: static; width: auto; height: auto; padding: 0; border: 0; min-width: 0; }
+    body.zs-console #tab-orders #order-table-body > tr > td:nth-child(1) { display: flex; grid-column: 1; grid-row: 1 / 3; align-items: center; justify-content: center; background: transparent; min-height: var(--zs-height-touch); }
+    body.zs-console #tab-orders #order-table-body > tr > td:nth-child(2) { display: block; grid-column: 2; grid-row: 1; }
+    body.zs-console #tab-orders #order-table-body > tr > td:nth-child(3) { display: block; grid-column: 2; grid-row: 2; }
+    body.zs-console #tab-orders #order-table-body > tr > td:nth-child(11) { display: flex; grid-column: 3; grid-row: 1; justify-content: flex-end; }
+    body.zs-console #tab-orders #order-table-body > tr > td:nth-child(9) { display: block; grid-column: 3; grid-row: 2; text-align: right; }
+    body.zs-console #tab-orders #order-table-body > tr > td:nth-child(9)::before { content: '利润 '; font-size: var(--zs-text-small); color: var(--zs-secondary); }
+    body.zs-console #tab-orders #order-table-body .order-row-actions { display: none; }
+    body.zs-console #tab-orders #order-table-body .order-row-number { flex-wrap: wrap; gap: 0 var(--zs-space-1); }
+    body.zs-console #tab-orders #order-table-body .order-product { display: block; }
+    body.zs-console #tab-orders #order-table-body .order-product-media { display: none; }
+    body.zs-console #tab-orders #order-table-body .order-state-tag { max-width: 96px; white-space: normal; }
+    body.zs-console #tab-orders #order-table-body .order-mobile-remark { display: block; color: var(--zs-danger); font-weight: 700; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    body.zs-console #tab-orders #order-table-body > tr.order-loading-row { display: block; }
+    body.zs-console #tab-orders #order-table-body > tr.order-loading-row > td { display: block; }
+    body.zs-console #tab-orders #order-board > .order-pagination .order-pagination-actions { min-width: 0; }
+}
+
+/* Four catalog workspaces share one header, filter and selection layout. */
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) > .zs-catalog-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--zs-space-3);
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading > :first-child { flex: 1 1 360px; min-width: 0; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading :is(.products-1688-heading-actions, .ai-original-heading-actions, .market-flow-indicator) {
+    display: flex; align-items: center; flex-wrap: wrap; gap: var(--zs-space-2);
+    margin: 0; max-width: 100%;
+}
+/* Decorative workflow banners duplicate the actionable steps below the list. */
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading :is(.ai-original-eyebrow, .mercado-workbench-eyebrow, .market-flow-step, .market-flow-arrow) { display: none; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-selection {
+    display: flex; align-items: center; flex-wrap: wrap; gap: var(--zs-space-2);
+    width: 100%; min-width: 0; box-sizing: border-box; margin: 0;
+}
+body.zs-console .zs-catalog-selection > :is(label, .market-selection-meta) {
+    display: flex; align-items: center; flex-wrap: wrap; gap: var(--zs-space-2);
+    margin: 0; flex: 0 1 auto; flex-direction: row;
+}
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-selection > .zs-bulk-menu { flex: 0 1 auto; width: auto; min-width: 0; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-selection > .zs-bulk-menu[open] { order: 10; flex-basis: 100%; }
+body.zs-console .zs-catalog-selection .zs-bulk-menu > .market-selection-tools {
+    display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center;
+    gap: var(--zs-space-2); width: 100%; box-sizing: border-box;
+}
+body.zs-console .zs-catalog-selection .market-selection-tools > :is(label, div) { min-width: 0; max-width: 100%; }
+body.zs-console .zs-catalog-selection :is(#products-1688-list-summary, #ai-original-total) { margin-left: auto; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-pagination {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    gap: var(--zs-space-3); margin: 0;
+}
+body.zs-console .zs-catalog-help { margin-bottom: var(--zs-space-3); }
+body.zs-console .zs-catalog-help > .collector-plugin-panel { margin: 0; }
+@media (max-width: 760px) {
+    body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading > :first-child { flex-basis: 100%; }
+    body.zs-console .zs-catalog-selection .market-selection-tools > label { flex: 1 1 140px; }
+    body.zs-console .zs-catalog-selection .market-selection-tools :is(input:not([type=checkbox]), select) { max-width: 100%; }
+    body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-pagination > :is(.market-pagination-controls, .p1688-pagination-actions) {
+        display: flex; flex-wrap: wrap; align-items: center; gap: var(--zs-space-2); max-width: 100%;
+    }
+}
+/* The outer heading identifies the catalog; the inner title repeats it. */
+body.zs-console .zs-catalog-workspace #mercado-list-module > .market-section-head { display: none; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-heading p { display: block; max-width: none; }
+body.zs-console #tab-ai-original-products .zs-catalog-selection > #ai-original-publish-next { flex: 0 1 auto; width: auto; margin-left: auto; }
+body.zs-console .zs-catalog-selection > label:has(> input[type=checkbox]) { flex-direction: row; flex-wrap: nowrap; }
+@media (max-width: 760px) {
+    body.zs-console #tab-1688-products .p1688-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--zs-space-2); }
+    body.zs-console #tab-1688-products .p1688-summary-card { padding: var(--zs-space-3); }
+    body.zs-console #tab-ai-original-products .zs-catalog-selection > #ai-original-publish-next { margin-left: 0; }
+}
+body.zs-console .zs-catalog-query { display: flex; align-items: flex-end; }
+body.zs-console .zs-catalog-query > button { width: 100%; min-width: 0; }
+body.zs-console :is(#tab-1688-products, #tab-mercado-collection, #tab-ai-original-products, #tab-mercado-products) .zs-catalog-selection { justify-content: flex-start; }
+body.zs-console .zs-catalog-selection > :is(button.primary, #mercado-collection-only-actions) { margin-left: auto; }

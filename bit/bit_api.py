@@ -6,6 +6,7 @@ import threading
 import time
 
 from bit import bit_browser_lifecycle as lifecycle, bit_browser_api_rate as api_rate
+from bit import ziniao_browser
 
 from bit.bit_runtime_lock import (
     InterProcessLock,
@@ -268,6 +269,8 @@ def openBrowser(
         with _AUTO_LEASES_GUARD:
             _AUTO_LEASES[(threading.get_ident(), str(id))] = auto_lease
     try:
+        if ziniao_browser.is_ziniao(id):
+            return ziniao_browser.open_browser(id, timeout=request_timeout or 120)
         lifecycle.ensure_browser_reaper()
         lifecycle.reserve_window(
             id,
@@ -299,7 +302,7 @@ def releaseBrowserLease(id):
     """释放 openBrowser 自动获取的任务锁，但保持浏览器窗口打开。"""
     # This is an explicit handoff (manual operations / interactive collectors),
     # not a failed automation cleanup. Never let the reaper close these windows.
-    if current_thread_window_lease(id) is not None:
+    if current_thread_window_lease(id) is not None and not ziniao_browser.is_ziniao(id):
         lifecycle.mark_manual(id)
     auto_lease_key = (threading.get_ident(), str(id))
     with _AUTO_LEASES_GUARD:
@@ -382,6 +385,8 @@ def getAllBrowserPids():
 
 
 def _close_browser_verified(window_id, request_timeout, api_lock_timeout):
+    if ziniao_browser.is_ziniao(window_id):
+        return ziniao_browser.close_browser(window_id, timeout=request_timeout)
     result = _post_browser_mutation(
         "close", window_id, request_timeout, api_lock_timeout=api_lock_timeout,
     )

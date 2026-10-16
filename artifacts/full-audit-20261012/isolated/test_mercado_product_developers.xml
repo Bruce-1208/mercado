@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="6" skipped="0" tests="33" time="2.449" timestamp="2026-10-12T16:40:09.747657+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_mercado_product_developers" name="test_all_saved_developers_are_available_beyond_a_product_page" time="0.004" /><testcase classname="tests.test_mercado_product_developers" name="test_historical_names_empty_values_and_duplicate_ids_are_normalized" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_shares_all_three_product_ownership_paths[tokens0-expected0]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_shares_all_three_product_ownership_paths[tokens1-expected1]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_shares_all_three_product_ownership_paths[tokens2-expected2]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_shares_all_three_product_ownership_paths[tokens3-expected3]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_shares_all_three_product_ownership_paths[None-expected4]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_empty_scope_skips_database_and_empty_directory_is_valid" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_unrestricted_empty_saved_directory_uses_existing_legacy_developers" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_empty_scoped_directory_never_reads_unowned_legacy_developers" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_missing_legacy_table_returns_an_empty_unrestricted_directory" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_name_only_directory_option_filters_historical_products_with_a_long_name" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_normalized_directory_option_matches_whitespace_in_historical_fields[ 17 - \u5f00\u53d1\u7532 -17]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_normalized_directory_option_matches_whitespace_in_historical_fields[None- \u5386\u53f2\u5f00\u53d1 -\u5386\u53f2\u5f00\u53d1]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_transport_preserves_scope_and_uses_one_bounded_attempt[None-expected0]" time="0.001" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_transport_preserves_scope_and_uses_one_bounded_attempt[tokens1-expected1]" time="0.000" /><testcase classname="tests.test_mercado_product_developers" name="test_directory_transport_preserves_scope_and_uses_one_bounded_attempt[tokens2-expected2]" time="0.000" /><testcase classname="tests.test_mercado_product_developers" name="test_local_directory_transport_preserves_empty_scope" time="0.000" /><testcase classname="tests.test_mercado_product_developers" name="test_public_directory_uses_current_users_product_scope[None-expected0]" time="0.166"><failure message="AssertionError: Expected 'mock' to be called once. Called 0 times.">tests/test_mercado_product_developers.py:276: in test_public_directory_uses_current_users_product_scope
+    routes.authorized.assert_called_once_with()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:955: in assert_called_once_with
+    raise AssertionError(msg)
+E   AssertionError: Expected 'mock' to be called once. Called 0 times.</failure></testcase><testcase classname="tests.test_mercado_product_developers" name="test_public_directory_uses_current_users_product_scope[tokens1-expected1]" time="0.163"><failure message="AssertionError: expected call not found.&#10;Expected: mock(token_ids=[])&#10;Actual: mock()">tests/test_mercado_product_developers.py:275: in test_public_directory_uses_current_users_product_scope
+    routes.listing.assert_called_once_with(**expected)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:956: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:944: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: mock(token_ids=[])
+E   Actual: mock()</failure></testcase><testcase classname="tests.test_mercado_product_developers" name="test_public_directory_uses_current_users_product_scope[tokens2-expected2]" time="0.153"><failure message="AssertionError: expected call not found.&#10;Expected: mock(token_ids=[7, 9])&#10;Actual: mock()">tests/test_mercado_product_developers.py:275: in test_public_directory_uses_current_users_product_scope
+    routes.listing.assert_called_once_with(**expected)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:956: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:944: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: mock(token_ids=[7, 9])
+E   Actual: mock()</failure></testcase><testcase classname="tests.test_mercado_product_developers" name="test_platform_admin_all_company_directory_can_read_the_legacy_directory[]" time="0.153" /><testcase classname="tests.test_mercado_product_developers" name="test_platform_admin_all_company_directory_can_read_the_legacy_directory[?organization_key=]" time="0.150" /><testcase classname="tests.test_mercado_product_developers" name="test_platform_admin_all_company_directory_can_read_the_legacy_directory[?organization_key=%20]" time="0.149" /><testcase classname="tests.test_mercado_product_developers" name="test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[True-?organization_key=wuhan-zeshun]" time="0.149"><failure message="AssertionError: expected call not found.&#10;Expected: mock(token_ids=[7, 9])&#10;Actual: mock()">tests/test_mercado_product_developers.py:298: in test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope
+    routes.listing.assert_called_once_with(token_ids=[7, 9])
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:956: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:944: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: mock(token_ids=[7, 9])
+E   Actual: mock()</failure></testcase><testcase classname="tests.test_mercado_product_developers" name="test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[False-]" time="0.149"><failure message="AssertionError: expected call not found.&#10;Expected: mock(token_ids=[7, 9])&#10;Actual: mock()">tests/test_mercado_product_developers.py:298: in test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope
+    routes.listing.assert_called_once_with(token_ids=[7, 9])
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:956: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:944: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: mock(token_ids=[7, 9])
+E   Actual: mock()</failure></testcase><testcase classname="tests.test_mercado_product_developers" name="test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[False-?organization_key=wuhan-zeshun]" time="0.156"><failure message="AssertionError: expected call not found.&#10;Expected: mock(token_ids=[7, 9])&#10;Actual: mock()">tests/test_mercado_product_developers.py:298: in test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope
+    routes.listing.assert_called_once_with(token_ids=[7, 9])
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:956: in assert_called_once_with
+    return self.assert_called_with(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/unittest/mock.py:944: in assert_called_with
+    raise AssertionError(_error_message()) from cause
+E   AssertionError: expected call not found.
+E   Expected: mock(token_ids=[7, 9])
+E   Actual: mock()</failure></testcase><testcase classname="tests.test_mercado_product_developers" name="test_internal_directory_preserves_explicit_empty_scope[-None]" time="0.158" /><testcase classname="tests.test_mercado_product_developers" name="test_internal_directory_preserves_explicit_empty_scope[?token_ids=-expected1]" time="0.150" /><testcase classname="tests.test_mercado_product_developers" name="test_internal_directory_preserves_explicit_empty_scope[?token_ids=7&amp;token_ids=9&amp;token_ids=bad-expected2]" time="0.151" /><testcase classname="tests.test_mercado_product_developers" name="test_public_directory_returns_error_instead_of_a_successful_empty_list" time="0.152" /><testcase classname="tests.test_mercado_product_developers" name="test_new_directory_routes_retain_the_existing_authentication_decorators" time="0.155" /><testcase classname="tests.test_mercado_product_developers" name="test_salesperson_filters_saved_owners_across_sources_before_paging" time="0.001" /></testsuite></testsuites>

@@ -1,0 +1,46 @@
+{
+  "feature": "产品列表与 AI 原创产品上架最低净收益（USD）",
+  "rule": "max(round(product_net * category_ratio * store_site_ratio * listing_ratio, 2), minimum_net)",
+  "default": "留空或 0 不设下限，不覆盖产品原净收益",
+  "verified": [
+    "下限在所有比例之后应用",
+    "低于/等于/高于下限",
+    "非法金额拒绝",
+    "原产品净收益不变",
+    "上架提交金额及记录",
+    "定时任务保存与执行",
+    "人工失败重试按各自下限分组",
+    "平台限流自动重试",
+    "后台目标转发",
+    "属性预检金额一致",
+    "1440px/390px 两个页面输入校验与提交",
+    "产品列表核对步骤显示最低值"
+  ],
+  "related_test_results": {
+    "python_feature_and_existing_pricing_manual_publication": "68 passed",
+    "feature_browser_and_existing_preflight_browser": "8 passed",
+    "javascript_manual_and_ai_publication": "17 passed"
+  },
+  "broader_regression_issues": [
+    "预检路由既有测试返回权限 403（3 件）",
+    "采集页面既有静态文本断言（2 件）",
+    "插件调度默认延迟断言 0/3 不一致（1 件）",
+    "AI 审核浏览器既有模拟路由把 profiles/cost-summary 当数字产品 ID（1 件）"
+  ],
+  "live_marketplace_writes": false,
+  "live_local_service": {
+    "/static/ai-original-products.js": {
+      "http_status": 200,
+      "updated_content": true
+    },
+    "/static/console-workflow.js": {
+      "http_status": 200,
+      "updated_content": true
+    },
+    "/static/mercado-attribute-preflight.js": {
+      "http_status": 200,
+      "updated_content": true
+    }
+  },
+  "service_restart": "success"
+}

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from flask import g
 
 from bit import bit_db_api, bit_interface
@@ -91,7 +92,11 @@ def test_public_workbench_issues_short_lived_local_executor_token(monkeypatch):
     }
 
 
-def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch):
+@pytest.mark.parametrize("origin", [
+    "https://wuhanzeshun.cn", "https://www.wuhanzeshun.cn",
+    "https://wuhanzeshun.com", "https://www.wuhanzeshun.com",
+])
+def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch, origin):
     monkeypatch.setenv("BIT_DB_API_TOKEN", "shared-local-executor-secret")
     monkeypatch.setattr(bit_interface, "USE_DB_API", True)
     token = bit_interface.create_local_executor_token(
@@ -100,7 +105,7 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
     )
     headers = {
         "Authorization": f"Bearer {token}",
-        "Origin": "https://wuhanzeshun.com",
+        "Origin": origin,
     }
     client = bit_interface.app.test_client()
 
@@ -111,13 +116,14 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
     )
     denied = client.get(
         "/api/local-executor/health",
+        base_url="https://localhost",
         headers=headers,
         environ_overrides={"REMOTE_ADDR": "10.0.0.25"},
     )
     preflight = client.options(
         "/api/local-executor/health",
         headers={
-            "Origin": "https://wuhanzeshun.com",
+            "Origin": origin,
             "Access-Control-Request-Method": "GET",
             "Access-Control-Request-Headers": "authorization",
             "Access-Control-Request-Private-Network": "true",
@@ -127,7 +133,7 @@ def test_local_executor_bridge_only_accepts_loopback_client_requests(monkeypatch
 
     assert allowed.status_code == 200
     assert allowed.get_json()["data"]["execution_target"] == "local"
-    assert allowed.headers["Access-Control-Allow-Origin"] == "https://wuhanzeshun.com"
+    assert allowed.headers["Access-Control-Allow-Origin"] == origin
     assert denied.status_code == 403
     assert preflight.status_code == 204
     assert preflight.headers["Access-Control-Allow-Private-Network"] == "true"
@@ -461,7 +467,7 @@ def test_live_infraction_collection_client_uses_server_route(monkeypatch):
         (
             "GET",
             "/api/db/official-infractions/live/jobs/job-123",
-            {"timeout": 30},
+            {"timeout": 30, "max_attempts": 1},
         ),
     ]
 
@@ -620,3 +626,23 @@ def test_live_infraction_background_job_reuses_identical_running_scan(monkeypatc
 
     assert second["job_id"] == first["job_id"]
     assert len(calls) == 1
+
+
+def test_live_infraction_wait_reports_server_status(monkeypatch, capsys):
+    monkeypatch.setattr(bit_db_api, "DB_MODE", "api")
+    monkeypatch.setattr(bit_db_api.time, "sleep", lambda _: None)
+    states = iter([
+        {"status": "queued"},
+        {"status": "running"},
+        {"status": "completed", "result": {"data": []}},
+    ])
+    def request(method, path, **kwargs):
+        if method == "POST":
+            return {"job_id": "test-job"}
+        assert kwargs["max_attempts"] == 1
+        return next(states)
+    monkeypatch.setattr(bit_db_api, "_request", request)
+    assert bit_db_api.collect_live_detection_infractions([{"token_id": 7}]) == {"data": []}
+    output = capsys.readouterr().out
+    assert "test-job：排队中" in output
+    assert "test-job：读取中" in output

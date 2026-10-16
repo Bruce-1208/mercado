@@ -102,6 +102,23 @@ def test_status_history_reads_a_bounded_utf8_tail(tmp_path):
     assert not _tail_text(tmp_path / "missing.log")
 
 
+@pytest.mark.parametrize("error", [UnicodeEncodeError("cp1252", "更新", 0, 2, "unsupported"),
+                                   OSError("detached console"), ValueError("closed stream")])
+def test_logging_survives_unusable_windows_stdout(monkeypatch, tmp_path, error):
+    class BrokenConsole:
+        def write(self, _):
+            raise error
+        def flush(self):
+            pass
+    runtime_log = AgentRuntimeLog(tmp_path / "agent.log")
+    received = []
+    runtime_log.add_listener(received.append)
+    monkeypatch.setattr(local_agent.sys, "stdout", BrokenConsole())
+    runtime_log.write("更新完成")
+    assert "更新完成" in runtime_log.path.read_text(encoding="utf-8")
+    assert received[0].endswith("更新完成")
+
+
 def test_status_window_supports_windows_and_macos():
     assert STATUS_WINDOW_PLATFORMS == {"win32", "darwin"}
 

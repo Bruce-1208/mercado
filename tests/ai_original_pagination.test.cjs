@@ -39,3 +39,12 @@ test('manually failed overrides completed and pending generation', () => {
     assert.equal(run(`aiOriginalProductStatus({review_status: 'failed', ai_status: '${status}'})`), 'failed');
   }
 });
+
+test('new source rows default to pending production and can be filtered', () => {
+  const {run, nodes} = setup();
+  run('aiOriginalRows = [{id:1}, {id:2, ai_status:"pending", review_status:"approved"}, {id:3, ai_status:"processing"}];');
+  assert.equal(run('aiOriginalProductStatusLabels.pending'), '待制作');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'pending');
+  nodes.set('ai-original-status-filter', {value:'pending'});
+  assert.equal(run('JSON.stringify(aiOriginalPageRows().map(row => row.id))'), '[1,2]');
+});

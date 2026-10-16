@@ -3,6 +3,35 @@
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import time
+import threading
+
+
+_generation_slots = threading.Condition()
+_active_generations = 0
+
+
+def generation_worker_limit():
+    """Budget a lock socket and a checkpoint socket per worker, plus UI/auth."""
+    from bit.db_pool import _connection_limit, _env_int
+    limit = _connection_limit()
+    reserved = min(limit - 1, _env_int("MYSQL_POOL_AUTH_RESERVED", 1, 0, 10))
+    return max(1, min(6, (limit - reserved - 1) // 2))
+
+
+@contextmanager
+def _generation_slot():
+    global _active_generations
+    # Queue before opening a persistent lock connection. Shared by every
+    # generation entry point in this process, not just one executor.
+    with _generation_slots:
+        _generation_slots.wait_for(lambda: _active_generations < generation_worker_limit())
+        _active_generations += 1
+    try:
+        yield
+    finally:
+        with _generation_slots:
+            _active_generations -= 1
+            _generation_slots.notify_all()
 
 
 def wait_for_low_cost_window(on_wait=None, *, now=None, sleep=None):
@@ -24,6 +53,13 @@ def wait_for_low_cost_window(on_wait=None, *, now=None, sleep=None):
 
 @contextmanager
 def product_generation_lock(product_id, *, connection_factory=None):
+    with _generation_slot():
+        with _product_generation_lock(product_id, connection_factory=connection_factory) as check_owner:
+            yield check_owner
+
+
+@contextmanager
+def _product_generation_lock(product_id, *, connection_factory=None):
     """One paying worker per product, including different server processes.
 
     Use the database's advisory lock rather than a Python-only mutex. The
@@ -71,7 +107,7 @@ def generation_cost_summary():
             ensure_collection_tables(cursor)
             access_sql, access_params = product_access.predicate(PRODUCT_TABLE)
             cursor.execute(
-                f"SELECT JSON_EXTRACT(source_snapshot_json, '$.ai_original.generation_budget') AS ledger "
+                f"SELECT /*+ MAX_EXECUTION_TIME(2000) */ JSON_EXTRACT(source_snapshot_json, '$.ai_original.generation_budget') AS ledger "
                 f"FROM `{PRODUCT_TABLE}` WHERE source_type = 'ai_original'"
                 + (f" AND {access_sql}" if access_sql else ""), tuple(access_params))
             rows = cursor.fetchall()

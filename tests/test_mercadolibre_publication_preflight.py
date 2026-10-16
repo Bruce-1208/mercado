@@ -47,7 +47,10 @@ def test_local_path_blocks_all_missing_fields_before_create_and_keeps_evidence()
         call(client, item, publish=True)
     assert not client.posts
     assert error.value.preflight_report["status"] == "needs_completion"
-    assert {row["attribute_id"] for row in error.value.preflight_report["issues"]} == {"BRAND", "MODEL", "GTIN"}
+    assert {row["attribute_id"] for row in error.value.preflight_report["issues"]} == {"MODEL", "GTIN"}
+    assert any(row["rule"] == "default_missing_brand_generic"
+               and row["target"] == {"id": "BRAND", "value_name": "Generic"}
+               for row in error.value.preflight_report["mappings"])
     assert error.value.publication_draft["source"] == item
 
 

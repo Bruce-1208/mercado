@@ -173,6 +173,67 @@ def test_filtered_outcomes_and_sql_summary_keep_latest_enrollment_semantics(stor
     assert len(store.enrollment_results(promotion_id, limit=1)) == 1
 
 
+def test_multi_offer_counts_and_enrollment_results_use_offer_identity(store):
+    promotion_id = store.upsert_promotion(
+        token_id=1, store_name='店铺 1', application_id='app', seller_id='1', site_id='MLM',
+        row={'id':'SMART-1','type':'SMART','name':'智能活动','status':'started'},
+    )
+    store.replace_items(promotion_id, [
+        {'id':'MLM1','offer_id':'candidate-a','status':'candidate'},
+        {'id':'MLM1','offer_id':'candidate-b','status':'candidate'},
+        {'id':'MLM2','offer_id':'active-a','status':'started'},
+        {'id':'MLM2','offer_id':'active-b','status':'pending'},
+    ])
+    finished_job(store, promotion_id, [
+        {'item_id':'MLM1','offer_id':'candidate-a','status':'succeeded'},
+        {'item_id':'MLM1','offer_id':'candidate-b','status':'failed'},
+    ])
+
+    outer = store.list_promotions(current_participation=True)[0]
+    assert outer['item_count'] == 4
+    assert outer['candidate_count'] == 1
+    assert outer['active_item_count'] == 1
+    rows = store.list_items(promotion_id)
+    outcomes = {
+        row['offer_id']: (row.get('enrollment_result') or {}).get('status')
+        for row in rows if row['item_id'] == 'MLM1'
+    }
+    assert outcomes == {'candidate-a':'succeeded', 'candidate-b':'failed'}
+
+
+def test_unresolved_enrollment_lookup_chunks_more_than_sqlite_variable_limit(store, monkeypatch):
+    promotion_id = campaign(store)
+    item_ids = [f"MLM{index:04}" for index in range(1200)]
+    unknown_item = item_ids[-1]
+    results = [
+        {
+            "item_id": item_id,
+            "status": "unknown" if item_id == unknown_item else "succeeded",
+        }
+        for item_id in item_ids
+    ]
+    job_id = finished_job(store, promotion_id, results)
+    original_sql = store._latest_enrollment_sql
+    batch_sizes = []
+
+    def recording_sql(promotion_fk, selected_ids=None, **kwargs):
+        if selected_ids is not None:
+            batch_sizes.append(len(list(selected_ids)))
+        return original_sql(promotion_fk, selected_ids, **kwargs)
+
+    monkeypatch.setattr(store, "_latest_enrollment_sql", recording_sql)
+
+    unresolved = store.unresolved_enrollment_results(
+        promotion_id, item_ids=item_ids,
+    )
+
+    assert batch_sizes == [500, 500, 200]
+    assert len(unresolved) == 1
+    assert unresolved[0]["item_id"] == unknown_item
+    assert unresolved[0]["status"] == "unknown"
+    assert unresolved[0]["job_id"] == job_id
+
+
 def test_bounded_latest_job_keeps_full_counters_before_result_decoding(store, monkeypatch):
     promotion_id = campaign(store)
     results = [{"item_id": f"MLM{index:04}", "status": ("succeeded", "failed", "unknown")[index % 3]}
@@ -293,6 +354,76 @@ def test_campaign_participation_requires_one_product_and_preserves_history(store
     assert pending['active_item_count'] == 1
     client = route_client(store, monkeypatch, lambda promotion, rows: rows)
     payload = client.get('/api/promotions?participated=1&type=DEAL').get_json()['data']
-    assert {row['id'] for row in payload['rows']} == expected
-    assert payload['summary']['total'] == len(expected)
+    current = {ids['pending'], ids['active']}
+    assert {row['id'] for row in payload['rows']} == current
+    assert payload['summary']['total'] == len(current)
     assert store.list_promotions(participated='1', scope_pairs=[]) == []
+
+
+def test_promotions_route_returns_latest_counts_without_operation_history(store, monkeypatch):
+    promotion_id = campaign(store)
+    store.replace_items(promotion_id, [
+        {'id': 'MLM1', 'status': 'candidate'},
+        {'id': 'MLM2', 'status': 'candidate'},
+        {'id': 'MLM3', 'status': 'started'},
+        {'id': 'MLM4', 'status': 'finished'},
+    ])
+    history_only = campaign(store, promotion_id='history-only')
+    finished_job(store, history_only, [{'item_id': 'MLM9', 'status': 'succeeded'}])
+
+    def forbid_history(*_args, **_kwargs):
+        pytest.fail('The outer activity list must not load historical enrollment results')
+
+    monkeypatch.setattr(store, '_enrollment_results_by_promotion', forbid_history)
+    client = route_client(store, monkeypatch, lambda promotion, rows: rows)
+    first = client.get('/api/promotions').get_json()['data']
+    row = next(item for item in first['rows'] if item['id'] == promotion_id)
+    assert row['candidate_count'] == 2
+    assert row['active_item_count'] == 1
+    assert row['item_count'] == 4
+    assert row['item_counts_synced_at']
+    assert not {'enrollment_summary', 'stop_summary', 'latest_job'} & row.keys()
+    assert first['summary']['candidate_items'] == 2
+    assert first['summary']['active_items'] == 1
+
+    # A successful historical enrollment is not current participation.
+    participating = client.get('/api/promotions?participated=1').get_json()['data']
+    assert [item['id'] for item in participating['rows']] == [promotion_id]
+
+    # The next request must reflect the newest item snapshot instead of a
+    # previous job summary or a cached outer-list count.
+    store.replace_items(promotion_id, [
+        {'id': 'MLM1', 'status': 'pending_approval'},
+        {'id': 'MLM2', 'status': 'active'},
+    ])
+    latest = client.get('/api/promotions').get_json()['data']
+    row = next(item for item in latest['rows'] if item['id'] == promotion_id)
+    assert row['candidate_count'] == 0
+    assert row['active_item_count'] == 2
+    assert row['item_count'] == 2
+    assert latest['summary']['candidate_items'] == 0
+    assert latest['summary']['active_items'] == 2
+
+
+def test_selection_page_skips_history_and_enrichment_and_keeps_scope(store,monkeypatch):
+    pk=campaign(store)
+    other=campaign(store,token_id=2,promotion_id='other')
+    store.replace_items(pk,products(1100))
+    def forbidden(*a,**kw):pytest.fail('Selection must not query job history or product enrichment')
+    for name in ['enrollment_summary','enrollment_results','latest_job']:
+        monkeypatch.setattr(store,name,forbidden)
+    monkeypatch.setattr(routes,'PromotionStore',lambda:store)
+    monkeypatch.setattr(routes,'enrich_item_products',forbidden)
+    app=Flask(__name__)
+    app.register_blueprint(routes.create_promotions_blueprint(login_required=lambda fn:fn,
+        current_user=lambda:{'username':'tester'},authorized_token_ids=lambda user:[1]))
+    client=app.test_client()
+    response=client.get(f'/api/promotions/{pk}/items?selection=1&page_size=500&page=2')
+    assert response.status_code==200
+    data=response.get_json()['data']
+    assert data['total']==1100 and data['pages']==3 and len(data['rows'])==500
+    assert data['rows'][0]['item_id']=='MLM0500'
+    assert 'raw' not in data['rows'][0] and 'enrollment_results' not in data
+    assert client.get(f'/api/promotions/{other}/items?selection=1').status_code==403
+    filtered=client.get(f'/api/promotions/{pk}/items?selection=1&item_id=MLM1001&enrolled=0').get_json()['data']
+    assert filtered['total']==1 and filtered['rows'][0]['item_id']=='MLM1001'

@@ -7,7 +7,7 @@
   const refresh = element("refresh");
   const start = element("start");
   const stop = element("stop");
-  const fields = [element("customer-mode"), element("copy-mode"), element("loop-count"), element("message")];
+  const fields = [element("customer-mode"), element("copy-mode"), element("loop-count"), element("message"), element("screenshot-mode")];
   let task = null;
   let busy = false;
   let visible = false;
@@ -79,6 +79,7 @@
       element("copy-mode").value = selection.appeal_copy_mode;
       element("loop-count").value = Number(selection.loop_count) === 0 ? "permanent" : String(selection.loop_count);
       element("message").value = selection.message || "";
+      element("screenshot-mode").checked = Boolean(selection.screenshot_mode);
     }
     syncControls();
   }
@@ -132,6 +133,7 @@
         mode: element("customer-mode").value,
         appeal_copy_mode: element("copy-mode").value,
         loop_count: element("loop-count").value,
+        screenshot_mode: element("screenshot-mode").checked,
         message: element("message").value.trim()
       }});
       if (!response.ok) throw new Error(response.error || "启动申诉失败");

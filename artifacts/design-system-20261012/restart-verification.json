@@ -1,0 +1,22 @@
+[
+  {
+    "path": "/login",
+    "status": 200,
+    "new_stylesheet": true
+  },
+  {
+    "path": "/static/design-system.css",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/zeshun-theme.css",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/erp-density.css",
+    "status": 200,
+    "matches_workspace": true
+  }
+]

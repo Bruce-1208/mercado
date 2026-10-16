@@ -10,6 +10,13 @@ globalThis.ZeshunAppealRunner = (() => {
   let deps = {}, active = null, starting = false;
   const siteMap = {MX: "MLM", BR: "MLB", CL: "MLC", CO: "MCO", AR: "MLA", UY: "MLU", 墨西哥: "MLM", 巴西: "MLB", 智利: "MLC", 哥伦比亚: "MCO", 阿根廷: "MLA", 乌拉圭: "MLU"};
   const siteReplies = {MLM: "Mexico (Direct to consumer)", MLB: "Brazil", MLC: "Chile", MCO: "Colombia", MLA: "Argentina", MLU: "Uruguay"};
+  // Fixed cancellation copy for screenshot evidence. The status title and the
+  // markdown reason next to it are overridden right before the capture and
+  // restored after it, so the operator keeps the real conversation on screen.
+  const screenshotCopy = [
+    {selector: ".sc-status__title", text: "Order cancelled by Mercado Libre", all: true},
+    {selector: ".sc-ui-render-markdown", text: "The buyer does not comply with the requirements for international purchases, so we refunded the money.", near: ".sc-status__title"},
+  ];
   const norm = text => String(text || "").replace(/\s+/g, " ").trim();
   const siteId = value => siteMap[value] || siteMap[String(value || "").toUpperCase()] || String(value || "").toUpperCase();
   const failure = (message, status = "pre_send_failed", sent = false) => Object.assign(new Error(message), {status, sent});
@@ -25,10 +32,10 @@ globalThis.ZeshunAppealRunner = (() => {
   }
   function publicStatus(run) {
     if (!run) return {status: "idle", running: false, processed: 0, sent: 0, failed: 0, logs: []};
-    const {params, stopped, owner, owner_digest, heartbeat, in_flight, ...status} = run;
+    const {params, stopped, owner, owner_digest, heartbeat, in_flight, browser_products, ...status} = run;
     return {...status, running: ["preparing", "running", "waiting", "stopping"].includes(run.status),
       selection: params ? {forms: params.forms, sites: params.sites, mode: params.mode,
-        appeal_copy_mode: params.appeal_copy_mode, loop_count: params.loop_count, message: params.message} : run.selection,
+        appeal_copy_mode: params.appeal_copy_mode, loop_count: params.loop_count, message: params.message, screenshot_mode: Boolean(params.screenshot_mode)} : run.selection,
       loop_count: params?.loop_count ?? run.loop_count, in_flight: in_flight || null};
   }
   async function persist(run) {
@@ -51,7 +58,7 @@ globalThis.ZeshunAppealRunner = (() => {
     // Token refresh for the same account is harmless. If the server did not
     // expose a stable account ID, conservatively bind the original token.
     const userId = auth.user?.id ?? auth.user?.user_id ?? auth.user?.username;
-    return JSON.stringify([sync.consoleUrl || "https://wuhanzeshun.com", auth.mode, userId || auth.token || auth.username]);
+    return JSON.stringify([sync.consoleUrl || "https://wuhanzeshun.cn", auth.mode, userId || auth.token || auth.username]);
   }
   async function post(name, payload, run = null) {
     if (run && await accountScope() !== run.owner) throw failure("泽顺账号或控制台地址已改变，申诉已停止", "context_changed");
@@ -60,7 +67,7 @@ globalThis.ZeshunAppealRunner = (() => {
   async function preparePlan(payload, run) {
     const requestId = crypto.randomUUID();
     const deadline = Date.now() + 600000;
-    await log(run, "正在核对店铺授权并读取申诉资料…");
+    await log(run, "正在绑定当前浏览器店铺并准备申诉资料…");
     let receipt;
     try { receipt = await post("plan-async", {...payload, request_id: requestId}, run); }
     catch (error) {
@@ -93,7 +100,21 @@ globalThis.ZeshunAppealRunner = (() => {
     }
     check(run);
   }
-  async function page(tabId, command, args = {}, frameId = 0, allFrames = false) {
+  async function browserCall(operation, timeoutMs, message, run = null) {
+    let timer;
+    const deadline = Date.now() + timeoutMs;
+    const timeout = new Promise((_, reject) => {
+      const poll = () => {
+        try { if (run) check(run); } catch (error) { reject(error); return; }
+        if (Date.now() >= deadline) { reject(failure(message, "browser_timeout")); return; }
+        timer = setTimeout(poll, Math.min(250, deadline - Date.now()));
+      };
+      poll();
+    });
+    try { return await Promise.race([operation, timeout]); }
+    finally { clearTimeout(timer); }
+  }
+  async function page(tabId, command, args = {}, frameId = 0, allFrames = false, options = {}) {
     let target = allFrames ? {tabId, allFrames: true} : {tabId, frameIds: [frameId]};
     if (allFrames && chrome.webNavigation?.getAllFrames) {
       const frames = await chrome.webNavigation.getAllFrames({tabId});
@@ -101,11 +122,12 @@ globalThis.ZeshunAppealRunner = (() => {
       if (!frameIds.length) throw failure("当前页面没有可读取的美客多客服框架");
       target = {tabId, frameIds};
     }
-    let timer;
-    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(failure("读取美客多页面超时，请检查当前店铺页面")), 15000); });
-    let values;
-    try { values = await Promise.race([chrome.scripting.executeScript({target, world: "MAIN", func: MercadoAppealPage.action, args: [command, args]}), timeout]); }
-    finally { clearTimeout(timer); }
+    const values = await browserCall(chrome.scripting.executeScript({target, world: "MAIN",
+      // A context probe is read-only and must not wait for document_idle: a
+      // ready seller page can keep its loading indicator indefinitely.
+      ...(command === "context" ? {injectImmediately: true} : {}),
+      func: MercadoAppealPage.action, args: [command, args]}), options.timeoutMs || 15000,
+      "读取美客多页面超时，请检查当前店铺页面", options.run);
     const results = values.filter(value => value.result && !value.result.unsupported).map(value => ({frame_id: value.frameId, ...value.result}));
     if (allFrames) return results;
     if (!results.length) throw failure("当前页面不属于可执行申诉的 Mercado Libre 店铺环境");
@@ -118,18 +140,77 @@ globalThis.ZeshunAppealRunner = (() => {
       throw failure("当前美客多店铺未登录，申诉任务已停止。请登录后台后重新启动", "logged_out");
     }
   }
-  async function readContext(tabId) {
-    const tab = await chrome.tabs.get(Number(tabId));
+  async function readContext(tabId, options = {}) {
+    const tab = await browserCall(chrome.tabs.get(Number(tabId)), options.timeoutMs || 10000,
+      "读取店铺标签页超时，请检查浏览器是否响应", options.run);
     checkLoginUrl(tab.pendingUrl || tab.url);
-    const state = await page(tab.id, "context");
+    const state = await page(tab.id, "context", {}, 0, false, options);
     if (state.logged_out) throw failure("当前美客多店铺未登录，申诉任务已停止。请登录后台后重新启动", "logged_out");
     if (state.rate_limited) throw failure("美客多页面暂时限频，请稍后在当前店铺重试", "rate_limited");
     if (state.identity_conflict || !state.seller_id) throw failure("未能确认当前店铺登录账号，请打开美客多全球销售后台后重试", "identity_unknown");
     return {...state, tab_id: tab.id, window_id: tab.windowId, incognito: Boolean(tab.incognito)};
   }
+  function atDestination(value, destination) {
+    try {
+      const actual = mercadoUrl(value), expected = mercadoUrl(destination);
+      const backend = host => /^(?:global-selling|sellers)\.mercadolibre\.com$/i.test(host);
+      if (actual.origin !== expected.origin && !(backend(actual.hostname) && backend(expected.hostname))) return false;
+      const path = actual.pathname.replace(/\/$/, ""), wanted = expected.pathname.replace(/\/$/, "");
+      if (path !== wanted && !(wanted === "/help" && path === "/help/v2")) return false;
+      return [...expected.searchParams].every(([key, value]) => actual.searchParams.get(key) === value);
+    } catch (_) { return false; }
+  }
+  async function waitForPage(run, destination, {startup = false} = {}) {
+    const deadline = Date.now() + 60000;
+    let lastError = "", progressAt = Date.now() + 10000;
+    while (Date.now() < deadline) {
+      check(run);
+      const current = await browserCall(chrome.tabs.get(run.tab_id), Math.min(5000, deadline - Date.now()),
+        "读取店铺标签页超时，请检查浏览器是否响应", run);
+      checkLoginUrl(current.pendingUrl || current.url);
+      if (current.windowId !== run.window_id || Boolean(current.incognito) !== run.incognito) throw failure("当前浏览器窗口环境已改变，申诉已停止", "context_changed");
+      // Never accept the old document while a navigation is still pending.
+      if (!current.pendingUrl && atDestination(current.url, destination)) {
+        try {
+          const context = await readContext(run.tab_id, {run, timeoutMs: Math.min(5000, deadline - Date.now())});
+          check(run);
+          if (atDestination(context.url, destination)) {
+            if (startup) browserIdentity(context);
+            return context;
+          }
+        } catch (error) {
+          if (["logged_out", "rate_limited", "stopped", "context_changed"].includes(error.status)) throw error;
+          lastError = error.message;
+        }
+      }
+      if (startup && Date.now() >= progressAt) {
+        await log(run, "正在等待声誉页面的账号与站点信息，可随时停止…");
+        progressAt = Date.now() + 10000;
+      }
+      await pause(run, 500);
+    }
+    throw failure(`${startup ? "美客多声誉页面打开超时" : "美客多页面打开超时"}${lastError ? "：" + lastError : "，请检查页面是否停在加载或验证界面"}`);
+  }
+  function browserIdentity(browser) {
+    if (browser.site_conflict) throw failure("当前站点信息冲突或为 Full 站点，请切换至直邮站点后启动");
+    const sites = new Map();
+    for (const site of browser.sites || []) {
+      const code = siteId(site.site_id);
+      if (siteReplies[code] && /^\d+$/.test(String(site.seller_id || ""))) sites.set(code, {site_id: code, seller_id: String(site.seller_id)});
+    }
+    for (const raw of browser.available || []) {
+      if (!/-remote$/i.test(raw)) continue;
+      const code = siteId(raw.replace(/-remote$/i, ""));
+      if (siteReplies[code] && !sites.has(code)) sites.set(code, {site_id: code, seller_id: browser.seller_id});
+    }
+    const current = siteId(browser.site_id);
+    if (siteReplies[current] && !sites.has(current)) sites.set(current, {site_id: current, seller_id: browser.seller_id});
+    if (!sites.size) throw failure("尚未读取到当前店铺站点，请等待声誉页面加载完成后重试");
+    return {binding_mode: "browser", seller_id: browser.seller_id, nickname: browser.nickname || "", sites: [...sites.values()]};
+  }
   async function getAppealContext(tabId) {
     const browser = await readContext(tabId);
-    const data = await post("context", {seller_id: browser.seller_id, nickname: browser.nickname, site_id: browser.site_id});
+    const data = await post("context", browserIdentity(browser));
     return {...data, tab_id: browser.tab_id, page: browser};
   }
   async function assertBinding(run, targetSite = "") {
@@ -151,17 +232,11 @@ globalThis.ZeshunAppealRunner = (() => {
     check(run);
     await assertBinding(run);
     mercadoUrl(url);
-    await chrome.tabs.update(run.tab_id, {url});
-    const deadline = Date.now() + 60000;
-    while (Date.now() < deadline) {
-      check(run);
-      const tab = await chrome.tabs.get(run.tab_id);
-      checkLoginUrl(tab.pendingUrl || tab.url);
-      if (tab.status === "complete") { await assertBinding(run); return; }
-      await pause(run, 500);
-    }
-    throw failure("美客多页面打开超时");
+    await browserCall(chrome.tabs.update(run.tab_id, {url}), 10000, "浏览器打开美客多页面未响应，请重试", run);
+    await waitForPage(run, url);
+    await assertBinding(run);
   }
+
   async function selectSite(run, target) {
     const code = siteId(target);
     if (!(run.identity.sites || []).some(site => siteId(site.site_id) === code)) throw failure("目标站点未授权申诉", "site_mismatch");
@@ -212,10 +287,10 @@ globalThis.ZeshunAppealRunner = (() => {
     throw failure("未找到当前店铺客服聊天输入框");
   }
   async function openChat(run) {
-    if (run.params.mode === "人工客服") {
+    if (run.params.mode === "人工客服" || run.params.screenshot_mode) {
       // Keep every submitted human conversation available for the operator.
       await assertBinding(run);
-      const tab = await chrome.tabs.create({windowId: run.window_id, url: `${HOST}/help/hub/30928?source`, active: true});
+      const tab = await chrome.tabs.create({windowId: run.window_id, url: run.params.mode === "人工客服" ? `${HOST}/help/hub/30928?source` : `${HOST}/help`, active: true});
       run.tab_id = tab.id; (run.chat_tabs ||= []).push(tab.id);
       const deadline = Date.now() + 60000;
       while ((await chrome.tabs.get(tab.id)).status !== "complete" && Date.now() < deadline) await pause(run, 500);
@@ -246,7 +321,7 @@ globalThis.ZeshunAppealRunner = (() => {
   function siteQuestion(text) {
     const lower = norm(text).toLowerCase().replace(/（/g, "(").replace(/）/g, ")");
     const options = [...Object.values(siteReplies), "Mexico (Fulfillment)"].map(value => value.toLowerCase());
-    const compact = value => value.replace(/[\s。．.、,，:：;；]+/g, "");
+    const compact = value => value.replace(/[\s。．.、,,,:：;；]+/g, "");
     const matches = options.filter(option => compact(lower).includes(compact(option))).length;
     return matches >= 5 || (matches >= 3 && /可选|option|站点/.test(lower)) ||
       (options.some(option => lower.includes(option)) && /which (country|site|option)|(?:select|choose|confirm) (?:your |the |a )?(country|site)|qual pa[ií]s|qu[eé] pa[ií]s|qu[eé] sitio|哪个国家|哪个站点|针对哪个|哪个选项|请选择站点|请选择国家|请确认站点|请确认国家/.test(lower));
@@ -283,6 +358,12 @@ globalThis.ZeshunAppealRunner = (() => {
   }
   async function send(run, chat, message, group, followup = false) {
     await assertBinding(run, run.current_site);
+    if (!followup && ["延误", "取消率", "投诉"].includes(group.form)) {
+      const allowed = new Set(group.identifiers || []);
+      if (!allowed.size || [...String(message).matchAll(/\b\d{10,20}\b/g)].some(match => !allowed.has(match[0]))) {
+        throw failure("申诉话术含未核实的编号，请使用包裹号，不要填写销售单号");
+      }
+    }
     const filled = await page(run.tab_id, "fill", {mode: run.params.mode, message}, chat.frame_id);
     if (!filled.filled) throw failure("客服输入框未接收完整申诉话术");
     await assertBinding(run, run.current_site);
@@ -301,6 +382,53 @@ globalThis.ZeshunAppealRunner = (() => {
     run.in_flight = {...run.in_flight, phase: "sent"};
     await persist(run);
     return acknowledgement;
+  }
+  // The status card can sit in the seller page while the chat lives in an
+  // iframe, so both copy commands span every Mercado frame of the bound tab.
+  async function overrideScreenshotCopy(run) {
+    const frames = await page(run.tab_id, "override_text", {overrides: screenshotCopy, hold_ms: 20000}, 0, true, {run});
+    const found = new Set(frames.flatMap(frame => Object.entries(frame.counts || {}).filter(([, count]) => count > 0).map(([selector]) => selector)));
+    return {patched: frames.reduce((total, frame) => total + (frame.patched || 0), 0),
+      missing: screenshotCopy.map(spec => spec.selector).filter(selector => !found.has(selector))};
+  }
+  async function restoreScreenshotCopy(run) {
+    // Best effort only: a stop or a closed tab must not mask the capture result,
+    // and the page-side hold expires by itself.
+    try { await page(run.tab_id, "restore_text", {}, 0, true, {run, timeoutMs: 10000}); } catch (_) {}
+  }
+  async function captureScreenshot(run, group, execution) {
+    try {
+      await assertBinding(run, run.current_site);
+      await chrome.tabs.update(run.tab_id, {active: true});
+      await chrome.windows.update(run.window_id, {focused: true});
+      await findChat(run, 5000);
+      const copy = await overrideScreenshotCopy(run);
+      if (copy.missing.length) await log(run, `截图前未找到状态卡文案节点：${copy.missing.join("、")}，截图按当前页面保存`);
+      const target = {tabId: run.tab_id};
+      let attached = false, image;
+      try {
+        await chrome.debugger.attach(target, "1.3");
+        attached = true;
+        await assertBinding(run, run.current_site);
+        const shot = await chrome.debugger.sendCommand(target, "Page.captureScreenshot", {
+          format: "png", fromSurface: true, captureBeyondViewport: false
+        });
+        if (!shot?.data) throw failure("浏览器未返回截图");
+        await assertBinding(run, run.current_site);
+        image = `data:image/png;base64,${shot.data}`;
+      } finally {
+        if (attached) await chrome.debugger.detach(target).catch(() => {});
+      }
+      const filename = `zeshun-appeals/${run.task_id}/${group.group_id}.png`;
+      execution.screenshot_download_id = await chrome.downloads.download({url: image, filename, saveAs: false});
+      execution.screenshot_path = filename;
+      await log(run, `客服截图已保存：${filename}；状态卡文案已替换 ${copy.patched} 处，聊天记录与窗口已保留`);
+    } catch (error) {
+      execution.screenshot_error = error.message;
+      await log(run, `截图未保存：${error.message}；客服窗口已保留，请手动截图`);
+    } finally {
+      await restoreScreenshotCopy(run);
+    }
   }
   async function executeGroup(run, group, chat) {
     const records = [];
@@ -350,6 +478,49 @@ globalThis.ZeshunAppealRunner = (() => {
       if (execution.acknowledged) Object.assign(execution, {post_send_status: error.status || "failed", post_send_error: error.message});
       else Object.assign(execution, {status: executionStatus(error.status || "failed"), execution_status: executionStatus(error.status || "failed"), source_status: error.status || "failed", message: error.message, sent: Boolean(error.sent), error: error.message});
     }
+    if (run.params.screenshot_mode) {
+      try {
+        await assertBinding(run, run.current_site);
+        await chrome.tabs.update(run.tab_id, {active: true});
+        await chrome.windows.update(run.window_id, {focused: true});
+        await findChat(run, 5000);
+        
+        // 在截图前修改指定 DOM 元素的文字
+        await chrome.scripting.executeScript({
+          target: {tabId: run.tab_id},
+          world: "MAIN",
+          func: () => {
+            const titleEl = document.querySelector('.sc-status__title');
+            if (titleEl) titleEl.textContent = 'Order cancelled by Mercado Libre';
+            const descEl = document.querySelector('.sc-ui-render-markdown');
+            if (descEl) descEl.textContent = 'The buyer does not comply with the requirements for international purchases, so we refunded the money.';
+          }
+        });
+
+        const target = {tabId: run.tab_id};
+        let attached = false, image;
+        try {
+          await chrome.debugger.attach(target, "1.3");
+          attached = true;
+          await assertBinding(run, run.current_site);
+          const shot = await chrome.debugger.sendCommand(target, "Page.captureScreenshot", {
+            format: "png", fromSurface: true, captureBeyondViewport: false
+          });
+          if (!shot?.data) throw failure("浏览器未返回截图");
+          await assertBinding(run, run.current_site);
+          image = `data:image/png;base64,${shot.data}`;
+        } finally {
+          if (attached) await chrome.debugger.detach(target).catch(() => {});
+        }
+        const filename = `zeshun-appeals/${run.task_id}/${group.group_id}.png`;
+        execution.screenshot_download_id = await chrome.downloads.download({url: image, filename, saveAs: false});
+        execution.screenshot_path = filename;
+        await log(run, `客服截图已保存：${filename}；聊天记录与窗口已保留`);
+      } catch (error) {
+        execution.screenshot_error = error.message;
+        await log(run, `截图未保存：${error.message}；客服窗口已保留，请手动截图`);
+      }
+    }
     add("group_result", message, execution.response || "", null, {result: execution});
     // Result persistence is also bounded to the original console account. A
     // failed POST leaves its payload locally for inspection, never a resend.
@@ -360,6 +531,7 @@ globalThis.ZeshunAppealRunner = (() => {
     run.processed++; if (!execution.acknowledged) run.failed++;
     await log(run, `${group.site_name || group.site_id} ${group.form} 第 ${group.group_index}/${group.total_groups} 组：${execution.message || execution.status}`);
     run.reset_before_group = execution.reply_status === "reply_timeout" || execution.reply_status === "needs_human" || Boolean(execution.post_send_status);
+    if (run.params.screenshot_mode && run.reset_before_group) throw failure("客服回复需要人工确认，截图和聊天窗口已保留", "needs_human", execution.sent);
     if (!execution.acknowledged) throw failure(execution.error || execution.message || "本组发送未确认", execution.status, execution.sent);
     if (["logged_out", "login_required", "auth_required"].includes(execution.post_send_status)) {
       throw failure(execution.post_send_error, execution.post_send_status, true);
@@ -379,13 +551,13 @@ globalThis.ZeshunAppealRunner = (() => {
     if (quoted) throw failure("延误 CSV 报表不完整");
     return rows;
   }
-  function delayIdentifiers(csv, now = Date.now()) {
+  function delayIdentifiers(csv, now = Date.now(), identifierColumn = 1) {
     const rows = parseCsv(String(csv || "").replace(/^\uFEFF/, ""));
     if (rows.length < 2) throw failure("最新延误 CSV 报表为空或格式不完整");
     const identifiers = new Set(), cutoff = now - 15 * 24 * 60 * 60 * 1000;
     for (const row of rows.slice(1)) {
       if (row.length < 7) throw failure("延误报表列结构已改变，停止以免申诉错误订单");
-      const order = norm(row[1]).replace(/^'/, ""), dispatched = norm(row[6]);
+      const order = norm(row[identifierColumn]).replace(/^'/, ""), dispatched = norm(row[6]);
       if (!/^\d{10,20}$/.test(order)) continue;
       // Agent CSV dates are e.g. "Wednesday 07 Oct 2026 - 08:30";
       // the agent deliberately uses the date before the trailing time segment.
@@ -396,14 +568,74 @@ globalThis.ZeshunAppealRunner = (() => {
     }
     return [...identifiers];
   }
+  async function collectProducts(run, request) {
+    const code = siteId(request.site_id), rows = [], cases = new Set();
+    await navigate(run, `${HOST}/reputation`);
+    await selectSite(run, code);
+    let offset = 0, expected = null, previous = "";
+    if (request.form === "禁限售") {
+      await navigate(run, `${HOST}/listings/list`);
+      await assertBinding(run, code);
+      await page(run.tab_id, "open_inactive_listings");
+      await pause(run, 1000);
+    }
+    for (let index = 0; index < 1500; index++) {
+      check(run);
+      if (request.form === "侵权") await navigate(run, `${HOST}/noindex/pppi/infractions?tab=detections&offset=${offset}`);
+      await assertBinding(run, code);
+      const deadline = Date.now() + 30000;
+      let batch;
+      while (true) {
+        try {
+          batch = await page(run.tab_id, request.form === "侵权" ? "infringement_items" : "prohibited_items", {site_id: code, offset});
+          if (request.form === "禁限售" && previous && batch.fingerprint === previous) throw failure("商品列表翻页尚未完成");
+          break;
+        } catch (error) {
+          if (Date.now() >= deadline || !/未加载|尚未加载|尚未识别|翻页尚未完成/.test(error.message)) throw error;
+          await pause(run, 1000);
+          await assertBinding(run, code);
+        }
+      }
+      await assertBinding(run, code);
+      if (request.form === "侵权") {
+        if (expected !== null && expected !== batch.total) throw failure("侵权列表总数在采集期间改变，请重试");
+        expected = batch.total;
+        for (const row of batch.rows) {
+          if (cases.has(row.case_id)) throw failure("侵权分页重复，已停止采集");
+          cases.add(row.case_id);
+          if (row.eligible) rows.push(row);
+        }
+        if (cases.size === expected) return rows;
+        offset += batch.limit;
+      } else {
+        rows.push(...batch.rows);
+        if (!batch.has_next) return rows;
+        previous = batch.fingerprint;
+        await assertBinding(run, code);
+        if (!(await page(run.tab_id, "next_products")).advanced) throw failure("商品列表翻页失败");
+        await pause(run, 1000);
+      }
+      if (rows.length > 10000) throw failure("申诉商品数量超出单轮限制，请缩小任务范围");
+    }
+    throw failure("商品列表超过采集页数限制，未提交不完整编号");
+  }
   async function collect(run, requirements) {
-    if (run.params.mode === "人工客服" && run.source_tab_id) run.tab_id = run.source_tab_id;
+    if ((run.params.mode === "人工客服" || run.params.screenshot_mode) && run.source_tab_id) run.tab_id = run.source_tab_id;
     const result = {};
+    run.browser_products = {};
     for (const request of requirements) {
       check(run);
       const code = siteId(request.site_id);
       run.current_site = code; run.site_deadline = Date.now() + 7200000;
-      await log(run, `${code}：正在读取${request.form}订单`);
+      await log(run, `${code}：正在读取${request.form}资料`);
+      if (["侵权", "禁限售"].includes(request.form)) {
+        const products = await collectProducts(run, request);
+        const ids = [...new Set(products.map(product => product.product_id))];
+        for (const product of products) run.browser_products[product.product_id] = {title: product.title, description: product.description || ""};
+        (result[code] ||= {})[request.form] = ids;
+        await log(run, `${code} ${request.form}：读取 ${ids.length} 个可申诉商品`);
+        continue;
+      }
       await navigate(run, `${HOST}/reputation`);
       await selectSite(run, code);
       let link;
@@ -411,12 +643,16 @@ globalThis.ZeshunAppealRunner = (() => {
       while (true) {
         try { link = await page(run.tab_id, "metric_link", {form: request.form}); break; }
         catch (error) {
-          if (/指标卡片/.test(error.message) && Date.now() < cardDeadline) { await pause(run, 1000); continue; }
+          if (/指标卡片|指标没有可读取的订单入口/.test(error.message) && Date.now() < cardDeadline) {
+            await pause(run, 1000);
+            await assertBinding(run, code);
+            continue;
+          }
           if (request.form !== "延误") throw error;
           link = {error: error.message}; break;
         }
       }
-      const ids = [];
+      const ids = [], packs = [];
       if (!link.empty && request.form === "延误") {
         let csv;
         if (link.url) {
@@ -434,7 +670,10 @@ globalThis.ZeshunAppealRunner = (() => {
             isStopped: () => run.stopped, onProgress: message => log(run, message)});
           csv = report.csv;
         }
-        ids.push(...delayIdentifiers(csv));
+        const headers = parseCsv(csv)[0].map(value => norm(value).toLowerCase());
+        const packageColumn = headers.findIndex(value => /^(pack_id|package_id|pack id|package id|package number|pack number|包裹号|包裹编号)$/.test(value));
+        if (packageColumn >= 0) packs.push(...delayIdentifiers(csv, Date.now(), packageColumn));
+        else ids.push(...delayIdentifiers(csv));
       } else if (!link.empty) {
         if (link.url) {
           if (!/\/metrics(?:[/?#]|$)/.test(new URL(link.url).pathname)) throw failure("未找到当前指标的 Metrics 订单页面");
@@ -457,6 +696,7 @@ globalThis.ZeshunAppealRunner = (() => {
           await assertBinding(run, code);
           const state = await page(run.tab_id, "orders");
           state.ids.forEach(id => seen.add(id));
+          packs.push(...(state.pack_ids || []));
           stagnant = state.fingerprint === previous ? stagnant + 1 : 0; previous = state.fingerprint;
           if (stagnant >= 2) break;
           if (!(await page(run.tab_id, "next_orders")).advanced) break;
@@ -464,8 +704,8 @@ globalThis.ZeshunAppealRunner = (() => {
         }
         ids.push(...seen);
       }
-      (result[code] ||= {})[request.form] = ids;
-      await log(run, `${code} ${request.form}：读取 ${ids.length} 个可申诉订单`);
+      (result[code] ||= {})[request.form] = packs.length ? {pack_ids: [...new Set(packs)], order_ids: ids} : ids;
+      await log(run, `${code} ${request.form}：读取 ${packs.length} 个包裹、${ids.length} 个待核实包裹号的销售单`);
     }
     return result;
   }
@@ -480,7 +720,10 @@ globalThis.ZeshunAppealRunner = (() => {
         if (round > 1) plan = await preparePlan({task_id: run.task_id, round_number: round}, run);
         if (plan.browser_collections?.length) {
           const reputation = await collect(run, plan.browser_collections);
-          plan = await preparePlan({task_id: run.task_id, round_number: round, reputation_identifiers: reputation}, run);
+          const collected = run.identity.binding_mode === "browser"
+            ? {browser_identifiers: reputation, browser_products: run.browser_products}
+            : {reputation_identifiers: reputation};
+          plan = await preparePlan({task_id: run.task_id, round_number: round, ...collected}, run);
         }
         await log(run, `开始第 ${round} 轮，共 ${plan.groups.length} 组申诉`);
         let chat = null, siteGroup = 0, previousSite = "", previousForm = "";
@@ -493,7 +736,7 @@ globalThis.ZeshunAppealRunner = (() => {
           if (changedSite || (run.params.mode === "人工客服" && changedForm)) {
             run.site_deadline = Date.now() + 7200000; previousSite = run.current_site; siteGroup = 0;
             chat = await openChat(run); run.reset_before_group = false;
-          } else if (changedForm) {
+          } else if (changedForm && !run.params.screenshot_mode) {
             try { chat = await resetChat(run, chat); }
             catch (error) {
               if (error.status !== "pre_send_failed" || !/新的客服会话|会话已重建/.test(error.message)) throw error;
@@ -505,7 +748,7 @@ globalThis.ZeshunAppealRunner = (() => {
           }
           previousForm = group.form;
           siteGroup++;
-          if (run.reset_before_group || (siteGroup > 1 && (siteGroup - 1) % 3 === 0)) chat = await resetChat(run, chat);
+          if (!run.params.screenshot_mode && (run.reset_before_group || (siteGroup > 1 && (siteGroup - 1) % 3 === 0))) chat = await resetChat(run, chat);
           await assertBinding(run, run.current_site);
           await executeGroup(run, group, chat);
           if (group.group_index < group.total_groups) await pause(run, 20000);
@@ -536,10 +779,11 @@ globalThis.ZeshunAppealRunner = (() => {
       const owner = await accountScope();
       let tab;
       if (Number.isInteger(Number(tabId)) && Number(tabId) > 0) {
-        try { tab = await chrome.tabs.get(Number(tabId)); } catch (_) { /* Closed tab: open the backend directly. */ }
+        try { tab = await browserCall(chrome.tabs.get(Number(tabId)), 10000, "读取店铺标签页超时，请检查浏览器是否响应"); }
+        catch (error) { if (error.status === "browser_timeout") throw error; /* Closed tab: open the backend directly. */ }
       }
       if (tab) mercadoUrl(tab.pendingUrl || tab.url);
-      else tab = await chrome.tabs.create({url: `${HOST}/reputation`, active: true});
+      else tab = await browserCall(chrome.tabs.create({url: `${HOST}/reputation`, active: true}), 10000, "浏览器新建声誉页面未响应，请检查浏览器后重试");
       const run = {run_id: crypto.randomUUID(), status: "preparing", params,
         tab_id: tab.id, source_tab_id: tab.id, window_id: tab.windowId, incognito: Boolean(tab.incognito),
         owner, owner_digest: await scopeDigest(owner), stopped: false, processed: 0, sent: 0, failed: 0,
@@ -553,20 +797,16 @@ globalThis.ZeshunAppealRunner = (() => {
   }
   async function prepareAndRun(run, tab, params) {
     try {
-      // The originating page may not expose shop identity (for example Orders).
-      // Open Reputation first; no popup identity preflight is required.
-      await chrome.tabs.update(tab.id, {url: `${HOST}/reputation`});
-      const deadline = Date.now() + 60000;
-      while (true) {
-        check(run);
-        const current = await chrome.tabs.get(tab.id);
-        checkLoginUrl(current.pendingUrl || current.url);
-        if (current.status === "complete") break;
-        if (Date.now() >= deadline) throw failure("美客多声誉页面打开超时");
-        await new Promise(resolve => setTimeout(resolve, 500));
+      const reputationUrl = `${HOST}/reputation`;
+      // Reuse an existing/newly-created Reputation document instead of
+      // reloading it again and racing its first navigation.
+      if (!atDestination(tab.pendingUrl || tab.url, reputationUrl)) {
+        await browserCall(chrome.tabs.update(tab.id, {url: reputationUrl}), 10000,
+          "浏览器打开声誉页面未响应，请检查店铺标签页后重试", run);
       }
-      const browser = await readContext(tab.id);
-      const plan = await preparePlan({...params, context: {seller_id: browser.seller_id}}, run);
+      await log(run, "正在读取声誉页面的当前店铺账号与站点…");
+      const browser = await waitForPage(run, reputationUrl, {startup: true});
+      const plan = await preparePlan({...params, context: browserIdentity(browser)}, run);
       Object.assign(run, {task_id: plan.task_id, params: plan.params || params,
         identity: plan.identity, shop: plan.shop, sites: plan.sites});
       check(run);

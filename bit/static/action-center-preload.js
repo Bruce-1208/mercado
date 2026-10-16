@@ -2,6 +2,34 @@
 (() => {
   const account = typeof document === 'undefined' ? '' : document.currentScript?.dataset.account;
   const storageKey = account ? `zeshun-today-filters:v1:${account}` : null;
+  const hourlyMs = 60 * 60 * 1000;
+  const hourlyKey = account ? `zeshun-today-hourly:v1:${account}` : null;
+  let lastHourlyAt = Date.now();
+  try {
+    const saved = Number(window.sessionStorage.getItem(hourlyKey));
+    if (saved > 0 && saved <= lastHourlyAt) lastHourlyAt = saved;
+    else if (hourlyKey) window.sessionStorage.setItem(hourlyKey, String(lastHourlyAt));
+  } catch (_) {}
+  function markHourlyRefresh() {
+    lastHourlyAt = Date.now();
+    try { if (hourlyKey) window.sessionStorage.setItem(hourlyKey, String(lastHourlyAt)); } catch (_) {}
+  }
+  window.startTodayAutoRefresh = callback => {
+    if (typeof setInterval !== 'function') return;
+    const check = () => {
+      if (Date.now() - lastHourlyAt < hourlyMs) return;
+      markHourlyRefresh();
+      callback();
+    };
+    // Keep refreshing while another workbench section or browser tab is active.
+    // Wall-clock checks catch up after sleep without replaying missed hours.
+    setInterval(check, 60000);
+    if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', () => {
+      if (!document.hidden) check();
+    });
+    window.addEventListener?.('pageshow', check);
+    window.addEventListener?.('online', check);
+  };
   const clean = value => Object.fromEntries(['salesperson', 'group_name'].map(key => {
     const values = Array.isArray(value?.[key]) ? value[key] : [value?.[key]];
     return [key, [...new Set(values.filter(v => typeof v === 'string').map(v => v.trim().slice(0, 200)).filter(Boolean))].sort()];
@@ -50,15 +78,17 @@
     requests.delete(url);
     return promise;
   };
-  async function read(url) {
+  async function read(url, force = false) {
     try {
-      const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store'});
+      const response = await fetch(force ? `${url}&refresh=1` : url, {credentials: 'same-origin', cache: 'no-store'});
       const result = {ok: response.ok, status: response.status, payload: await response.json()};
       window.rememberTodaySnapshot(url, result);
       return result;
     } catch (_) { return null; }
   }
-  function preload() {
+  function preload(force = false) {
+    force = force === true || Date.now() - lastHourlyAt >= hourlyMs;
+    if (force) markHourlyRefresh();
     const filters = window.todayFilterPreferences.read();
     const query = initial => {
       const params = new URLSearchParams(initial);
@@ -74,14 +104,14 @@
       `/api/mercado/today/tasks?${tasks}`,
       `/api/mercado/today/claims?${messages}`,
     ]) {
-      const snapshot = cached(url);
-      requests.set(url, snapshot ? Promise.resolve(snapshot) : read(url));
+      const snapshot = force ? null : cached(url);
+      requests.set(url, snapshot ? Promise.resolve(snapshot) : read(url, force));
       if (location.pathname !== '/mercado/today') {
         // Warm to completion while the workbench is open, not just the first pending response.
         const warm = async (attempt = 0) => {
           const result = await read(url);
           requests.set(url, Promise.resolve(result));
-          if (result?.ok && result.payload?.data?.refreshing && attempt < 20 && !document.hidden) {
+          if (result?.ok && result.payload?.data?.refreshing && attempt < 20) {
             setTimeout(() => warm(attempt + 1), 3000);
           }
         };
@@ -92,6 +122,12 @@
     }
   }
   if (location.pathname === '/mercado/today') preload();
-  else if ('requestIdleCallback' in window) window.requestIdleCallback(preload, {timeout: 1500});
-  else setTimeout(preload, 500);
+  else {
+    const start = () => {
+      preload();
+      window.startTodayAutoRefresh(() => preload(true));
+    };
+    if ('requestIdleCallback' in window) window.requestIdleCallback(start, {timeout: 1500});
+    else setTimeout(start, 500);
+  }
 })();

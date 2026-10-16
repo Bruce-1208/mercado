@@ -1,0 +1,10 @@
+[
+  {
+    "product_id": 16764276,
+    "source_item_id": "1688722263868314",
+    "status": "failed",
+    "message": "SKU 1 缺少采集主图，请补充该 SKU 的图片链接后重新生成",
+    "failed_step": "sku_images",
+    "workflow_status": "needs_sku_images"
+  }
+]

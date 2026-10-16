@@ -1,0 +1,43 @@
+{
+  "login": 200,
+  "static": {
+    "catalog-attributes.js": {
+      "status": 200,
+      "matches_workspace": true
+    },
+    "catalog-attributes.css": {
+      "status": 200,
+      "matches_workspace": true
+    },
+    "1688-products.js": {
+      "status": 200,
+      "matches_workspace": true
+    },
+    "ai-original-products.js": {
+      "status": 200,
+      "matches_workspace": true
+    }
+  },
+  "workers": {
+    "5001": {
+      "db_limit": 4,
+      "group": "worker",
+      "status": "success"
+    },
+    "5002": {
+      "db_limit": 4,
+      "group": "orders",
+      "status": "success"
+    },
+    "5003": {
+      "db_limit": 4,
+      "group": "stores",
+      "status": "success"
+    },
+    "5004": {
+      "db_limit": 2,
+      "group": "maintenance",
+      "status": "success"
+    }
+  }
+}

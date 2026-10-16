@@ -1,0 +1,44 @@
+[
+  {
+    "product_id": 16326848,
+    "generation_status": "completed",
+    "page_status": "unreviewed",
+    "failed_checks": [],
+    "missing_manual": [],
+    "sku_count": 30,
+    "budget_status": "ready",
+    "unconfirmed_charge_retained": 0
+  },
+  {
+    "product_id": 16327056,
+    "generation_status": "completed",
+    "page_status": "unreviewed",
+    "failed_checks": [],
+    "missing_manual": [],
+    "sku_count": 36,
+    "budget_status": "ready",
+    "unconfirmed_charge_retained": 0.011738
+  },
+  {
+    "product_id": 16327260,
+    "generation_status": "completed",
+    "page_status": "incomplete",
+    "failed_checks": [],
+    "missing_manual": [
+      "包装尺寸"
+    ],
+    "sku_count": 10,
+    "budget_status": "ready",
+    "unconfirmed_charge_retained": 0.003188
+  },
+  {
+    "product_id": 16327261,
+    "generation_status": "completed",
+    "page_status": "unreviewed",
+    "failed_checks": [],
+    "missing_manual": [],
+    "sku_count": 10,
+    "budget_status": "ready",
+    "unconfirmed_charge_retained": 0.003839
+  }
+]

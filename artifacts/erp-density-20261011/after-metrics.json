@@ -1,0 +1,82 @@
+{
+  "overview": {
+    "width": 1204,
+    "filters": [],
+    "tableTop": null
+  },
+  "mercado-products": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "mercado-product-filters",
+        "height": 164
+      }
+    ],
+    "tableTop": 731.5
+  },
+  "1688-products": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "",
+        "height": 201.09375
+      }
+    ],
+    "tableTop": 666.9375
+  },
+  "ai-original-products": {
+    "width": 1204,
+    "filters": [],
+    "tableTop": 0
+  },
+  "orders": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "",
+        "height": 70
+      }
+    ],
+    "tableTop": 342
+  },
+  "store-links": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "",
+        "height": 136
+      }
+    ],
+    "tableTop": 677.59375
+  },
+  "store-analysis": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "store-analysis-form",
+        "height": 114
+      }
+    ],
+    "tableTop": null
+  },
+  "risk-check": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "",
+        "height": 75
+      }
+    ],
+    "tableTop": 1280.359375
+  },
+  "inventory": {
+    "width": 1204,
+    "filters": [
+      {
+        "id": "",
+        "height": 83
+      }
+    ],
+    "tableTop": 540.34375
+  }
+}

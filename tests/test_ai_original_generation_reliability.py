@@ -140,3 +140,38 @@ def test_original_brand_policy_overrides_generated_and_cached_brands(cached_bran
                                              cached_result=cached, chat=chat)
     assert result['attributes'] == [{'id': 'BRAND', 'name': 'Brand', 'value_name': 'Generic'}]
     assert not result['missing_required_attributes']
+
+
+@pytest.mark.parametrize('part', [None, 'SUPPLIER-123'])
+def test_missing_part_number_gets_stable_seller_number_but_source_number_wins(part):
+    schema = [{'id': 'PART_NUMBER', 'value_type': 'string', 'tags': {'required': True}},
+              {'id': 'BRAND', 'value_type': 'string'}]
+    class Client:
+        def request(self, *a, **k): return deepcopy(schema)
+    def chat(*a, **k): pytest.fail('No model call needed for an assigned identifier')
+    chat.cost_control = True
+    source = {'source_1688_item_id': '856899155378'}
+    attrs = [{'id': 'BRAND', 'value_name': 'Generic'}]
+    if part:
+        source['properties'] = [{'id': 'PART_NUMBER', 'value_name': part}]
+        attrs.append({'id': 'PART_NUMBER', 'value_name': part})
+    result = p.complete_marketplace_category(source, {'attributes': attrs}, Client(),
+        category_override={'category_id': 'CBT123'}, chat=chat)
+    assert not result['missing_required_attributes']
+    assert next(a['value_name'] for a in result['attributes'] if a['id'] == 'PART_NUMBER') == (part or 'AO-856899155378')
+    if not part:
+        assert result['assigned_part_number']['basis'] == 'seller_catalog_identifier'
+    else:
+        assert 'assigned_part_number' not in result
+
+
+def test_missing_sku_source_is_actionable_but_transient_image_failure_stays_failed():
+    from erp.ai_original_state import source_input_state
+    state = {'status': 'failed', 'failed_step': 'sku_images', 'variations': [{'sku_id': 'a'}]}
+    missing = source_input_state(state, {'variations': [{'sku_id': 'a'}]})
+    assert missing['status'] == 'failed'
+    assert missing['input_blockers'][0]['sku_indices'] == [1]
+    ready_source = {'variations': [{'sku_id': 'a', 'image_url': 'https://example.com/a.jpg'}]}
+    assert source_input_state(state, ready_source)['status'] == 'failed'
+    assert source_input_state(missing, ready_source)['status'] == 'failed'
+    assert state['status'] == 'failed'

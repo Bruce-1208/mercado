@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.zeshun.cloud-tunnel</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/ssh</string>
+		<string>-N</string>
+		<string>-T</string>
+		<string>-i</string>
+		<string>/Users/a11/.ssh/zeshun_tunnel_ed25519</string>
+		<string>-o</string>
+		<string>BatchMode=yes</string>
+		<string>-o</string>
+		<string>IdentitiesOnly=yes</string>
+		<string>-o</string>
+		<string>StrictHostKeyChecking=yes</string>
+		<string>-o</string>
+		<string>ExitOnForwardFailure=yes</string>
+		<string>-o</string>
+		<string>ConnectTimeout=15</string>
+		<string>-o</string>
+		<string>ServerAliveInterval=30</string>
+		<string>-o</string>
+		<string>ServerAliveCountMax=3</string>
+		<string>-R</string>
+		<string>127.0.0.1:15000:127.0.0.1:5000</string>
+		<string>zeshun-tunnel@111.229.187.101</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/a11/mercado/runtime_logs/cloud-tunnel.stderr.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/a11/mercado/runtime_logs/cloud-tunnel.stdout.log</string>
+	<key>ThrottleInterval</key>
+	<integer>15</integer>
+</dict>
+</plist>

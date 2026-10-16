@@ -7,7 +7,7 @@ body.zs-console #order-board > .order-filter-region { flex: 0 0 auto; min-height
 body.zs-console #order-board > .order-table-wrap { flex: 1 1 0; min-height: 80px; max-height: none; overflow: auto; overscroll-behavior: contain; }
 body.zs-console #order-board > .order-pagination { flex: 0 0 auto; margin: 0; padding: 6px 10px; gap: 6px; }
 body.zs-console #order-board > .order-footer-metrics { display: flex; flex: 0 0 auto; overflow-x: auto; }
-.order-balance-cny { display: block; margin-top: 4px; font-size: 12px; color: #667085; white-space: nowrap; }
+.order-balance-cny, .order-balance-cny-accounting { display: block; margin-top: var(--zs-space-1); font-size: var(--zs-text-small); color: var(--zs-secondary); white-space: nowrap; }
 .order-picture-zoom, .order-sku-image-link { cursor: zoom-in; }
 #order-image-viewer { width: min(1100px, 96vw); max-width: 96vw; max-height: 94dvh; padding: 42px 12px 12px; border: 0; border-radius: 12px; }
 #order-image-viewer::backdrop { background: rgb(0 0 0 / 75%); }
@@ -111,3 +111,69 @@ body.zs-console #order-board.order-density-compact .order-balance-cny { margin-t
     body.zs-console #order-board .order-filters :is(input,select,button.market-multi-trigger) { min-height: 32px; height: 32px; padding-top: 4px; padding-bottom: 4px; }
     body.zs-console #order-board > .order-footer-metrics > .order-metric { display: flex; }
 }
+
+/* A continuous summary strip: quieter labels, clear amounts, no nested cards.
+   Keep intrinsic widths so large amounts and settlement notices scroll intact. */
+body.zs-console #order-board > .order-footer-metrics {
+    gap: 0;
+    padding: var(--zs-space-2) 0;
+    border-top: 1px solid var(--zs-stroke);
+    background: var(--zs-card);
+    scrollbar-width: thin;
+}
+body.zs-console #order-board > .order-footer-metrics > .order-metric {
+    display: flex;
+    flex: 1 0 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: var(--zs-space-1);
+    min-width: 150px;
+    padding: var(--zs-space-1) var(--zs-space-4);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+body.zs-console #order-board > .order-footer-metrics > .order-metric + .order-metric {
+    border-left: 1px solid var(--zs-stroke);
+}
+body.zs-console #order-board > .order-footer-metrics > .order-metric:has(#order-metric-profit),
+body.zs-console #order-board > .order-footer-metrics > .order-metric:has(#order-metric-rate) {
+    background: var(--zs-card-soft);
+}
+body.zs-console #order-board > .order-footer-metrics .order-metric > span {
+    margin: 0;
+    color: var(--zs-secondary);
+    font-size: var(--zs-text-small);
+    font-weight: 400;
+    white-space: nowrap;
+}
+body.zs-console #order-board > .order-footer-metrics .order-metric > strong {
+    color: var(--zs-heading);
+    font-size: var(--zs-text-title);
+    line-height: 1.3;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: visible;
+}
+body.zs-console #order-board > .order-footer-metrics .order-metric > small {
+    color: var(--zs-secondary);
+    font-size: var(--zs-text-small);
+    white-space: nowrap;
+}
+body.zs-console #order-summary-region:focus-visible {
+    outline: 2px solid var(--zs-brand);
+    outline-offset: -2px;
+}
+@media (max-width: 760px) {
+    body.zs-console #order-board > .order-footer-metrics > .order-metric {
+        min-width: 140px;
+        padding-inline: var(--zs-space-3);
+    }
+}
+
+/* Full sales order numbers must remain readable within the scrollable table. */
+body.zs-console #order-board .order-row-number > .order-copy-link { min-width: 0; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+body.zs-console #order-board .order-row-number > .order-country-tag { flex-shrink: 0; }
+body.zs-console #order-board .order-product .order-cell-stack > span[data-copy-text] { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }

@@ -17,20 +17,26 @@ function harness() {
   let startPhase = 'waiting_login';
   let startError;
   let opened = 0;
+  let tabUrl = "https://meli.zying.net/#/order";
+  let tabClosed = false;
+  let probeFailures = 0;
+  const navigations = [];
   const chrome = {
     alarms: {create() {}},
     tabs: {
-      create:async () => {opened++; return {id:42};}, get:async () => ({id:42}),
-      update:async () => ({id:42}), reload:async () => {}
+      create:async () => {opened++; tabClosed = false; return {id:42};},
+      get:async () => {if (tabClosed) throw new Error('tab closed'); return {id:42,url:tabUrl,status:'loading'};},
+      update:async (_id, options) => {navigations.push('update'); tabUrl = options.url || tabUrl; loaded = true; return {id:42};},
+      reload:async () => {navigations.push('reload'); loaded = true;}
     },
     scripting:{executeScript:async ({args}) => {
-      if (!args) return [{result:loaded}];
+      if (!args) {if (probeFailures-- > 0) throw new Error('context destroyed'); return [{result:loaded}];}
       if (pageBusy) return [{result:{busy:true}}];
       beforeResult();
       return [{result:structuredClone(scriptResult)}];
     }}
   };
-  const context = vm.createContext({chrome, console:{warn(){}}, zeshunReadZyingOrderBatch() {}});
+  const context = vm.createContext({chrome, setTimeout, console:{warn(){}}, zeshunReadZyingOrderBatch() {}});
   const create = () => {
     vm.runInContext(source, context);
     const runner = context.ZeshunOrderSync;
@@ -60,7 +66,10 @@ function harness() {
     });
     return runner;
   };
-  return {create, calls, writes, storage,
+  return {create, calls, writes, storage, navigations,
+    setUrl(value) {tabUrl = value;},
+    closeTab() {tabClosed = true; loaded = false;},
+    failProbes(value) {probeFailures = value;},
     beforeResult(value) {beforeResult = value;},
     loseResponse() {lostResponse = true;},
     setLoaded(value) {loaded = value;},
@@ -157,4 +166,42 @@ test('a surviving page read defers recovery until the next run', async () => {
   fixture.setBusy(false);
   await runner.resume();
   assert.equal(fixture.writes.length, 1);
+});
+
+
+test('confirmation preserves a ready SPA even while other resources are loading', async () => {
+  const fixture = harness();
+  const runner = fixture.create();
+  await runner.start({date_start:'2026-10-01',date_end:'2026-10-08'});
+  await runner.confirm();
+  await runner.resume();
+  assert.deepEqual(fixture.navigations, []);
+  assert.equal(fixture.writes.length, 1);
+});
+
+for (const [url, expected] of [
+  ['https://meli.zying.net/#/login', 'update'],
+  ['https://meli.zying.net/#/order', 'reload']
+]) test(`confirmation uses only one navigation from ${url}`, async () => {
+  const fixture = harness();
+  const runner = fixture.create();
+  await runner.start({date_start:'2026-10-01',date_end:'2026-10-08'});
+  fixture.setLoaded(false);
+  fixture.setUrl(url);
+  fixture.failProbes(2); // Both the initial probe and the redirect's first probe fail.
+  await runner.confirm();
+  await runner.resume();
+  assert.deepEqual(fixture.navigations, [expected]);
+  assert.equal(fixture.writes.length, 1);
+});
+
+test('a closed login tab is reopened without claiming or writing orders', async () => {
+  const fixture = harness();
+  const runner = fixture.create();
+  await runner.start({date_start:'2026-10-01',date_end:'2026-10-08'});
+  fixture.closeTab();
+  await assert.rejects(runner.confirm(), /已重新打开/);
+  assert.equal(fixture.opened(), 2);
+  assert.equal(fixture.calls.some(call => call.action === 'confirm'), false);
+  assert.equal(fixture.writes.length, 0);
 });

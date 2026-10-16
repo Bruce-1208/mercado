@@ -1,0 +1,309 @@
+{
+  "scope": "isolated synthetic orders, 40 simultaneous cold requests across pages 1-3, including cache coalescing",
+  "actual_peak_client_inflight": 40,
+  "elapsed_seconds": 5.16,
+  "requests": 40,
+  "failed": 0,
+  "p50_ms": 5077.98,
+  "p95_ms": 5130.98,
+  "max_ms": 5134.76,
+  "samples": [
+    {
+      "endpoint": "orders",
+      "ms": 5134.76,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4991.07,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5097.78,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5121.43,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4991.07,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5042.46,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5117.48,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4974.98,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5130.98,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5059.95,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4975.79,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5102.14,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5026.84,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5077.98,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5060.52,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5089.16,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4981.19,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5101.85,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5114.39,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5112.72,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5047.54,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5068.83,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4979.71,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5081.77,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5132.46,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4977.35,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5077.42,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5127.21,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4985.3,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5128.98,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5121.63,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4981.85,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5077.34,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5106.96,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 4978.51,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5098.98,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5116.12,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5124.79,
+      "status": 200,
+      "ok": true,
+      "bytes": 99691
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5060.53,
+      "status": 200,
+      "ok": true,
+      "bytes": 99777
+    },
+    {
+      "endpoint": "orders",
+      "ms": 5126.85,
+      "status": 200,
+      "ok": true,
+      "bytes": 99794
+    }
+  ],
+  "idle_socket_recovery": true,
+  "pool_after": {
+    "pool_count": 1,
+    "active": 0,
+    "idle": 4,
+    "physical": 4,
+    "max_connections": 6,
+    "pools": [
+      {
+        "active": 0,
+        "idle": 4,
+        "physical": 4,
+        "max_connections": 6,
+        "utilization_percent": 0.0
+      }
+    ]
+  }
+}

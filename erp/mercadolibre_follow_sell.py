@@ -35,6 +35,7 @@ from erp.mercadolibre_attribute_rules import (
     semantic_value_key,
 )
 from erp import mercadolibre_publication_preflight as preflight
+from erp.mercadolibre_page_facts import normalize_variation, repair_source_facts
 
 from erp.mercadolibre_translation import (
     ListingTranslationError,
@@ -45,7 +46,7 @@ from erp.mercadolibre_translation import (
 
 
 API_BASE_URL = "https://api.mercadolibre.com"
-DEFAULT_REDIRECT_URI = "https://wuhanzeshun.com/zs"
+DEFAULT_REDIRECT_URI = "https://wuhanzeshun.cn/zs"
 DEFAULT_TOKEN_FILE = Path(__file__).with_name("tokens.json")
 ITEM_ID_PATTERN = re.compile(r"\b(ML[A-Z]|CBT)-?(\d+)\b", re.IGNORECASE)
 
@@ -448,6 +449,16 @@ def _copy_attributes(
                     raise MercadoLibreError(f"属性 {attribute_id} 有多个冲突值")
         elif _attribute_has_value(attribute):
             copied[existing_position] = attribute
+    if ensure_brand and (allowed_ids is None or "BRAND" in allowed_ids):
+        brand_position = positions.get("BRAND")
+        if brand_position is None or not _attribute_has_value(copied[brand_position]):
+            brand = {"id": "BRAND", "value_name": "Generic"}
+            original = copied[brand_position] if brand_position is not None else {}
+            if brand_position is None:
+                copied.append(brand)
+            else:
+                copied[brand_position] = brand
+            preflight.mapped(original, brand, "default_missing_brand_generic")
     if seller_sku:
         copied.append({"id": "SELLER_SKU", "value_name": seller_sku})
     return copied
@@ -1324,6 +1335,39 @@ def _resolve_sale_terms(
     ]
 
 
+def _variation_source(source: Mapping[str, Any]) -> dict[str, Any]:
+    source = repair_source_facts(source)
+    if source.get("variation_collection_status") in {"incomplete", "needs_recollection"}:
+        raise MercadoLibreError("规格未采全或待核实，请重新采集完整变体后再上架")
+    rows = source.get("variations") or []
+    if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):
+        raise MercadoLibreError("变体数据格式不正确，请重新采集或编辑变体")
+    if rows:
+        source["variations"] = [normalize_variation(row) for row in rows]
+    return source
+
+
+def _include_variation_pictures(pictures, variations):
+    """Traditional listings require SKU images in the item gallery as well."""
+    urls = {picture["source"] for picture in pictures}
+    for variation in variations:
+        if not variation.get("picture_ids"):
+            variation["picture_ids"] = [pictures[0]["source"]]
+        for url in variation.get("picture_ids") or []:
+            if url not in urls:
+                pictures.append({"source": url})
+                urls.add(url)
+    if len(pictures) > MAX_PICTURES_PER_LISTING:
+        raise MercadoLibreError("变体图片总数超过刊登图片上限，请精简图片后重试")
+
+
+def _without_variation_dimensions(attributes, variations):
+    # Detail-page specs often repeat the currently selected color/size. These
+    # belong to each SKU, not to the parent of a traditional variation listing.
+    dimensions = {a.get("id") for v in variations for a in v["attribute_combinations"] if a.get("id")}
+    return [a for a in attributes if a.get("id") not in dimensions]
+
+
 def _copy_variations(
     source: Mapping[str, Any],
     ids_to_urls: Mapping[str, str],
@@ -1379,15 +1423,27 @@ def _copy_variations(
         }
         _normalize_enumerated_attributes(copied["attribute_combinations"], schema)
         _normalize_enumerated_attributes(copied["attributes"], schema)
-        urls = [
-            ids_to_urls[str(picture_id)]
-            for picture_id in variation.get("picture_ids") or []
-            if str(picture_id) in ids_to_urls
-        ]
+        urls = []
+        variant_picture_map = dict(ids_to_urls)
+        for picture in variation.get("pictures") or []:
+            if isinstance(picture, Mapping) and picture.get("id") is not None:
+                url = _publishable_picture_url(picture.get("secure_url") or picture.get("url") or picture.get("source"))
+                if url:
+                    variant_picture_map[str(picture["id"])] = url
+        for picture_id in variation.get("picture_ids") or []:
+            reference = str(picture_id)
+            url = variant_picture_map.get(reference) or (
+                _publishable_picture_url(reference) if reference.startswith(("https://", "http://", "//")) else ""
+            )
+            if not url:
+                raise MercadoLibreError(f"变体 {index} 的图片无法解析，请重新采集变体图片")
+            if url and url not in urls:
+                urls.append(url)
         variation_images = variation.get("images")
         if not isinstance(variation_images, list):
             variation_images = []
-        for raw_image in [variation.get("image_url"), variation.get("image"), *variation_images]:
+        image = variation.get("image")
+        for raw_image in [variation.get("image_url"), *(image if isinstance(image, list) else [image]), *variation_images]:
             image_url = (
                 raw_image.get("secure_url") or raw_image.get("url") or raw_image.get("source")
                 if isinstance(raw_image, Mapping) else raw_image
@@ -1397,6 +1453,8 @@ def _copy_variations(
                 urls.append(image_url)
         if urls:
             copied["picture_ids"] = urls
+        elif any(variation.get(key) for key in ("picture_ids", "images", "image", "image_url")):
+            raise MercadoLibreError(f"变体 {index} 的图片无法解析，请重新采集变体图片")
         variations.append(copied)
     preflight.ACTIVE_SCOPE.set("商品")
     return variations
@@ -1413,6 +1471,7 @@ def build_global_payload(
     translator: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Build the current Global Selling payload for one destination site."""
+    source = _variation_source(source)
     if quantity <= 0:
         raise ValueError("quantity 必须大于 0")
     item_id = extract_item_id(str(source.get("id") or ""))
@@ -1444,6 +1503,7 @@ def build_global_payload(
         schema=attribute_schema,
         source_schema=source_attribute_schema,
     )
+    attributes = _without_variation_dimensions(attributes, variations)
     _ensure_required_attribute_defaults(attributes, attribute_schema, variations)
     _ensure_contextual_required_attribute_defaults(attributes, attribute_schema, source)
     _normalize_enumerated_attributes(attributes, attribute_schema)
@@ -1458,6 +1518,7 @@ def build_global_payload(
         "pictures": pictures,
     }
     if variations:
+        _include_variation_pictures(pictures, variations)
         site["variations"] = variations
     payload: dict[str, Any] = {
         "sites_to_sell": [site],
@@ -1490,6 +1551,7 @@ def build_user_product_payload(
     translator: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Build a single-variant CBT User Products payload."""
+    source = _variation_source(source)
     if source.get("variations"):
         raise MercadoLibreError(
             "单个 User Product 不能包含 variations，请使用 family 构建器逐变体创建"
@@ -1596,6 +1658,7 @@ def build_user_product_family_payload(
     net_proceeds: float | None = None,
 ) -> list[dict[str, Any]]:
     """Create one independent UP per variation for the family array endpoint."""
+    source = _variation_source(source)
     if quantity <= 0:
         raise ValueError("quantity 必须大于 0")
     item_id = extract_item_id(str(source.get("id") or ""))
@@ -1664,7 +1727,6 @@ def build_user_product_family_payload(
                 raise MercadoLibreError(f"SKU {index} 尚未完成白底主图处理，请重新执行 AI 任务")
             ordered_urls = list(dict.fromkeys([
                 raw_variation["white_image_url"], *variation_picture_urls,
-                *(picture["source"] for picture in pictures if picture.get("source") != main_picture_url),
             ]))
             child["pictures"] = [
                 {"source": url} for url in ordered_urls[:MAX_PICTURES_PER_LISTING]
@@ -1675,7 +1737,7 @@ def build_user_product_family_payload(
             ] or pictures
         payload = build_user_product_payload(
             client, child, description, site_id=site_id,
-            quantity=quantity, net_proceeds=net_proceeds,
+            quantity=quantity, net_proceeds=raw_variation.get('publish_net_proceeds_usd') or raw_variation.get('net_proceeds_usd') or net_proceeds,
         )
         # The single-UP builder generates a source-level SKU. Replace it with
         # the variant SKU retained by the existing variation normalization.
@@ -1785,6 +1847,7 @@ def build_local_payload(
     client: MercadoLibreClient | None = None,
 ) -> dict[str, Any]:
     """Build a standard local-site ``POST /items`` payload."""
+    source = _variation_source(source)
     item_id = extract_item_id(str(source.get("id") or ""))
     pictures, ids_to_urls = _picture_sources(source)
     schema = _required_category_attribute_schema(client, str(source.get("category_id") or "")) if client else None
@@ -1809,8 +1872,15 @@ def build_local_payload(
         source, ids_to_urls, quantity=quantity, sku_prefix=f"FOLLOW-{item_id}",
         schema=schema, source_schema=schema, allowed_ids=_category_attribute_ids(schema),
     )
+    attributes = _without_variation_dimensions(attributes, variations)
+    payload["attributes"] = attributes
     _validate_required_attributes(attributes, schema, variations)
     if variations:
+        _include_variation_pictures(pictures, variations)
+        for variation in variations:
+            # Legacy /items variations share one listing price. Source prices
+            # remain evidence; an explicit publication price applies to all SKUs.
+            variation["price"] = payload["price"]
         payload["variations"] = variations
     else:
         payload["available_quantity"] = quantity
@@ -1918,6 +1988,7 @@ def follow_sell(
     on_prepared: Callable[[dict[str, Any]], None] | None = None,
     attribute_corrections: list[dict[str, Any]] | None = None,
     prior_draft: Mapping[str, Any] | None = None,
+    virtual_ean_identity: str | None = None,
 ) -> dict[str, Any]:
     """Build, and optionally publish, a copied listing."""
     total_started = time.perf_counter()
@@ -1946,7 +2017,10 @@ def follow_sell(
                 source, description = load_listing_for_publish(source_url)
             except Exception:
                 raise api_error
-    source = copy.deepcopy(source)
+    source = _variation_source(source)
+    if virtual_ean_identity:
+        from erp.mercadolibre_virtual_ean import ensure_virtual_eans
+        source = ensure_virtual_eans(source, virtual_ean_identity)
     raw_source = copy.deepcopy(source)
     raw_description = copy.deepcopy(description)
     timings["source"] = time.perf_counter() - stage_started
@@ -2082,6 +2156,10 @@ def follow_sell(
             if identity in identities:
                 preflight.issue("duplicate_variation", "修正后的商品族 SKU 身份重复，不能合并库存", scope=f"SKU {index}")
             identities.add(identity)
+    for generated in raw_source.get('_virtual_eans') or []:
+        preflight.issue('virtual_ean',
+                        f"自动生成虚拟 EAN-13：{generated['value']}；仅满足格式和校验位，未经 GS1 注册，不保证平台接受",
+                        attribute_id='GTIN', scope=generated['scope'], severity='warning')
     report = preflight.refresh_status(preflight.ACTIVE_REPORT.get())
     draft = (copy.deepcopy(prepared_draft) if prepared_draft is not None else
              preflight.make_draft(payload, raw_source, raw_description, context, schemas, report, endpoint, publication_action))

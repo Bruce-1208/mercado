@@ -1,0 +1,46 @@
+{
+  "failure_time": "2026-10-09 22:45:19",
+  "failure_stage": "snapshot INSERT INTO zying_product after product-list mirror committed 60 records",
+  "mysql_code": 1205,
+  "parameters": {
+    "category": null,
+    "category_name": "全部分类",
+    "management_category_id": 1,
+    "max_items": 20000,
+    "number": null,
+    "product_developer_id": "165127",
+    "product_developer_name": "精品区",
+    "salesperson": "管理员",
+    "start_page": 1,
+    "start_product_id": "",
+    "window_id": "e27ab66368b141a993f9c6847f51222b"
+  },
+  "cause": "Legacy risk INSERT IGNORE ... SELECT takes source next-key locks; lazy risk candidate stream retained them until scan completion. Original blocker had cleared at inspection; mechanism reproduced with isolated MySQL tables.",
+  "fix": [
+    "Read missing legacy risk rows with nonlocking SELECT in pages of 200; insert VALUES without updating existing decisions.",
+    "Commit legacy backfill before yielding any candidate."
+  ],
+  "verification": {
+    "targeted_tests_passed": 142,
+    "original_code_concurrency_test": "1205 on concurrent snapshot insert",
+    "fixed_code_concurrency_test": "concurrent snapshot insert succeeds before reader commit; existing manual review preserved; pagination and repeated backfill verified",
+    "live_backfill_seconds": 0.038
+  },
+  "deployment": {
+    "web_pid": 35701,
+    "worker_pid": 35783,
+    "extension_update_required": false
+  },
+  "recovery": {
+    "started_at": "2026-10-09 23:12:14 +08:00",
+    "status": "running",
+    "original_filters_restored": true,
+    "database_verification": {
+      "saved": 180,
+      "unique_products": 180,
+      "first_commit": "2026-10-09 23:12:38",
+      "last_commit": "2026-10-09 23:13:14",
+      "last_page": 3
+    }
+  }
+}

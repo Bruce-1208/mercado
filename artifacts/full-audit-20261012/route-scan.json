@@ -1,0 +1,6597 @@
+{
+  "scope": "All registered routes: OPTIONS only, isolated app bootstrap, no authenticated business operations. This verifies registration/dispatch only, not feature correctness.",
+  "routes": [
+    {
+      "rule": "/static/<path:filename>",
+      "endpoint": "static",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 1.18
+    },
+    {
+      "rule": "/ai-weight-price",
+      "endpoint": "ai_weight_price.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.33
+    },
+    {
+      "rule": "/api/ai-weight-price/status",
+      "endpoint": "ai_weight_price.status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.55
+    },
+    {
+      "rule": "/api/ai-weight-price/model/check",
+      "endpoint": "ai_weight_price.check_model",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.24
+    },
+    {
+      "rule": "/api/ai-weight-price/visuals/<filename>",
+      "endpoint": "ai_weight_price.visual_frame",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.29
+    },
+    {
+      "rule": "/api/ai-weight-price/login/open",
+      "endpoint": "ai_weight_price.open_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/ai-weight-price/login/confirm",
+      "endpoint": "ai_weight_price.confirm_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/ai-weight-price/supplier/login/open",
+      "endpoint": "ai_weight_price.open_supplier_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-weight-price/categories/refresh",
+      "endpoint": "ai_weight_price.categories",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-weight-price/categories",
+      "endpoint": "ai_weight_price.cached_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/config",
+      "endpoint": "ai_weight_price.config",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/owners",
+      "endpoint": "ai_weight_price.owners",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/tasks",
+      "endpoint": "ai_weight_price.tasks",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/run-items",
+      "endpoint": "ai_weight_price.run_items",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/tasks/<key>",
+      "endpoint": "ai_weight_price.task",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/tasks/<key>/manual-execute",
+      "endpoint": "ai_weight_price.manual_execute",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/tasks/<key>/retry",
+      "endpoint": "ai_weight_price.retry",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/start",
+      "endpoint": "ai_weight_price.start",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-weight-price/stop",
+      "endpoint": "ai_weight_price.stop",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-weight-price/terminate",
+      "endpoint": "ai_weight_price.terminate",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-weight-price/continue",
+      "endpoint": "ai_weight_price.continue_after_human",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-weight-price/skip-current",
+      "endpoint": "ai_weight_price.skip_current",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-weight-price/logs",
+      "endpoint": "ai_weight_price.logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-weight-price/export",
+      "endpoint": "ai_weight_price.export",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/ai-weight-price/store",
+      "endpoint": "api_db_ai_weight_price_store",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/mercado-action-center",
+      "endpoint": "api_db_mercado_action_center",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/product-diagnosis",
+      "endpoint": "product_diagnosis.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/product-diagnosis",
+      "endpoint": "product_diagnosis.listing",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/product-diagnosis/start",
+      "endpoint": "product_diagnosis.start",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/product-diagnosis/<int:link_id>",
+      "endpoint": "product_diagnosis.detail",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/product-diagnosis/<int:link_id>/today",
+      "endpoint": "product_diagnosis.today",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/db/product-diagnosis",
+      "endpoint": "product_diagnosis.internal",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/price-competition",
+      "endpoint": "price_competition_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/price-competition",
+      "endpoint": "price_competition_list",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/price-competition/stores",
+      "endpoint": "price_competition_stores",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/price-competition/<action>",
+      "endpoint": "price_competition_action",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/price-competition/<action>",
+      "endpoint": "price_competition_internal",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/promotions",
+      "endpoint": "promotions.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/promotions/stores",
+      "endpoint": "promotions.stores",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/promotions",
+      "endpoint": "promotions.list_promotions",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/promotions/sync",
+      "endpoint": "promotions.sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/promotions/<int:promotion_id>/items",
+      "endpoint": "promotions.items",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/promotions/<int:promotion_id>/withdraw",
+      "endpoint": "promotions.withdraw_listing",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/promotions/stop",
+      "endpoint": "promotions.stop_promotions",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/promotions/preview",
+      "endpoint": "promotions.preview",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/promotions/jobs",
+      "endpoint": "promotions.jobs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/mercado/today",
+      "endpoint": "mercado_action_center.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/mercado/today/post-sale",
+      "endpoint": "mercado_action_center.unanswered_post_sale",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/today/claims",
+      "endpoint": "mercado_action_center.unanswered_post_sale",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/today/tasks",
+      "endpoint": "mercado_action_center.list_tasks",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/today/rights-holder/<int:token_id>/<case_id>",
+      "endpoint": "mercado_action_center.rights_holder_reply",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado/today/batch-status",
+      "endpoint": "mercado_action_center.batch_status",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/today/tasks/<int:task_id>",
+      "endpoint": "mercado_action_center.update_task",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/today/events/<int:event_id>/replay",
+      "endpoint": "mercado_action_center.replay_event",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado/notifications",
+      "endpoint": "mercado_action_center.receive_notification",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/automation-center",
+      "endpoint": "automation_center.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/automation-center",
+      "endpoint": "automation_center.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.22
+    },
+    {
+      "rule": "/employee-tasks",
+      "endpoint": "employee_tasks.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/employee-tasks/<int:task_id>",
+      "endpoint": "employee_tasks.api",
+      "methods": [
+        "OPTIONS",
+        "PATCH",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/employee-tasks",
+      "endpoint": "employee_tasks.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/billing",
+      "endpoint": "account_billing.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/billing/accounts/<int:user_id>/records",
+      "endpoint": "account_billing.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/billing/accounts/<int:user_id>/recharges",
+      "endpoint": "account_billing.api",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/billing/accounts/<int:user_id>",
+      "endpoint": "account_billing.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/billing/me",
+      "endpoint": "account_billing.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/billing/accounts",
+      "endpoint": "account_billing.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/ai-billing",
+      "endpoint": "ai_billing.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-billing",
+      "endpoint": "ai_billing.records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/ai-usage-billing",
+      "endpoint": "api_db_ai_usage_billing",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/print-wallet",
+      "endpoint": "print_wallet.page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/print-wallet/requests/<request_id>/cancel",
+      "endpoint": "print_wallet.api",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/print-wallet/accounts/<int:user_id>/recharges",
+      "endpoint": "print_wallet.api",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/print-wallet/accounts/<int:user_id>/records",
+      "endpoint": "print_wallet.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/print-wallet/accounts/<int:user_id>",
+      "endpoint": "print_wallet.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.45
+    },
+    {
+      "rule": "/api/print-wallet/me",
+      "endpoint": "print_wallet.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.32
+    },
+    {
+      "rule": "/api/print-wallet/accounts",
+      "endpoint": "print_wallet.api",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/workbench/print-wallet",
+      "endpoint": "api_db_workbench_print_wallet",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/workbench/billing",
+      "endpoint": "api_db_workbench_billing",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/run_shensu",
+      "endpoint": "api_run_shensu",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/run_shensu/stop",
+      "endpoint": "api_stop_shensu",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/appeal-phrases",
+      "endpoint": "api_appeal_phrases",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/appeal-phrases/<int:phrase_id>",
+      "endpoint": "api_appeal_phrase_detail",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/infringement-knowledge/collection/<action>",
+      "endpoint": "api_knowledge_product_collection_action",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/infringement-knowledge/collection/status",
+      "endpoint": "api_knowledge_product_collection_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/collection/products",
+      "endpoint": "api_knowledge_collected_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge",
+      "endpoint": "api_infringement_knowledge",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/bulk",
+      "endpoint": "api_bulk_infringement_knowledge",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/<int:record_id>",
+      "endpoint": "api_get_infringement_knowledge_detail",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/<int:record_id>/products",
+      "endpoint": "api_infringement_knowledge_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/candidates",
+      "endpoint": "api_infringement_knowledge_candidate",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/analysis/start",
+      "endpoint": "api_start_infringement_knowledge_analysis",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/analysis/status",
+      "endpoint": "api_infringement_knowledge_analysis_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/<int:record_id>",
+      "endpoint": "api_infringement_knowledge_detail",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infractions/latest",
+      "endpoint": "api_latest_infractions",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infractions/latest/export",
+      "endpoint": "api_export_latest_infractions",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infractions/collect",
+      "endpoint": "api_collect_infractions",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infractions/collect/status",
+      "endpoint": "api_collect_infractions_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/infringement-dashboard",
+      "endpoint": "official_infraction_dashboard_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/ip-rights-dashboard",
+      "endpoint": "official_ip_rights_dashboard_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/official-infractions/dashboard",
+      "endpoint": "api_official_infraction_dashboard",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/official-ip-rights/dashboard",
+      "endpoint": "api_official_ip_rights_dashboard",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/official-infractions/export",
+      "endpoint": "api_export_official_infractions",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/official-ip-rights/export",
+      "endpoint": "api_export_official_ip_rights",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/official-infractions/sync",
+      "endpoint": "api_start_official_infraction_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/official-infractions/sync/status",
+      "endpoint": "api_official_infraction_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/overview-auto-sync",
+      "endpoint": "api_overview_auto_sync",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/latest",
+      "endpoint": "api_latest_reputation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/latest/export",
+      "endpoint": "api_export_latest_reputation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/collect",
+      "endpoint": "api_collect_reputation",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/update-selected",
+      "endpoint": "api_update_selected_reputation",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/browser-sync",
+      "endpoint": "api_reputation_browser_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/browser-sync/<task_id>",
+      "endpoint": "api_reputation_browser_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/reputation/collect/status",
+      "endpoint": "api_collect_reputation_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/collections/options",
+      "endpoint": "api_collection_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/funds/latest",
+      "endpoint": "api_latest_funds",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/funds/manual",
+      "endpoint": "api_manual_funds",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/funds/collect",
+      "endpoint": "api_collect_funds",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/funds/collect/stop",
+      "endpoint": "api_stop_funds_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/funds/collect/status",
+      "endpoint": "api_collect_funds_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/order-analysis/import",
+      "endpoint": "api_import_order_analysis",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/upload",
+      "endpoint": "api_weight_dimensions_records_upload",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records",
+      "endpoint": "api_weight_dimensions_records_list",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/changed",
+      "endpoint": "api_weight_dimensions_records_changed",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/saved",
+      "endpoint": "api_weight_dimensions_records_saved",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/latest",
+      "endpoint": "api_weight_dimensions_records_latest",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/export",
+      "endpoint": "api_weight_dimensions_records_export_all",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/<task_id>",
+      "endpoint": "api_weight_dimensions_records_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/<task_id>/execute",
+      "endpoint": "api_weight_dimensions_records_execute",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/weight-dimensions-records/<task_id>/stop",
+      "endpoint": "api_weight_dimensions_records_stop",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/weight-dimensions-records/<task_id>/export",
+      "endpoint": "api_weight_dimensions_records_export",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/weight-dimensions-records/status",
+      "endpoint": "api_browser_extension_weight_dimensions_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/weight-dimensions-records/execute",
+      "endpoint": "api_browser_extension_weight_dimensions_execute",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/order-analysis/freight-changes",
+      "endpoint": "api_order_freight_changes",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/order-analysis/high-after-sales",
+      "endpoint": "api_high_after_sale_alerts",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/order-analysis/high-profits",
+      "endpoint": "api_high_profit_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/order-sync/yandex",
+      "endpoint": "api_unified_yandex_order_sync",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/order-sync/yandex",
+      "endpoint": "api_db_yandex_order_sync",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.52
+    },
+    {
+      "rule": "/api/orders",
+      "endpoint": "api_orders",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/orders/display-exchange-rate",
+      "endpoint": "api_order_display_exchange_rate",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/orders/zying-sync/start",
+      "endpoint": "api_zying_order_sync_start",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/orders/zying-sync/upload",
+      "endpoint": "api_zying_order_excel_upload",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/orders/zying-sync/confirm-login",
+      "endpoint": "api_zying_order_sync_confirm_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/zying-sync/stop",
+      "endpoint": "api_zying_order_sync_stop",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/zying-sync/status",
+      "endpoint": "api_zying_order_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/local-agents/zying-sync/<job_id>",
+      "endpoint": "api_zying_order_sync_agent_step",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/orders/weight-quote",
+      "endpoint": "api_order_weight_quote",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/split/preview",
+      "endpoint": "api_order_split_preview",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/split",
+      "endpoint": "api_order_split",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/order-sync/options",
+      "endpoint": "api_order_sync_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/orders/product-detail",
+      "endpoint": "api_order_product_detail",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/orders/product-detail",
+      "endpoint": "api_db_order_product_detail",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/outbound/confirm",
+      "endpoint": "api_confirm_order_outbound",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/bulk-update",
+      "endpoint": "api_bulk_update_orders",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/purchase-tracking/platforms",
+      "endpoint": "api_purchase_tracking_platforms",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/purchase-tracking/start",
+      "endpoint": "api_start_purchase_tracking_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/purchase-tracking/status",
+      "endpoint": "api_purchase_tracking_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/orders/print",
+      "endpoint": "api_print_orders_pdf",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/orders/<order_id>/logs",
+      "endpoint": "api_order_operation_logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/orders/<order_id>/tracking",
+      "endpoint": "api_order_tracking",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.33
+    },
+    {
+      "rule": "/api/inventory/stocks",
+      "endpoint": "api_inventory_stocks",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/inventory/skus",
+      "endpoint": "api_inventory_skus",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/inventory/skus/<int:sku_id>",
+      "endpoint": "api_update_inventory_sku",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/inventory/sku-mappings",
+      "endpoint": "api_inventory_sku_mappings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/inventory/sku-mappings/<int:mapping_id>",
+      "endpoint": "api_update_inventory_sku_mapping",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/inventory/reconciliation",
+      "endpoint": "api_inventory_reconciliation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/inventory/shelves",
+      "endpoint": "api_inventory_shelves",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/inventory/shelves/<int:shelf_id>",
+      "endpoint": "api_update_inventory_shelf",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/inventory/matches",
+      "endpoint": "api_inventory_matches",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/inventory/movements",
+      "endpoint": "api_inventory_movements",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/order-sync/start",
+      "endpoint": "api_start_order_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.33
+    },
+    {
+      "rule": "/api/order-sync/status",
+      "endpoint": "api_order_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.31
+    },
+    {
+      "rule": "/api/store-links/operation-logs",
+      "endpoint": "api_store_link_operation_logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.38
+    },
+    {
+      "rule": "/api/store-links/metrics",
+      "endpoint": "api_store_link_metrics",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.28
+    },
+    {
+      "rule": "/api/db/store-links/metrics",
+      "endpoint": "api_db_store_link_metrics",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.31
+    },
+    {
+      "rule": "/api/store-links",
+      "endpoint": "api_store_links",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.22
+    },
+    {
+      "rule": "/clearance-alerts",
+      "endpoint": "clearance_alerts_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/clearance-alerts",
+      "endpoint": "api_clearance_alerts",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/clearance-alerts/refresh",
+      "endpoint": "api_clearance_alerts_refresh",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/clearance-alerts/<int:link_id>/facts",
+      "endpoint": "api_clearance_alerts_facts",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/db/clearance-alerts",
+      "endpoint": "api_db_clearance_alerts",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/clearance-alerts/refresh",
+      "endpoint": "api_db_clearance_alerts_refresh",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/clearance-alerts/<int:link_id>/facts",
+      "endpoint": "api_db_clearance_alerts_facts",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/infringement-knowledge/wipo/settings",
+      "endpoint": "api_wipo_settings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/infringement-knowledge/wipo/status",
+      "endpoint": "api_wipo_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/infringement-knowledge/wipo/sync",
+      "endpoint": "api_wipo_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/wipo/settings",
+      "endpoint": "api_db_wipo_settings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/wipo/status",
+      "endpoint": "api_db_wipo_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/wipo/sync",
+      "endpoint": "api_db_wipo_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/size-charts",
+      "endpoint": "size_charts_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/size-charts/templates",
+      "endpoint": "api_size_chart_templates",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/templates/<int:template_id>",
+      "endpoint": "api_size_chart_template",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/size-charts/templates/<int:template_id>/copy",
+      "endpoint": "api_size_chart_copy",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/size-charts/options",
+      "endpoint": "api_size_chart_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/requirements",
+      "endpoint": "api_size_chart_requirements",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/preview",
+      "endpoint": "api_size_chart_preview",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/upload",
+      "endpoint": "api_size_chart_upload",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/batch",
+      "endpoint": "api_size_chart_batch",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/records",
+      "endpoint": "api_size_chart_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/size-charts/reconcile",
+      "endpoint": "api_size_chart_reconcile",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/size-charts/<action>",
+      "endpoint": "api_db_size_charts",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-original-products/publish/stores",
+      "endpoint": "api_original_publish_stores",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/publish/amazon-store",
+      "endpoint": "api_original_amazon_store",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/publish/schema",
+      "endpoint": "api_original_publish_schema",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.45
+    },
+    {
+      "rule": "/api/ai-original-products/publish/preview",
+      "endpoint": "api_original_publish_preview",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/ai-original-products/publish",
+      "endpoint": "api_original_publish_submit",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/publish/jobs",
+      "endpoint": "api_original_publish_jobs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/publish/jobs/<job_id>",
+      "endpoint": "api_original_publish_job",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/ai-original-products/publish/jobs/<job_id>/refresh",
+      "endpoint": "api_original_publish_refresh",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/ai-original-products/publish/jobs/<job_id>/retry",
+      "endpoint": "api_original_publish_retry",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/salesperson-stats",
+      "endpoint": "salesperson_stats",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/salesperson-stats",
+      "endpoint": "db_salesperson_stats",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/store-analysis",
+      "endpoint": "api_store_analysis",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/store-links/category-paths",
+      "endpoint": "api_store_link_category_paths",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/store-links/<int:link_id>/video",
+      "endpoint": "api_store_link_video",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/store-links/<int:link_id>/video",
+      "endpoint": "api_db_store_link_video",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-videos/jobs",
+      "endpoint": "api_ai_video_jobs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-videos/jobs/<job_id>/retry",
+      "endpoint": "api_ai_video_retry",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-videos/upload-logs",
+      "endpoint": "api_video_upload_logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/ai-videos/upload-logs",
+      "endpoint": "api_db_video_upload_logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-videos/settings",
+      "endpoint": "api_ai_video_settings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-videos/jobs/<job_id>/assets/<asset_id>",
+      "endpoint": "api_ai_video_asset",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/ai-videos/<job_id>/details",
+      "endpoint": "ai_video_details",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/ai-videos/jobs/<job_id>",
+      "endpoint": "api_ai_video_job",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-videos/jobs/<job_id>/publish",
+      "endpoint": "api_ai_video_publish",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-videos/jobs/<job_id>/content",
+      "endpoint": "api_ai_video_content",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-videos/jobs/<job_id>/cover",
+      "endpoint": "api_ai_video_cover",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-videos/assets/<job_id>/<asset_id>",
+      "endpoint": "api_ai_video_signed_asset",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs",
+      "endpoint": "api_db_ai_video_jobs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs/<job_id>/retry",
+      "endpoint": "api_db_ai_video_retry",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 32.26
+    },
+    {
+      "rule": "/api/db/ai-videos/settings",
+      "endpoint": "api_db_ai_video_settings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.3
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs/<job_id>/assets/<asset_id>",
+      "endpoint": "api_db_ai_video_asset",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs/<job_id>",
+      "endpoint": "api_db_ai_video_job",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.33
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs/<job_id>/publish",
+      "endpoint": "api_db_ai_video_publish",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs/<job_id>/content",
+      "endpoint": "api_db_ai_video_content",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/ai-videos/jobs/<job_id>/cover",
+      "endpoint": "api_db_ai_video_cover",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/store-links/<int:link_id>/advertise",
+      "endpoint": "api_store_link_advertise",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/db/store-links/<int:link_id>/advertise",
+      "endpoint": "api_db_store_link_advertise",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/store-links/bulk-advertise",
+      "endpoint": "api_store_links_bulk_advertise",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/store-links/bulk-advertise",
+      "endpoint": "api_db_store_links_bulk_advertise",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/store-links/bulk-update",
+      "endpoint": "api_bulk_update_store_links",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/store-links/delete",
+      "endpoint": "api_delete_store_links",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/store-links/bulk-update/status",
+      "endpoint": "api_store_link_remote_update_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/store-links/sync/start",
+      "endpoint": "api_start_store_link_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/store-links/sync/status",
+      "endpoint": "api_store_link_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/prohibited-listings",
+      "endpoint": "api_prohibited_listings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/prohibited-listings/export",
+      "endpoint": "api_export_prohibited_listings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/prohibited-listings/sync/start",
+      "endpoint": "api_start_prohibited_listing_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/prohibited-listings/sync/status",
+      "endpoint": "api_prohibited_listing_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/tasks/daily/start",
+      "endpoint": "api_start_daily_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/tasks/daily/stop",
+      "endpoint": "api_stop_daily_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/tasks/daily/options",
+      "endpoint": "api_daily_task_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/tasks/daily/status",
+      "endpoint": "api_daily_task_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/local-agents/enroll",
+      "endpoint": "api_local_agent_enroll",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/local-agents/heartbeat",
+      "endpoint": "api_local_agent_heartbeat",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.37
+    },
+    {
+      "rule": "/api/local-agents/jobs/claim",
+      "endpoint": "api_local_agent_claim_job",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.5
+    },
+    {
+      "rule": "/api/local-agents/jobs/<job_id>/events",
+      "endpoint": "api_local_agent_job_event",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/local-agents/jobs/<job_id>/credentials",
+      "endpoint": "api_local_agent_job_credentials",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/local-agents/jobs/<job_id>/collection-check",
+      "endpoint": "api_local_agent_collection_check",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/local-agents/business-bundle",
+      "endpoint": "api_local_agent_business_bundle",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/execution-agents",
+      "endpoint": "api_execution_agents",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ad-analysis",
+      "endpoint": "api_ad_analysis",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ad-analysis/profit",
+      "endpoint": "api_ad_analysis_profit",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/ad-analysis/profit",
+      "endpoint": "api_db_ad_analysis_profit",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/ad-analysis/actions",
+      "endpoint": "api_ad_analysis_actions",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/local-agents/download",
+      "endpoint": "api_download_local_agent",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/run_shensu/<task_id>/events",
+      "endpoint": "api_appeal_job_events",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/local-executor/health",
+      "endpoint": "api_local_executor_health",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 204,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/local-executor/run_shensu",
+      "endpoint": "api_local_executor_run_shensu",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 204,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/local-executor/run_shensu/stop",
+      "endpoint": "api_local_executor_stop_shensu",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 204,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/local-executor/run_shensu/<task_id>/events",
+      "endpoint": "api_local_executor_appeal_events",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 204,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/local-executor/tasks/daily/start",
+      "endpoint": "api_local_executor_start_daily_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 204,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/local-executor/tasks/daily/stop",
+      "endpoint": "api_local_executor_stop_daily_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 204,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/local-executor/tasks/daily/status",
+      "endpoint": "api_local_executor_daily_task_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 204,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/risk-check/categories",
+      "endpoint": "api_risk_check_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/risk-check/options",
+      "endpoint": "api_risk_check_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.22
+    },
+    {
+      "rule": "/api/risk-check/results",
+      "endpoint": "api_risk_check_results",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/risk-check/results/export",
+      "endpoint": "api_export_risk_check_results",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/categories",
+      "endpoint": "api_zying_collection_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/developers",
+      "endpoint": "api_zying_collection_developers",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/options/refresh",
+      "endpoint": "api_refresh_zying_collection_options",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/auth/open",
+      "endpoint": "api_open_zying_collection_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/auth/capture",
+      "endpoint": "api_capture_zying_collection_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/start",
+      "endpoint": "api_start_zying_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/status",
+      "endpoint": "api_zying_collection_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/zying-collection/stop",
+      "endpoint": "api_stop_zying_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/risk-check/start",
+      "endpoint": "api_start_risk_check",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/risk-check/status",
+      "endpoint": "api_risk_check_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/mercado-collection/start",
+      "endpoint": "api_start_mercado_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-collection/browser-windows",
+      "endpoint": "api_mercado_collection_browser_windows",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-collection/playwright-setup",
+      "endpoint": "api_open_mercado_playwright_setup",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-collection/stop",
+      "endpoint": "api_stop_mercado_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-collection/status",
+      "endpoint": "api_mercado_collection_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-collection/ai-weight-price",
+      "endpoint": "api_mercado_collection_ai_weight_price",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado/infringement/tasks",
+      "endpoint": "api_mercado_infringement_tasks",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/infringement/tasks/<task_id>",
+      "endpoint": "api_mercado_infringement_task",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/infringement/tasks/<task_id>/cancel",
+      "endpoint": "api_cancel_mercado_infringement_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/infringement/tasks/<task_id>/retry",
+      "endpoint": "api_retry_mercado_infringement_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/infringement/items/<mode>/<int:row_id>",
+      "endpoint": "api_mercado_infringement_item",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado/infringement/items/<mode>/<int:row_id>/review",
+      "endpoint": "api_review_mercado_infringement_item",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/mercado-collection/items/<int:item_id>",
+      "endpoint": "mercado_collection_detail_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado-collection/items",
+      "endpoint": "api_mercado_collection_items",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-collection/ai-copy",
+      "endpoint": "api_start_mercado_collection_ai_copy",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-collection/ai-copy/status",
+      "endpoint": "api_mercado_collection_ai_copy_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/catalog/visibility",
+      "endpoint": "api_catalog_visibility",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/catalog/access",
+      "endpoint": "api_db_catalog_access",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/db/catalog/visibility",
+      "endpoint": "api_db_catalog_visibility",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/mercado-products/mercado-categories",
+      "endpoint": "api_mercado_product_mercado_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/salespeople",
+      "endpoint": "api_mercado_product_salespeople",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/developers",
+      "endpoint": "api_mercado_product_developers",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products",
+      "endpoint": "api_mercado_products",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-management-categories",
+      "endpoint": "api_mercado_management_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-management-categories/<int:category_id>",
+      "endpoint": "api_mercado_management_category",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-management-categories/assign",
+      "endpoint": "api_assign_mercado_management_category",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/add",
+      "endpoint": "api_add_mercado_products",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/<int:product_item_id>",
+      "endpoint": "api_update_mercado_product",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/bulk-edit",
+      "endpoint": "api_bulk_update_mercado_products",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-collection/bulk-edit",
+      "endpoint": "api_bulk_update_mercado_collection_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/review-status",
+      "endpoint": "api_update_mercado_product_review_status",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/mercado-products/attribute-drafts",
+      "endpoint": "api_db_mercado_attribute_drafts",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/mercado-products/attribute-preflight",
+      "endpoint": "api_mercado_attribute_preflight",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/publish",
+      "endpoint": "api_publish_mercado_products",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-products/publish/status",
+      "endpoint": "api_mercado_product_publish_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-shipping-rates",
+      "endpoint": "api_mercado_shipping_rates",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-shipping-rates/refresh",
+      "endpoint": "api_refresh_mercado_shipping_rates",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-publish-records",
+      "endpoint": "api_mercado_product_publish_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-publish-records/retry",
+      "endpoint": "api_retry_mercado_product_publish_records",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/mercado-collection/tasks",
+      "endpoint": "api_db_create_mercado_collection_task",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-collection/tasks/<int:task_id>",
+      "endpoint": "api_db_mercado_collection_task",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-collection/items",
+      "endpoint": "api_db_mercado_collection_items",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-collection/items/by-ids",
+      "endpoint": "api_db_get_mercado_collection_items_by_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/db/mercado-collection/items/<int:item_id>/ai-copy",
+      "endpoint": "api_db_save_mercado_collection_item_ai_copy",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-products/mercado-categories",
+      "endpoint": "api_db_mercado_product_mercado_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/salespeople",
+      "endpoint": "api_db_mercado_product_salespeople",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/developers",
+      "endpoint": "api_db_mercado_product_developers",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products",
+      "endpoint": "api_db_mercado_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/bulk-edit",
+      "endpoint": "api_db_bulk_update_mercado_products",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-collection/bulk-edit",
+      "endpoint": "api_db_bulk_update_mercado_collection",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/<int:product_item_id>",
+      "endpoint": "api_db_update_mercado_product",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-publish-records",
+      "endpoint": "api_db_mercado_product_publish_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-publish-records/published-product-ids",
+      "endpoint": "api_db_published_mercado_product_item_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-publish-records/published-account-ids",
+      "endpoint": "api_db_published_mercado_product_account_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-publish-records/by-ids",
+      "endpoint": "api_db_mercado_product_publish_records_by_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-publish-records/existing-user-products",
+      "endpoint": "api_db_existing_mercado_user_product_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-publish-records/bulk",
+      "endpoint": "api_db_create_mercado_product_publish_records",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-publish-records/<int:record_id>",
+      "endpoint": "api_db_update_mercado_product_publish_record",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-products/review-status",
+      "endpoint": "api_db_update_mercado_product_review_status",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/move-to-collection",
+      "endpoint": "api_db_move_mercado_products_to_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/add",
+      "endpoint": "api_db_add_mercado_products",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-collection/items/delete",
+      "endpoint": "api_db_delete_mercado_collection_items",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/delete",
+      "endpoint": "api_db_delete_mercado_product_items",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/by-ids",
+      "endpoint": "api_db_get_mercado_product_items_by_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/publish-schedules",
+      "endpoint": "api_db_create_mercado_product_publish_schedule",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/publish-schedules/latest",
+      "endpoint": "api_db_get_latest_mercado_product_publish_schedule",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/publish-schedules/claim",
+      "endpoint": "api_db_claim_mercado_product_publish_schedule",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-products/publish-schedules/recover",
+      "endpoint": "api_db_recover_mercado_product_publish_schedules",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.53
+    },
+    {
+      "rule": "/api/db/mercado-products/publish-schedules/<int:schedule_id>",
+      "endpoint": "api_db_update_mercado_product_publish_schedule",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.25
+    },
+    {
+      "rule": "/api/db/mercado-products/<int:product_item_id>/publish-state",
+      "endpoint": "api_db_update_mercado_product_publish_state",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/task-records",
+      "endpoint": "api_db_insert_task_records",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/task-records/order-print/latest",
+      "endpoint": "api_db_latest_order_print_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/services/health",
+      "endpoint": "api_services_health",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/health",
+      "endpoint": "api_db_health",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/official-infractions/dashboard",
+      "endpoint": "api_db_official_infraction_dashboard",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/official-infractions/current-counts",
+      "endpoint": "api_db_official_infraction_current_counts",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/official-infractions/live/jobs",
+      "endpoint": "api_db_start_live_official_infraction_job",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/official-infractions/live/jobs/<job_id>",
+      "endpoint": "api_db_live_official_infraction_job_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/official-infractions/live",
+      "endpoint": "api_db_collect_live_official_infractions",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/official-infractions/sync",
+      "endpoint": "api_db_start_official_infraction_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/official-infractions/sync/status",
+      "endpoint": "api_db_official_infraction_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/publish-concurrency",
+      "endpoint": "api_db_publish_concurrency",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/publish-concurrency",
+      "endpoint": "api_publish_concurrency",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/overview-auto-sync",
+      "endpoint": "api_db_overview_auto_sync",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-tokens/authorization",
+      "endpoint": "api_db_mercado_token_authorization",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-applications",
+      "endpoint": "api_db_mercado_applications",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-applications/<int:application_id>",
+      "endpoint": "api_db_mercado_application",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-applications/<int:application_id>/authorization",
+      "endpoint": "api_db_mercado_application_authorization",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-tokens",
+      "endpoint": "api_db_list_mercado_tokens",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-account-groups",
+      "endpoint": "api_db_mercado_account_groups",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-account-groups/<int:group_id>",
+      "endpoint": "api_db_mercado_account_group",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-tokens/<int:token_id>/site-settings",
+      "endpoint": "api_db_mercado_token_site_settings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-tokens/exchange",
+      "endpoint": "api_db_exchange_mercado_token",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/db/mercado-tokens/<int:token_id>/refresh",
+      "endpoint": "api_db_refresh_mercado_token",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-tokens/<int:token_id>/application",
+      "endpoint": "api_db_reauthorize_mercado_token_application",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-tokens/<int:token_id>/reputation",
+      "endpoint": "api_db_mercado_token_reputation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-communications/<int:token_id>/<action>",
+      "endpoint": "api_db_mercado_communication",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-tokens/<int:token_id>",
+      "endpoint": "api_db_update_mercado_token",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/reputation/bulk",
+      "endpoint": "api_db_insert_reputation",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infractions/bulk",
+      "endpoint": "api_db_insert_infractions",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/delays/bulk",
+      "endpoint": "api_db_insert_delays",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/pago/bulk",
+      "endpoint": "api_db_insert_pago",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-products/bulk",
+      "endpoint": "api_db_insert_zying_products",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/weight-dimensions-records",
+      "endpoint": "api_db_weight_dimensions_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/weight-dimensions-changes",
+      "endpoint": "api_db_weight_dimensions_changes",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/weight-dimensions-records/existing",
+      "endpoint": "api_db_existing_weight_dimensions_record_order_numbers",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/weight-dimensions-records/log",
+      "endpoint": "api_db_weight_dimensions_record_log",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-products/existing",
+      "endpoint": "api_db_existing_zying_product_ids",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-products/product-list",
+      "endpoint": "api_db_upsert_zying_product_list",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-products/developers/sync",
+      "endpoint": "api_db_sync_zying_product_developers",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-risk/candidates",
+      "endpoint": "api_db_zying_risk_candidates",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-risk/bulk",
+      "endpoint": "api_db_update_zying_risks",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-risk/categories",
+      "endpoint": "api_db_zying_risk_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/zying-risk/results",
+      "endpoint": "api_db_zying_risk_results",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-risk/candidates",
+      "endpoint": "api_db_infringement_risk_candidates",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-risk/bulk",
+      "endpoint": "api_db_update_infringement_risks",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-risk/results",
+      "endpoint": "api_db_infringement_risk_results",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-risk/review",
+      "endpoint": "api_db_infringement_risk_review",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/<int:record_id>",
+      "endpoint": "api_db_get_infringement_knowledge_detail",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/<int:record_id>/products",
+      "endpoint": "api_db_infringement_knowledge_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/candidates",
+      "endpoint": "api_db_infringement_knowledge_candidate",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-risk/options",
+      "endpoint": "api_db_infringement_risk_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/stocks",
+      "endpoint": "api_db_inventory_stocks",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/skus",
+      "endpoint": "api_db_inventory_skus",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/skus/<int:sku_id>",
+      "endpoint": "api_db_update_inventory_sku",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/sku-mappings",
+      "endpoint": "api_db_inventory_sku_mappings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/sku-store-sites",
+      "endpoint": "api_db_inventory_sku_store_sites",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/sku-mappings/<int:mapping_id>",
+      "endpoint": "api_db_update_inventory_sku_mapping",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/reconciliation",
+      "endpoint": "api_db_inventory_reconciliation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/1688-products/options",
+      "endpoint": "api_db_1688_product_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/1688-products/bulk-dimensions",
+      "endpoint": "api_db_update_1688_product_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/1688-products/<int:product_item_id>",
+      "endpoint": "api_db_update_1688_product",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-original-products",
+      "endpoint": "api_db_upsert_ai_original_product",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-original-products/<int:product_item_id>",
+      "endpoint": "api_db_update_ai_original_product",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-original-products/bulk-net-proceeds",
+      "endpoint": "api_db_update_ai_original_product_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-original-products/bulk-dimensions",
+      "endpoint": "api_db_update_ai_original_product_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-original-products/<int:product_item_id>/listing",
+      "endpoint": "api_db_update_ai_original_listing",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/ai-original-products/<int:product_item_id>/translate",
+      "endpoint": "api_db_translate_ai_original_listing",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-management-categories",
+      "endpoint": "api_db_mercado_management_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/mercado-management-categories/<int:category_id>",
+      "endpoint": "api_db_mercado_management_category",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/mercado-management-categories/assign",
+      "endpoint": "api_db_assign_mercado_management_category",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/shelves",
+      "endpoint": "api_db_inventory_shelves",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/shelves/<int:shelf_id>",
+      "endpoint": "api_db_update_inventory_shelf",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/db/inventory/matches",
+      "endpoint": "api_db_inventory_matches",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/inventory/movements",
+      "endpoint": "api_db_inventory_movements",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders",
+      "endpoint": "api_db_list_orders",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-analysis",
+      "endpoint": "api_db_store_analysis",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders/weight-quote",
+      "endpoint": "api_db_order_weight_quote",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders/split/preview",
+      "endpoint": "api_db_order_split_preview",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders/split",
+      "endpoint": "api_db_order_split",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/order-sync/start",
+      "endpoint": "api_db_start_order_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.14
+    },
+    {
+      "rule": "/api/db/order-sync/status",
+      "endpoint": "api_db_order_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-links",
+      "endpoint": "api_db_store_links",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ad-analysis",
+      "endpoint": "api_db_ad_analysis",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ad-analysis/actions",
+      "endpoint": "api_db_ad_analysis_actions",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-links/bulk-update",
+      "endpoint": "api_db_bulk_update_store_links",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-links/delete",
+      "endpoint": "api_db_delete_store_links",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-links/bulk-update/status",
+      "endpoint": "api_db_store_link_remote_update_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-links/sync/start",
+      "endpoint": "api_db_start_store_link_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/store-links/sync/status",
+      "endpoint": "api_db_store_link_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/prohibited-listings",
+      "endpoint": "api_db_prohibited_listings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/prohibited-listings/sync/start",
+      "endpoint": "api_db_start_prohibited_listing_sync",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/prohibited-listings/sync/status",
+      "endpoint": "api_db_prohibited_listing_sync_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders/bulk-update",
+      "endpoint": "api_db_bulk_update_orders",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders/access-contexts",
+      "endpoint": "api_db_order_access_contexts",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/orders/purchase-tracking",
+      "endpoint": "api_db_purchase_tracking_orders",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/orders/labels",
+      "endpoint": "api_db_order_labels",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/orders/print-logs",
+      "endpoint": "api_db_order_print_logs",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/db/orders/<order_id>/logs",
+      "endpoint": "api_db_order_operation_logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.27
+    },
+    {
+      "rule": "/api/db/orders/<order_id>/tracking",
+      "endpoint": "api_db_order_tracking",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.36
+    },
+    {
+      "rule": "/api/db/orders/bulk",
+      "endpoint": "api_db_insert_orders",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.25
+    },
+    {
+      "rule": "/api/db/orders/high-after-sales",
+      "endpoint": "api_db_high_after_sale_alerts",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.28
+    },
+    {
+      "rule": "/api/db/orders/high-profits",
+      "endpoint": "api_db_high_profit_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/db/chat",
+      "endpoint": "api_db_insert_chat",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/appeal-chat-records",
+      "endpoint": "api_db_insert_appeal_chat_record",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/ai-appeal-product-contexts",
+      "endpoint": "api_db_ai_appeal_product_contexts",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/ai-appeal-records",
+      "endpoint": "api_db_insert_ai_appeal_record",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/ai-appeal-records",
+      "endpoint": "api_db_get_ai_appeal_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.14
+    },
+    {
+      "rule": "/api/db/appeal-phrases",
+      "endpoint": "api_db_appeal_phrases",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/appeal-phrases/random",
+      "endpoint": "api_db_random_appeal_phrase",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/appeal-phrases/<int:phrase_id>",
+      "endpoint": "api_db_appeal_phrase_detail",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/infringement-knowledge",
+      "endpoint": "api_db_infringement_knowledge",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/bulk",
+      "endpoint": "api_db_bulk_infringement_knowledge",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/analysis-sources",
+      "endpoint": "api_db_infringement_knowledge_analysis_sources",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/analyzed",
+      "endpoint": "api_db_upsert_analyzed_infringement_knowledge",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/wipo/records",
+      "endpoint": "api_db_upsert_wipo_infringement_knowledge",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/infringement-knowledge/<int:record_id>",
+      "endpoint": "api_db_infringement_knowledge_detail",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/infractions/latest",
+      "endpoint": "api_db_latest_infractions",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/reputation/latest",
+      "endpoint": "api_db_latest_reputation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/pago/latest",
+      "endpoint": "api_db_latest_pago",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/window-anomalies",
+      "endpoint": "api_db_upsert_window_anomaly",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/window-anomalies",
+      "endpoint": "api_db_get_window_anomalies",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.14
+    },
+    {
+      "rule": "/api/db/window-anomalies/resolve",
+      "endpoint": "api_db_resolve_window_anomaly",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/ai-appeal-records",
+      "endpoint": "api_ai_appeal_records",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/window-anomalies",
+      "endpoint": "api_window_anomalies",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/window-anomalies/<window_id>/resolve",
+      "endpoint": "api_resolve_window_anomaly",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/window-anomalies/mercado-login/status",
+      "endpoint": "api_mercado_login_console_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/window-anomalies/mercado-login/stop",
+      "endpoint": "api_stop_mercado_login_console",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/window-anomalies/mercado-login/start",
+      "endpoint": "api_start_mercado_login_console",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/workbench/session-user",
+      "endpoint": "api_db_workbench_session_user",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/workbench/profile",
+      "endpoint": "api_db_workbench_profile",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/roles",
+      "endpoint": "api_db_workbench_roles",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/organizations",
+      "endpoint": "api_db_workbench_organizations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/roles/<role_key>",
+      "endpoint": "api_db_workbench_role_detail",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/db/workbench/users",
+      "endpoint": "api_db_workbench_users",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/registration-code",
+      "endpoint": "api_db_workbench_registration_code",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/register",
+      "endpoint": "api_db_workbench_register",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/users/<int:user_id>",
+      "endpoint": "api_db_workbench_user_detail",
+      "methods": [
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/db/workbench/users/<int:user_id>/password",
+      "endpoint": "api_db_workbench_user_password",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/access/catalog",
+      "endpoint": "api_access_catalog",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/access/organizations",
+      "endpoint": "api_access_organizations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/access/roles",
+      "endpoint": "api_access_roles",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/access/roles/<role_key>",
+      "endpoint": "api_access_role_detail",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/access/users",
+      "endpoint": "api_access_users",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/access/users/<int:user_id>",
+      "endpoint": "api_access_user_detail",
+      "methods": [
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/access/users/<int:user_id>/password",
+      "endpoint": "api_access_user_password",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/db/workbench/login",
+      "endpoint": "api_db_workbench_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/mercado-tokens/authorization",
+      "endpoint": "api_mercado_token_authorization",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-applications",
+      "endpoint": "api_mercado_applications",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-applications/<int:application_id>",
+      "endpoint": "api_mercado_application",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-tokens",
+      "endpoint": "api_list_mercado_tokens",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.23
+    },
+    {
+      "rule": "/api/mercado-account-groups",
+      "endpoint": "api_mercado_account_groups",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-account-groups/<int:group_id>",
+      "endpoint": "api_mercado_account_group",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-tokens/<int:token_id>/site-settings",
+      "endpoint": "api_mercado_token_site_settings",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-tokens/exchange",
+      "endpoint": "api_exchange_mercado_token",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-tokens/<int:token_id>/refresh",
+      "endpoint": "api_refresh_mercado_token",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-tokens/<int:token_id>/application",
+      "endpoint": "api_reauthorize_mercado_token_application",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-reputation/refresh",
+      "endpoint": "api_refresh_all_mercado_reputation",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-reputation/status",
+      "endpoint": "api_mercado_reputation_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-tokens/<int:token_id>/reputation",
+      "endpoint": "api_mercado_token_reputation",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-communications/pre-sale-aggregate",
+      "endpoint": "api_mercado_pre_sale_aggregate",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/overview/mercado-notices",
+      "endpoint": "api_overview_mercado_notices",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/reputation/mercado-notices",
+      "endpoint": "api_reputation_mercado_notices",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado-communications/customer-service-aggregate",
+      "endpoint": "api_mercado_customer_service_aggregate",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/mercado-claims/<int:token_id>/open-browser",
+      "endpoint": "api_open_mercado_claim_browser",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.44
+    },
+    {
+      "rule": "/api/mercado/today/rights-holder/<int:token_id>/open-browser",
+      "endpoint": "api_open_reputation_browser",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.24
+    },
+    {
+      "rule": "/api/reputation/<int:token_id>/open-browser",
+      "endpoint": "api_open_reputation_browser",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/mercado/today/rights-holder/open-store/<task_id>",
+      "endpoint": "api_open_reputation_browser_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/reputation/open-store/<task_id>",
+      "endpoint": "api_open_reputation_browser_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/mercado-claims/open-store/<task_id>",
+      "endpoint": "api_open_reputation_browser_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-communications/<int:token_id>/<action>",
+      "endpoint": "api_mercado_communication",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 401,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/mercado-tokens/<int:token_id>",
+      "endpoint": "api_update_mercado_token",
+      "methods": [
+        "DELETE",
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.2
+    },
+    {
+      "rule": "/api/browser-extension/yandex/search",
+      "endpoint": "api_browser_extension_yandex_search",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/yandex/search/<int:run_id>",
+      "endpoint": "api_browser_extension_yandex_search_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/yandex-console/status",
+      "endpoint": "api_yandex_console_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/yandex-console/start",
+      "endpoint": "api_yandex_console_start",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/yandex-console/",
+      "endpoint": "proxy_yandex_console",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/yandex-console/<path:proxy_path>",
+      "endpoint": "proxy_yandex_console",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PATCH",
+        "POST",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/",
+      "endpoint": "index",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.28
+    },
+    {
+      "rule": "/settings/integrations",
+      "endpoint": "account_integrations_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.36
+    },
+    {
+      "rule": "/settings/profile",
+      "endpoint": "account_profile_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/account/password",
+      "endpoint": "api_account_profile",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/account/profile",
+      "endpoint": "api_account_profile",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/account-integrations",
+      "endpoint": "api_account_integrations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/private",
+      "endpoint": "api_private_account_integrations",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/balance",
+      "endpoint": "api_account_model_balance",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/balances",
+      "endpoint": "api_account_model_balances",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/tokens",
+      "endpoint": "api_account_integration_tokens",
+      "methods": [
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/email",
+      "endpoint": "api_account_integration_email",
+      "methods": [
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/email/test",
+      "endpoint": "api_account_integration_email_test",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/webhook",
+      "endpoint": "api_account_integration_webhook",
+      "methods": [
+        "OPTIONS",
+        "PUT"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/account-integrations/webhook/test",
+      "endpoint": "api_account_integration_webhook_test",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/login",
+      "endpoint": "login_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/register",
+      "endpoint": "register_page",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.14
+    },
+    {
+      "rule": "/api/registration/send-code",
+      "endpoint": "api_registration_send_code",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/register",
+      "endpoint": "api_register",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/login",
+      "endpoint": "api_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/api/execution-targets/local-token",
+      "endpoint": "api_local_executor_token",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/execution-targets/local-token/verify",
+      "endpoint": "api_verify_local_executor_token",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.76
+    },
+    {
+      "rule": "/api/browser-extension/login",
+      "endpoint": "api_browser_extension_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.25
+    },
+    {
+      "rule": "/api/browser-extension/version",
+      "endpoint": "api_browser_extension_version",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/download",
+      "endpoint": "api_browser_extension_download",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/console-session",
+      "endpoint": "api_browser_extension_console_session",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/session",
+      "endpoint": "api_browser_extension_session",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.24
+    },
+    {
+      "rule": "/api/browser-extension/appeal/<action>",
+      "endpoint": "api_browser_extension_appeal_action",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/browser-extension/appeal/status",
+      "endpoint": "api_browser_extension_appeal_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/mercado-data/status",
+      "endpoint": "api_browser_extension_mercado_data_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/mercado-data/exchange-rates",
+      "endpoint": "api_browser_extension_mercado_exchange_rates",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/mercado-data/query",
+      "endpoint": "api_browser_extension_mercado_data_query",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/management-categories",
+      "endpoint": "api_browser_extension_management_categories",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/notifications/send",
+      "endpoint": "api_browser_extension_notification_send",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/purchase-tracking/request",
+      "endpoint": "api_browser_extension_purchase_tracking_request",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying-order-sync/status",
+      "endpoint": "api_browser_extension_zying_order_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/zying-order-sync/<action>",
+      "endpoint": "api_browser_extension_zying_order_action",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/purchase-tracking/start",
+      "endpoint": "api_browser_extension_purchase_tracking_start",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/orders/purchase-tracking/logs",
+      "endpoint": "api_purchase_tracking_logs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 401,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/browser-extension/purchase-tracking/prepare",
+      "endpoint": "api_browser_extension_purchase_tracking_prepare",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/purchase-tracking/claim",
+      "endpoint": "api_browser_extension_purchase_tracking_claim",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/purchase-tracking/result",
+      "endpoint": "api_browser_extension_purchase_tracking_result",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/purchase-tracking/fail",
+      "endpoint": "api_browser_extension_purchase_tracking_fail",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying/options",
+      "endpoint": "api_browser_extension_zying_options",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying/start",
+      "endpoint": "api_browser_extension_start_zying_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying/status",
+      "endpoint": "api_browser_extension_zying_collection_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying/stop",
+      "endpoint": "api_browser_extension_stop_zying_collection",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying-infringement/start",
+      "endpoint": "api_browser_extension_start_zying_infringement",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying-infringement/status",
+      "endpoint": "api_browser_extension_zying_infringement_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/zying-infringement/stop",
+      "endpoint": "api_browser_extension_stop_zying_infringement",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/client/status",
+      "endpoint": "api_browser_extension_ai_weight_price_client_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/client/<path:action>",
+      "endpoint": "api_browser_extension_ai_weight_price_client_action",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.22
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/status",
+      "endpoint": "api_browser_extension_ai_weight_price_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/login/open",
+      "endpoint": "api_browser_extension_ai_weight_price_open_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/login/confirm",
+      "endpoint": "api_browser_extension_ai_weight_price_confirm_login",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/categories/refresh",
+      "endpoint": "api_browser_extension_ai_weight_price_refresh_categories",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/start",
+      "endpoint": "api_browser_extension_ai_weight_price_start",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/login/supplier",
+      "endpoint": "api_browser_extension_ai_weight_price_open_supplier",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/continue",
+      "endpoint": "api_browser_extension_ai_weight_price_continue",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/browser-extension/ai-weight-price/stop",
+      "endpoint": "api_browser_extension_ai_weight_price_stop",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-original-products/profiles",
+      "endpoint": "api_ai_original_profiles",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-original-products/<int:product_item_id>/export",
+      "endpoint": "api_export_ai_original_listing",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.35
+    },
+    {
+      "rule": "/api/ai-original-products",
+      "endpoint": "api_ai_original_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.21
+    },
+    {
+      "rule": "/api/ai-original-products/cost-summary",
+      "endpoint": "api_ai_original_cost_summary",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/1688-products/options",
+      "endpoint": "api_1688_product_options",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/1688-products/bulk-dimensions",
+      "endpoint": "api_update_1688_product_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/1688-products/<int:product_item_id>",
+      "endpoint": "api_update_1688_product",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/1688-products",
+      "endpoint": "api_1688_products",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/<int:product_item_id>",
+      "endpoint": "api_update_ai_original_product",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/bulk-net-proceeds",
+      "endpoint": "api_update_ai_original_product_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/bulk-dimensions",
+      "endpoint": "api_update_ai_original_product_items",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/categories/search",
+      "endpoint": "api_ai_original_category_search",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/categories/<string:category_id>/attributes",
+      "endpoint": "api_ai_original_category_attributes",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/ai-original-products/<int:product_item_id>/listing",
+      "endpoint": "api_update_ai_original_listing",
+      "methods": [
+        "OPTIONS",
+        "PATCH"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/<int:product_item_id>/translate",
+      "endpoint": "api_translate_ai_original_listing",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/ai-original-products/process",
+      "endpoint": "api_process_ai_original_products",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/ai-original-products/process/status",
+      "endpoint": "api_ai_original_products_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.24
+    },
+    {
+      "rule": "/api/ai-original-products/images/<path:filename>",
+      "endpoint": "api_ai_original_product_image",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.19
+    },
+    {
+      "rule": "/api/ai-original-products/source-image",
+      "endpoint": "api_ai_original_source_image",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/browser-extension/collect",
+      "endpoint": "api_browser_extension_collect",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/logout",
+      "endpoint": "logout",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.16
+    },
+    {
+      "rule": "/zs",
+      "endpoint": "hello_whzs",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.15
+    },
+    {
+      "rule": "/api/exports",
+      "endpoint": "enqueue_export",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "options_status": 200,
+      "ms": 0.17
+    },
+    {
+      "rule": "/api/exports/<job_id>",
+      "endpoint": "export_status",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    },
+    {
+      "rule": "/api/exports/<job_id>/download",
+      "endpoint": "export_download",
+      "methods": [
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "options_status": 200,
+      "ms": 0.18
+    }
+  ]
+}

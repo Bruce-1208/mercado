@@ -1605,3 +1605,39 @@ def test_product_number_search_idless_fallback_still_checks_detail(page):
     adapter = Browser(validate({}), threading.Event(), lambda *a: None)
     with pytest.raises(ValueError, match='打开的智赢商品编号不匹配'):
         adapter._open_zying_product_by_id(page, '734690209', timeout=.2)
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+def test_console_products_follow_processing_time_descending(page, tmp_path, width):
+    from test_ai_weight_price_sorting import populate
+
+    service = Service(tmp_path)
+    expected = populate(service)
+    app = Flask(__name__)
+    app.register_blueprint(create_blueprint(service))
+    client = app.test_client()
+
+    def respond(route):
+        url = urlsplit(route.request.url)
+        assert route.request.method == 'GET'
+        response = client.get(url.path + ('?' + url.query if url.query else ''))
+        route.fulfill(status=response.status_code, headers=dict(response.headers), body=response.data)
+
+    page.route('http://127.0.0.1:5018/**', respond)
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.goto('http://127.0.0.1:5018/ai-weight-price')
+    expect = pytest.importorskip('playwright.sync_api').expect
+    for scope in ('current', 'all'):
+        page.locator('#task-scope').select_option(scope)
+        expect(page.locator('#rows [data-open]')).to_have_count(50)
+        expect(page.locator('#rows [data-open]').first).to_have_attribute('data-open', expected[0])
+        assert page.locator('#rows [data-open]').evaluate_all('(els) => els.map(e => e.dataset.open)') == expected[:50]
+        page.locator('#next').click()
+        expect(page.locator('#rows [data-open]')).to_have_count(6)
+        assert page.locator('#rows [data-open]').evaluate_all('(els) => els.map(e => e.dataset.open)') == expected[50:]
+        page.locator('#prev').click()
+        expect(page.locator('#rows [data-open]')).to_have_count(50)
+    page.locator('#search').focus()
+    expect(page.locator('#search')).to_be_focused()
+    page.get_by_role('button', name='参数设置', exact=True).click()
+    expect(page.locator('#view-settings')).to_be_visible()

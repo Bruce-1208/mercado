@@ -1,0 +1,382 @@
+[
+  {
+    "dialog": "order-zying-sync-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 120.046875,
+      "width": 362,
+      "height": 759.890625
+    }
+  },
+  {
+    "dialog": "order-detail-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 380.75,
+      "width": 362,
+      "height": 238.5
+    }
+  },
+  {
+    "dialog": "order-split-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 16,
+      "y": 200.65625,
+      "width": 358,
+      "height": 598.6875
+    }
+  },
+  {
+    "dialog": "order-sync-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 12,
+      "width": 362,
+      "height": 976
+    }
+  },
+  {
+    "dialog": "order-purchase-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 127.5625,
+      "width": 362,
+      "height": 744.875
+    }
+  },
+  {
+    "dialog": "purchase-tracking-sync-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 308.125,
+      "width": 362,
+      "height": 383.734375
+    }
+  },
+  {
+    "dialog": "purchase-tracking-logs-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 397,
+      "width": 362,
+      "height": 206
+    }
+  },
+  {
+    "dialog": "order-tracking-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 380,
+      "width": 362,
+      "height": 240
+    }
+  },
+  {
+    "dialog": "inventory-movement-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 12,
+      "width": 362,
+      "height": 976
+    }
+  },
+  {
+    "dialog": "inventory-sku-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 190.75,
+      "width": 362,
+      "height": 618.5
+    }
+  },
+  {
+    "dialog": "inventory-sku-mapping-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 187.75,
+      "width": 362,
+      "height": 624.5
+    }
+  },
+  {
+    "dialog": "inventory-shelf-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 99.25,
+      "width": 362,
+      "height": 801.5
+    }
+  },
+  {
+    "dialog": "products-1688-bulk-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 16,
+      "y": 195.109375,
+      "width": 358,
+      "height": 609.78125
+    }
+  },
+  {
+    "dialog": "products-1688-detail-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 1000
+    }
+  },
+  {
+    "dialog": "ai-original-platform-editor",
+    "width": 390,
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 1000
+    }
+  },
+  {
+    "dialog": "ai-original-editor-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 1000
+    }
+  },
+  {
+    "dialog": "aip-amazon-config",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 205.859375,
+      "width": 362,
+      "height": 588.28125
+    }
+  },
+  {
+    "dialog": "collection-ai-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 354.890625,
+      "width": 362,
+      "height": 290.203125
+    }
+  },
+  {
+    "dialog": "mercado-category-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 298.75,
+      "width": 362,
+      "height": 402.5
+    }
+  },
+  {
+    "dialog": "wdr-history-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 12,
+      "y": 252.5,
+      "width": 366,
+      "height": 495
+    }
+  },
+  {
+    "dialog": "mercado-product-edit-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 1000
+    }
+  },
+  {
+    "dialog": "mercado-bulk-edit-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 12,
+      "width": 362,
+      "height": 976
+    }
+  },
+  {
+    "dialog": "mercado-copy-preview",
+    "width": 390,
+    "bounds": {
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 1000
+    }
+  },
+  {
+    "dialog": "ai-video-edit-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 14.234375,
+      "width": 362,
+      "height": 971.53125
+    }
+  },
+  {
+    "dialog": "ai-video-settings-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 111.375,
+      "width": 362,
+      "height": 777.25
+    }
+  },
+  {
+    "dialog": "mercado-application-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 253.21875,
+      "width": 362,
+      "height": 493.546875
+    }
+  },
+  {
+    "dialog": "mercado-site-settings-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 286,
+      "width": 362,
+      "height": 428
+    }
+  },
+  {
+    "dialog": "mercado-bulk-settings-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 279.5,
+      "width": 362,
+      "height": 441
+    }
+  },
+  {
+    "dialog": "mercado-account-group-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 229.5,
+      "width": 362,
+      "height": 541
+    }
+  },
+  {
+    "dialog": "pre-sale-detail-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 12,
+      "y": 306.5,
+      "width": 366,
+      "height": 387
+    }
+  },
+  {
+    "dialog": "customer-service-detail-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 12,
+      "y": 315.5,
+      "width": 366,
+      "height": 369
+    }
+  },
+  {
+    "dialog": "fund-edit-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 0,
+      "y": 319.390625,
+      "width": 390,
+      "height": 361.203125
+    }
+  },
+  {
+    "dialog": "infringement-knowledge-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 16,
+      "y": 499,
+      "width": 358,
+      "height": 2
+    }
+  },
+  {
+    "dialog": "knowledge-products-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 16,
+      "y": 437,
+      "width": 358,
+      "height": 126
+    }
+  },
+  {
+    "dialog": "mi-start-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 102.1875,
+      "width": 362,
+      "height": 795.625
+    }
+  },
+  {
+    "dialog": "mi-task-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 374.90625,
+      "width": 362,
+      "height": 250.1875
+    }
+  },
+  {
+    "dialog": "mi-detail-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 14,
+      "y": 74.5625,
+      "width": 362,
+      "height": 850.875
+    }
+  },
+  {
+    "dialog": "catalog-attributes-dialog",
+    "width": 390,
+    "bounds": {
+      "x": 12,
+      "y": 347.75,
+      "width": 366,
+      "height": 304.5
+    }
+  }
+]

@@ -22,15 +22,17 @@ def _product_section_html():
     styles = "\n".join(re.findall(r"<style[^>]*>(.*?)</style>", template, re.S))
     links = "\n".join(
         f'<link rel="stylesheet" href="/static/{name}">'
-        for name in ("console-ui.css", "ai-original-products.css",
-                     "1688-products.css", "zeshun-theme.css", "console-workflow.css",
-                     "date-filter-controls.css", "console-layout.css")
+        for name in ("console-ui.css", "ai-original-products.css", "1688-products.css",
+                     "sku-matrix.css", "zeshun-theme.css", "console-workflow.css",
+                     "console-layout.css", "product-cards.css", "product-tiles.css",
+                     "product-detail-drawer.css", "date-filter-controls.css",
+                     "erp-density.css", "design-system.css")
     )
     return (f'<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
             f'<style>{styles}</style>{links}'
             '<style>body{padding:24px}.tab-page.active{display:block}</style>'
-            '</head><body>' + section +
-            '<script src="/static/1688-products.js"></script></body></html>')
+            '</head><body class="zs-console">' + section +
+            '<script src="/static/product-visibility.js"></script><script src="/static/sku-matrix.js"></script><script src="/static/1688-products.js"></script></body></html>')
 
 
 @pytest.fixture(scope="module")
@@ -187,7 +189,7 @@ def test_bulk_category_uses_shared_product_categories_and_can_clear(products_pag
     assert page.locator("#products-1688-body tr td:nth-child(3)").all_text_contents() == ["汽车配件", "汽车配件"]
     page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
     assert "汽车配件" in page.locator("#products-1688-detail-content").inner_text()
-    page.locator("#products-1688-detail-dialog").get_by_role("button", name="关闭", exact=True).click()
+    page.locator("#products-1688-edit-cancel").click()
     category.select_option("uncategorized")
     page.locator("#products-1688-category-submit").click()
     page.wait_for_function("[...document.querySelectorAll('#products-1688-body tr td:nth-child(3)')].every(cell => cell.textContent === '未分类') && !document.querySelector('#products-1688-category-submit').disabled")
@@ -196,8 +198,8 @@ def test_bulk_category_uses_shared_product_categories_and_can_clear(products_pag
 
 def test_single_edit_submits_changed_values_in_g_cm_usd_and_cny(products_page):
     page = products_page
-    page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
-    dialog = page.locator("#products-1688-edit-dialog")
+    page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
+    dialog = page.locator("#products-1688-detail-dialog")
     assert dialog.is_visible()
     assert page.locator("#products-1688-edit-weight_g").input_value() == "250"
     values = {"weight_g": "375.5", "package_length_cm": "13.5", "package_width_cm": "9",
@@ -205,7 +207,7 @@ def test_single_edit_submits_changed_values_in_g_cm_usd_and_cny(products_page):
     for field, value in values.items():
         page.locator(f"#products-1688-edit-{field}").fill(value)
     page.locator("#products-1688-edit-save").click()
-    page.wait_for_function("!document.querySelector('#products-1688-edit-dialog').open")
+    page.wait_for_function("!document.querySelector('#products-1688-detail-dialog').open")
     assert _patches(page)[-1]["body"] == {field: float(value) for field, value in values.items()}
     row = page.locator("#products-1688-body tr").first
     assert "375.5 g" in row.inner_text()
@@ -213,20 +215,20 @@ def test_single_edit_submits_changed_values_in_g_cm_usd_and_cny(products_page):
     assert "￥25.75" in row.inner_text()
     assert "$17.25" in row.inner_text()
     row.get_by_role("button", name="查看详情").click()
-    detail = page.locator("#products-1688-detail-content").inner_text()
-    assert all(value in detail for value in ["375.5 g", "长：13.5 cm", "￥25.75", "$17.25"])
+    assert {field: page.locator(f"#products-1688-edit-{field}").input_value()
+            for field in values} == values
 
 
 def test_untouched_fields_are_not_patched_and_explicit_clear_beats_source_snapshot(products_page):
     page = products_page
-    page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
+    page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
     page.locator("#products-1688-edit-weight_g").fill("")
     page.locator("#products-1688-edit-save").click()
-    page.wait_for_function("!document.querySelector('#products-1688-edit-dialog').open")
+    page.wait_for_function("!document.querySelector('#products-1688-detail-dialog').open")
     assert _patches(page)[-1]["body"] == {"weight_g": None}
     assert page.locator("#products-1688-body tr").first.locator("td").nth(5).inner_text() == "—"
     assert page.evaluate("mock.rows[0].original_1688.weight_g") == 250
-    page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
+    page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
     assert page.locator("#products-1688-edit-weight_g").input_value() == ""
     page.locator("#products-1688-edit-save").click()
     assert len(_patches(page)) == 1
@@ -235,24 +237,24 @@ def test_untouched_fields_are_not_patched_and_explicit_clear_beats_source_snapsh
 def test_failed_edit_stays_open_and_can_retry(products_page):
     page = products_page
     page.evaluate("mock.failPatch = true")
-    page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
+    page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
     page.locator("#products-1688-edit-price").fill("29.99")
     page.locator("#products-1688-edit-save").click()
     page.wait_for_function("document.querySelector('#products-1688-edit-message').textContent.includes('模拟保存失败')")
-    assert page.locator("#products-1688-edit-dialog").is_visible()
+    assert page.locator("#products-1688-detail-dialog").is_visible()
     assert page.locator("#products-1688-edit-price").input_value() == "29.99"
     assert page.locator("#products-1688-edit-save").is_enabled()
     assert "￥12.50" in page.locator("#products-1688-body tr").first.inner_text()
     page.evaluate("mock.failPatch = false")
     page.locator("#products-1688-edit-save").click()
-    page.wait_for_function("!document.querySelector('#products-1688-edit-dialog').open")
+    page.wait_for_function("!document.querySelector('#products-1688-detail-dialog').open")
     assert _patches(page)[-1]["body"] == {"price": 29.99}
     assert "￥29.99" in page.locator("#products-1688-body tr").first.inner_text()
 
 
 def test_saved_edit_avoids_followup_list_and_slow_ai_refresh(products_page):
     page = products_page
-    page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
+    page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
     page.locator("#products-1688-edit-net_proceeds_usd").fill("19.5")
     page.evaluate("""() => {
       mock.failList = true;
@@ -260,7 +262,7 @@ def test_saved_edit_avoids_followup_list_and_slow_ai_refresh(products_page):
       window.loadAiOriginalProducts = () => new Promise(() => {});
     }""")
     page.locator("#products-1688-edit-save").click()
-    page.wait_for_function("!document.querySelector('#products-1688-edit-dialog').open")
+    page.wait_for_function("!document.querySelector('#products-1688-detail-dialog').open")
     assert _patches(page)[-1]["body"] == {"net_proceeds_usd": 19.5}
     assert "$19.50" in page.locator("#products-1688-body tr").first.inner_text()
     message = page.locator("#products-1688-status").inner_text()
@@ -268,7 +270,7 @@ def test_saved_edit_avoids_followup_list_and_slow_ai_refresh(products_page):
     assert page.evaluate("mock.requests.map(r => r.method)") == ["PATCH"]
     assert page.locator("#products-1688-edit-save").is_enabled()
     page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
-    assert "$19.50" in page.locator("#products-1688-detail-content").inner_text()
+    assert page.locator("#products-1688-edit-net_proceeds_usd").input_value() == "19.5"
 
 
 def test_failed_bulk_category_preserves_existing_rows_and_selection(products_page):
@@ -288,9 +290,10 @@ def test_desktop_list_and_edit_dialog_layout(products_page, tmp_path):
     destination = Path(os.environ.get("PRODUCTS_1688_SCREENSHOT_DIR", str(tmp_path)))
     destination.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(destination / "list.png"), full_page=True)
-    page.locator("#products-1688-body tr").first.get_by_role("button", name="修改资料").click()
-    dialog = page.locator("#products-1688-edit-dialog")
+    page.locator("#products-1688-body tr").first.get_by_role("button", name="查看详情").click()
+    dialog = page.locator("#products-1688-detail-dialog")
     assert dialog.is_visible()
+    page.wait_for_function("document.querySelector('#products-1688-detail-dialog').getAnimations().every(a => a.playState === 'finished')")
     bounds = dialog.bounding_box()
     assert bounds and bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= 1920
     assert bounds["y"] >= 0 and bounds["y"] + bounds["height"] <= 1080
@@ -347,3 +350,73 @@ def test_compact_primary_filters_and_advanced_weight_layout(products_page, tmp_p
     bounds = dialog.bounding_box()
     assert bounds and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width + 1
     page.screenshot(path=str(destination / f'bulk-{width}.png'), full_page=True)
+
+
+@pytest.mark.parametrize("width", [1440, 1024, 390])
+def test_detail_keyboard_escape_preserves_multiple_selection_and_layout(products_page, tmp_path, width):
+    page = products_page
+    page.set_viewport_size({"width": width, "height": 1000})
+    page.evaluate("document.body.classList.add('zs-console')")
+    page.locator('#products-1688-select-all').check()
+    assert page.locator('#products-1688-selection').inner_text() == '本页已选择 2 件'
+    row = page.locator('#products-1688-body tr').first
+    assert '701168800041' in row.inner_text()
+    assert row.get_by_role('button', name='修改资料').count() == 0
+    assert row.get_by_role('button', name='编辑刊登内容').count() == 0
+    trigger = row.get_by_role('button', name='查看详情')
+    trigger.focus()
+    page.keyboard.press('Enter')
+    dialog = page.locator('#products-1688-detail-dialog')
+    assert dialog.is_visible()
+    page.wait_for_function("document.querySelector('#products-1688-detail-dialog').getAnimations().every(a => a.playState === 'finished')")
+    bounds = dialog.bounding_box()
+    assert bounds and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width + 1
+    assert bounds['y'] == 0 and bounds['height'] == 1000
+    footer = dialog.locator('.p1688-edit-footer').bounding_box()
+    assert footer and footer['y'] + footer['height'] <= 1000
+    assert page.locator('#products-1688-edit-save').bounding_box()['x'] + page.locator('#products-1688-edit-save').bounding_box()['width'] <= width
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert page.locator('#products-1688-edit-save').is_enabled()
+    page.locator('#products-1688-edit-price').focus()
+    assert page.locator('#products-1688-edit-price').evaluate('el => el === document.activeElement')
+    page.keyboard.press('Tab')
+    assert dialog.evaluate('el => el.contains(document.activeElement)')
+    destination = Path(os.environ.get("PRODUCTS_1688_SCREENSHOT_DIR", str(tmp_path)))
+    destination.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(destination / f'detail-{width}.png'), animations='disabled')
+    page.keyboard.press('Escape')
+    assert not dialog.is_visible()
+    assert page.evaluate('products1688EditState') is None
+    assert trigger.evaluate('el => el === document.activeElement')
+    assert page.locator('#products-1688-selection').inner_text() == '本页已选择 2 件'
+    assert page.locator('#products-1688-select-all').is_checked()
+    assert len(_patches(page)) == 0
+
+
+def test_detail_pending_save_blocks_escape_and_duplicate_submit(products_page):
+    page = products_page
+    page.locator('#products-1688-body tr').first.get_by_role('button', name='查看详情').click()
+    page.locator('#products-1688-edit-weight_g').fill('420')
+    page.evaluate("""() => {
+      const original = window.fetch;
+      window.fetch = async (input, options={}) => {
+        if (options.method === 'PATCH') await new Promise(resolve => { mock.releaseSave = resolve; });
+        return original(input, options);
+      };
+    }""")
+    page.locator('#products-1688-edit-save').click()
+    page.wait_for_function('products1688EditSaving && typeof mock.releaseSave === "function"')
+    dialog = page.locator('#products-1688-detail-dialog')
+    assert page.locator('#products-1688-edit-save').is_disabled()
+    assert page.locator('#products-1688-edit-close').is_disabled()
+    assert page.locator('#products-1688-edit-price').is_disabled()
+    assert page.locator('[data-1688-sku="0"][data-field="seller_sku"]').is_disabled()
+    page.keyboard.press('Escape')
+    assert dialog.is_visible()
+    page.evaluate('products1688CloseDetail(); products1688SaveEdit()')
+    assert dialog.is_visible()
+    page.evaluate('mock.releaseSave()')
+    page.wait_for_function('!products1688EditSaving')
+    assert not dialog.is_visible()
+    assert len(_patches(page)) == 1
+    assert _patches(page)[0]['body'] == {'weight_g': 420}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="2" skipped="0" tests="5" time="52.993" timestamp="2026-10-12T16:45:30.843181+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_preflight_shows_reports_and_invalidates_after_settings_change" time="6.208"><failure message="playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.">tests/test_mercado_attribute_preflight_browser.py:63: in test_preflight_shows_reports_and_invalidates_after_settings_change
+    page.wait_for_function("document.body.textContent.includes('属性预检：可上架')")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:11559: in wait_for_function
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:1111: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:860: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_report_escapes_untrusted_collected_values" time="0.560" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[1440]" time="1.027" /><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[390]" time="5.655"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for get_by_label(&quot;型号&quot;, exact=True)">tests/test_mercado_attribute_preflight_browser.py:112: in test_user_can_complete_a_missing_attribute_and_recheck
+    page.get_by_label('型号', exact=True).fill('M-123')
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for get_by_label("型号", exact=True)</failure></testcase><testcase classname="tests.test_mercado_attribute_preflight_browser" name="test_user_can_complete_a_missing_attribute_and_recheck[390]" time="39.286"><error message="failed on teardown with &quot;Failed: Isolated functional test exceeded 45 seconds: tests/test_mercado_attribute_preflight_browser.py::test_user_can_complete_a_missing_attribute_and_recheck[390]&quot;">Isolated functional test exceeded 45 seconds: tests/test_mercado_attribute_preflight_browser.py::test_user_can_complete_a_missing_attribute_and_recheck[390]</error></testcase></testsuite></testsuites>

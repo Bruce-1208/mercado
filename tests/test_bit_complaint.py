@@ -114,7 +114,7 @@ def test_ai_complaint_groups_all_orders_and_uses_default_message(monkeypatch):
 
     driver = FakeDriver()
     orders = [str(2000017400000000 + index) for index in range(5)]
-    monkeypatch.setattr(bit_appeal_ai, "get_complaint_orders", lambda *args: orders)
+    monkeypatch.setattr(bit_appeal_ai, "get_complaint_orders", lambda *args, **kwargs: orders if kwargs["package_ids"] else pytest.fail("must request packages"))
     monkeypatch.setattr(
         bit_appeal_ai,
         "open_help_page_with_daily_validation",
@@ -159,7 +159,7 @@ def test_ai_complaint_groups_all_orders_and_uses_default_message(monkeypatch):
     assert all(group["appeal_kind"] == "投诉" for group in sent_groups)
     assert all(group["appeal_kind"] == "投诉" for group in saved_groups)
     assert sent_groups[0]["message"].startswith(
-        "销售单号：" + "、".join(sent_groups[0]["identifiers"])
+        "包裹号：" + "、".join(sent_groups[0]["identifiers"])
     )
     assert bit_appeal_ai.COMPLAINT_DEFAULT_APPEAL_MESSAGE in sent_groups[0]["message"]
     assert "买家想白嫖" in sent_groups[0]["message"]

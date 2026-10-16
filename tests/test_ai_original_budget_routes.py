@@ -132,7 +132,7 @@ def make_worker(monkeypatch, fresh_row, *, lock_error=False, reject_budget_revis
     held = [False]
     resume = "2026-10-05T12:00:00+08:00"
 
-    def wait(on_wait):
+    def wait(on_wait, *, sleep=None):
         on_wait(resume)
         queue_states.append(deepcopy(state))
         events.append("wait")

@@ -58,3 +58,8 @@ runtime_logs/store-link-remote-update.sqlite3*
 .data/mercado-product-data/
 .private/
 .tools/windows-agent/
+
+# Local database backups and recovery data
+.data/backups/
+.data/promotions.sqlite3*
+runtime_logs/store_link_operations.recovery.sqlite3*

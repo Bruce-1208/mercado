@@ -1,0 +1,55 @@
+{
+  "requests": 6500,
+  "failed": 0,
+  "p50_ms": 429.01,
+  "p95_ms": 1338.88,
+  "p99_ms": 1924.91,
+  "accounts": 500,
+  "seconds": 325.22,
+  "per_endpoint": {
+    "list": {
+      "requests": 3500,
+      "failed": 0,
+      "p50_ms": 318.14,
+      "p95_ms": 854.34,
+      "p99_ms": 1094.62
+    },
+    "summary": {
+      "requests": 1000,
+      "failed": 0,
+      "p50_ms": 497.09,
+      "p95_ms": 1439.38,
+      "p99_ms": 1562.33
+    },
+    "page2": {
+      "requests": 1000,
+      "failed": 0,
+      "p50_ms": 499.12,
+      "p95_ms": 930.4,
+      "p99_ms": 1081.33
+    },
+    "search": {
+      "requests": 1000,
+      "failed": 0,
+      "p50_ms": 899.01,
+      "p95_ms": 1958.87,
+      "p99_ms": 2297.38
+    }
+  },
+  "per_role": {
+    "staff": {
+      "requests": 5850,
+      "failed": 0,
+      "p50_ms": 410.01,
+      "p95_ms": 1155.98,
+      "p99_ms": 1793.88
+    },
+    "admin": {
+      "requests": 650,
+      "failed": 0,
+      "p50_ms": 923.95,
+      "p95_ms": 1827.39,
+      "p99_ms": 2035.07
+    }
+  }
+}

@@ -70,7 +70,7 @@ def start(service, user, payload, wrap=lambda fn: fn):
         if not _SLOTS.acquire(blocking=False):
             raise AppealError("申诉资料准备繁忙，请稍后重试", 503)
         value = {"request_id": request_id, "fingerprint": fingerprint, "state": "preparing",
-                 "message": "正在核对店铺授权并读取申诉资料…", "created_at": time.time(), "pid": os.getpid()}
+                 "message": "正在准备当前店铺申诉资料…", "created_at": time.time(), "pid": os.getpid()}
         def prepare():
             try:
                 plan = service.plan(user, params)

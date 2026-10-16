@@ -4,8 +4,8 @@
 
 ## 诊断内容
 
-- 刊登质量：读取 `GET /item/{LOCAL_ITEM_ID}/performance`，保存原始分数与待完成规则。递归识别 buckets、variables 下的规则；图片、GTIN、标题和属性提供中文处理建议，未知规则保留原文。
-- 购物体验：有当前站点 User Product ID 时使用 `GET /marketplace/user_products/{UP_ID}/purchase_experience?locale=...`；传统商品使用 CBT 父商品 `GET /marketplace/items/{CBT_ID}/purchase_experience`，精确选择当前本地 Item 的响应。读取原因、投诉/取消问题、建议及平台保护提示。缺映射或样本不足时保留「待核对」。
+- 刊登质量：读取 `GET /item/{LOCAL_ITEM_ID}/performance`，保存原始分数与待完成规则。递归识别 buckets、variables 下的规则；图片、GTIN、标题和属性提供中文处理建议，未知规则保留原文。平台返回 404 时明确显示尚未生成质量评分；返回商品模型不支持时保留不支持状态，不用其他指标代替评分。
+- 购物体验：有当前站点 User Product ID 时使用 `GET /marketplace/user_products/{UP_ID}/purchase_experience?locale=...`，兼容对象和数组响应，数组精确匹配当前 `up_id`；传统商品使用 CBT 父商品 `GET /marketplace/items/{CBT_ID}/purchase_experience`，精确选择当前本地 Item 的响应。读取原因、投诉/取消问题、建议及平台保护提示。缺映射或样本不足（平台分数为 -1）时保留「待核对」。
 - 库存与状态：读取当前本地商品，将 active 且可售库存 0、paused、under_review、closed 整理为本地规则提示。不会把失败请求当成零库存。
 
 风险优先级：优先处理 → 需要关注 → 改进机会 → 待核对 → 当前正常。平台颜色 red/orange、购物体验 moderated、在售零库存归入优先处理；质量 WARNING、黄色购物体验和暂停等状态归入需要关注；质量 OPPORTUNITY 归入改进机会。平台保护提示必须同时展示，风险级别本身不表示平台会处罚。
@@ -23,6 +23,7 @@
 - 默认数据库 `.data/product-diagnosis.sqlite3`，可用绝对路径 `BIT_PRODUCT_DIAGNOSIS_DB_PATH` 指定固定位置。需加入备份；Web 与 stores worker 使用同一路径。
 - API 客户端通过 `/api/db/product-diagnosis` 访问中心服务，不创建本地诊断数据库。Web/worker 分离部署时全部诊断 API 由 stores worker 处理。
 - 后台串行分批读取，每批最多 200 条链接，复用店铺并发额度与 API 限流。任务和逐商品游标持久保存，stores worker 启动后续跑 queued/running 任务。跨进程锁防止重复执行；读取完成后才移除当前范围已消失的商品结果。
+- 长任务在每个商品读取前检查授权有效期，临近过期时复用现有 Token 持久化刷新流程，避免整个店铺扫描始终使用启动时的旧 Token。
 - 单店铺授权或列表读取失败保留该店铺旧结果，记录失败店铺并继续其他店铺；诊断详情仍需核对检查时间。
 - 没有启动每天自动扫描。点击诊断后立即返回任务编号，页面每 3 秒读取进度，隐藏时暂停轮询。
 - 更新源码后重启 Web 与 stores worker 生效，数据库自动建表。

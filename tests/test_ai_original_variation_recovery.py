@@ -271,3 +271,53 @@ def test_unmapped_numbered_options_retry_full_sku_with_model_identity():
         assert row['attribute_combinations'] == [{'id': 'MODEL', 'name': 'Model', 'value_name': f'No. {i}'}]
         assert {k: v for k, v in row.items() if k != 'attribute_combinations'} == {
             k: v for k, v in before['variations'][i - 1].items() if k != 'attribute_combinations'}
+
+
+def test_shared_export_notice_is_preserved_without_becoming_a_sku_dimension():
+    from erp.ai_original_products import _clean_shared_variation_remarks
+    source = {'variations': [
+        {'id': str(i), 'attribute_combinations': [{'name': '规格1', 'value_name': color},
+            {'name': '规格2', 'value_name': '【国内不能用】'}]}
+        for i, color in enumerate(['Red', 'Blue'])]}
+    result = _clean_shared_variation_remarks(source)
+    assert all(len(v['attribute_combinations']) == 1 for v in result['variations'])
+    assert all(v['source_remarks'][0]['value_name'] == '【国内不能用】' for v in result['variations'])
+    assert len(source['variations'][0]['attribute_combinations']) == 2
+    source['variations'][1]['attribute_combinations'][1]['value_name'] = '国内能用'
+    assert _clean_shared_variation_remarks(source) == source
+
+
+def test_supplier_compound_colors_keep_one_color_and_the_usb_model():
+    from erp.ai_original_products import normalize_marketplace_variations
+    import json
+    original = {'variations': [{'id': 'blue', 'attribute_combinations': [
+        {'name': '规格1', 'value_name': '蓝白色#USB直插款【无充电头】'}]}]}
+    schema = [{'id': 'COLOR', 'value_type': 'string', 'hierarchy': 'CHILD_PK'},
+              {'id': 'MODEL', 'value_type': 'string', 'hierarchy': 'PARENT_PK'}]
+    response = {'options': [{'option_id': 0, 'attributes': [
+        {'id': 'COLOR', 'value_name': 'Blue'}, {'id': 'COLOR', 'value_name': 'White'},
+        {'id': 'MODEL', 'value_name': 'USB direct, no adapter'}]}]}
+    result = normalize_marketplace_variations(original, schema, chat=lambda *a, **k: json.dumps(response))
+    attrs = {a['id']: a['value_name'] for a in result[0]['attribute_combinations']}
+    assert attrs == {'COLOR': 'Blue / White', 'MODEL': 'USB direct, no adapter'}
+
+
+def test_large_option_mapping_is_batched_with_global_ids_and_all_skus_preserved():
+    from copy import deepcopy
+    from erp.ai_original_products import normalize_marketplace_variations
+    import json
+    original = {'variations': [{'id': str(i), 'price': i + 1, 'attribute_combinations': [
+        {'name': '款式', 'value_name': f'Style {i}'}]} for i in range(49)]}
+    before = deepcopy(original); batches = []
+    def chat(messages, **kwargs):
+        data = json.loads(messages[0]['content'].split('\n')[-1])
+        ids = [option['option_id'] for option in data['options']]; batches.append(ids)
+        return json.dumps({'options': [{'option_id': i, 'source_value_en': f'Style {i}',
+            'attributes': [{'id': 'MODEL', 'value_name': f'Style {i}'}]} for i in ids]})
+    result = normalize_marketplace_variations(original,
+        [{'id': 'MODEL', 'value_type': 'string', 'hierarchy': 'PARENT_PK'}], chat=chat)
+    assert [len(batch) for batch in batches] == [24, 24, 1]
+    assert [i for batch in batches for i in batch] == list(range(49))
+    assert [v['id'] for v in result] == [v['id'] for v in original['variations']]
+    assert [v['price'] for v in result] == list(range(1, 50))
+    assert original == before

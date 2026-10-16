@@ -1,0 +1,18 @@
+[
+  {
+    "id": 13091058,
+    "status": "variations_incomplete",
+    "category_id": "CBT24790",
+    "attributes": 4,
+    "error": "自动映射已尝试 3 次：AI 映射后存在无法区分的变体，未保存；请保留这两组原规格的完整区别：{\"first\": [{\"option_id\": 22, \"source\": {\"name\": \"完整SKU规格\", \"value_name\": \"规格1: 无&一郎 / 规格2: 110\"}}], \"second\": [{\"option_id\": 55, \"source\": {\"name\": \"完整SKU规格\", \"value_name\": \"规格1: 义&勇 / 规格2: 110\"}}], \"collapsed_attributes\": {\"CHARACTER\": {\"id\": \"CHARACTER\", \"name\": \"Character\", \"value_name\": \"Giyu Tomioka\"}, \"SIZE\": {\"id\": \"SIZE\", \"name\": \"Size\", \"value_name\": \"Kids 110 (100-110 cm)\"}, \"MODEL\": {\"id\": \"MODEL\", \"name\": \"Model\", \"value_name\": \"Giyu Tomioka / Kids 110 (100-110 cm)\"}}}",
+    "missing": []
+  },
+  {
+    "id": 13088985,
+    "status": "metadata_ready",
+    "category_id": "CBT116631",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  }
+]

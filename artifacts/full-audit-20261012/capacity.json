@@ -1,0 +1,51 @@
+{
+  "recommendation": "当前建议先按 20 名同时活跃用户、约 100 名总用户规划（假设 20% 同时活跃）。40 名混合活跃用户已接近舒适响应边界，80 名混合活跃用户不建议开放。",
+  "limits": "这是 16GiB / 10核机器上模拟订单负载的短时保守估算，不是全项目或生产容量保证；20 人档位的全库搜索仍可约 5 秒。真实鉴权、后台同步、AI、浏览器任务和公网链路未计入。总用户数：20%活跃→100人，10%活跃→200人，50%活跃→40人；活跃比例未经生产验证。建议全库重查询同时控制在 1–2 人，普通员工保持店铺权限隔离。",
+  "suggested_active_users": 20,
+  "planning_active_fraction": 0.2,
+  "planning_total_users": 100,
+  "stages": [
+    {
+      "users": 20,
+      "requests": 254,
+      "duration_seconds": 65.05,
+      "p95_ms": 932.73,
+      "p99_ms": 5252.59,
+      "error_percent": 0.0,
+      "failed": 0,
+      "actual_rps": 3.9,
+      "staff_p95_ms": 742.09,
+      "admin_p95_ms": 5294.1
+    },
+    {
+      "users": 40,
+      "requests": 494,
+      "duration_seconds": 67.0,
+      "p95_ms": 2153.71,
+      "p99_ms": 5623.83,
+      "error_percent": 0.0,
+      "failed": 0,
+      "actual_rps": 7.37,
+      "staff_p95_ms": 1532.93,
+      "admin_p95_ms": 5667.25
+    },
+    {
+      "users": 80,
+      "requests": 882,
+      "duration_seconds": 70.27,
+      "p95_ms": 4996.83,
+      "p99_ms": 5756.42,
+      "error_percent": 3.06,
+      "failed": 27,
+      "actual_rps": 12.55,
+      "staff_p95_ms": 4534.22,
+      "admin_p95_ms": 6708.33
+    }
+  ],
+  "interactive_target": {
+    "overall_p95_ms": 2000,
+    "error_percent": 1
+  },
+  "peak_concurrency_not_claimed": true,
+  "stress_shutdown_note": "The final recommended-stage HTTP server emitted Bad file descriptor in its daemon thread during socket teardown after all 254 samples and pool accounting were saved; request-phase failures were zero."
+}

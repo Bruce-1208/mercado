@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="14" time="0.504" timestamp="2026-10-12T16:37:01.206925+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_account_billing" name="test_prices_calendar_and_expiry" time="0.002" /><testcase classname="tests.test_account_billing" name="test_recharge_renew_adjust_audit_and_idempotency" time="0.008" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[NaN]" time="0.005" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[Infinity]" time="0.004" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[-1]" time="0.003" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[0]" time="0.003" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[1.001]" time="0.003" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[10000001]" time="0.006" /><testcase classname="tests.test_account_billing" name="test_invalid_money_rolls_back[oops]" time="0.004" /><testcase classname="tests.test_account_billing" name="test_personal_custom_capacity_controls_actual_usage" time="0.008" /><testcase classname="tests.test_account_billing" name="test_permissions_and_input_limits" time="0.009" /><testcase classname="tests.test_account_billing" name="test_blueprint_permission_and_page" time="0.018" /><testcase classname="tests.test_account_billing" name="test_real_access_gate" time="0.221" /><testcase classname="tests.test_account_billing" name="test_browser_admin_flow" time="0.015"><failure message="SystemExit: 1">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/werkzeug/serving.py:760: in __init__
+    self.server_bind()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/http/server.py:136: in server_bind
+    socketserver.TCPServer.server_bind(self)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/socketserver.py:473: in server_bind
+    self.socket.bind(self.server_address)
+E   PermissionError: [Errno 1] Operation not permitted
+
+During handling of the above exception, another exception occurred:
+tests/test_account_billing.py:220: in test_browser_admin_flow
+    server = make_server('127.0.0.1', 0, app)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/werkzeug/serving.py:947: in make_server
+    return BaseWSGIServer(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/werkzeug/serving.py:783: in __init__
+    sys.exit(1)
+E   SystemExit: 1</failure></testcase></testsuite></testsuites>

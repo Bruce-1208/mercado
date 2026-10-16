@@ -1671,7 +1671,10 @@ def _merge_detail_record(record, search_row, detail):
         record.get("package_dimensions")
     ) or api_dimensions
 
-    zying_status = _zying_status_name(detail.get("sale_stat"))
+    status_value = next((source.get(key) for source in (detail, search_row)
+                         for key in ("sale_stat", "stat", "status")
+                         if source.get(key) not in (None, "")), None)
+    zying_status = _zying_status_name(status_value) if status_value is not None else _clean_text(record.get("zying_status"))
     record["zying_status"] = zying_status
     record["review_status"] = _clean_text(record.get("review_status")) or zying_status
 
@@ -3008,12 +3011,15 @@ def _zying_api_list_record(row, page_number, collected_at):
     product_id = _format_number(row.get("id"))
     if not product_id:
         raise RuntimeError(f"智赢接口列表第 {page_number} 页存在缺少产品编号的数据")
+    status_value = next((row.get(key) for key in ("sale_stat", "stat", "status")
+                         if row.get(key) not in (None, "")), None)
     currency = _clean_text(row.get("cur"))
     price = row.get("cost") if row.get("cost") is not None else row.get("price")
     title = _clean_text(html.unescape(re.sub(r"<[^>]+>", "", str(row.get("title") or ""))))
     record = {
         "product_id": product_id,
         "_zying_list_row": dict(row),
+        "zying_status": _zying_status_name(status_value) if status_value is not None else "",
         "main_image_url": _clean_text(row.get("thumb")),
         "title": title,
         "page_number": page_number,

@@ -255,6 +255,7 @@ def _ensure_appeal_phrases_table(cursor):
         """
         CREATE TABLE IF NOT EXISTS `appeal_phrases` (
             `id` BIGINT NOT NULL AUTO_INCREMENT,
+            `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
             `source_key` VARCHAR(64) NULL,
             `appeal_type` VARCHAR(32) NOT NULL,
             `content` TEXT NOT NULL,
@@ -264,25 +265,38 @@ def _ensure_appeal_phrases_table(cursor):
             `updated_at` DATETIME NOT NULL,
             `deleted_at` DATETIME NULL,
             PRIMARY KEY (`id`),
-            UNIQUE KEY `uniq_appeal_phrase_source` (`source_key`),
-            UNIQUE KEY `uniq_appeal_phrase_content` (`appeal_type`, `content_hash`),
+            UNIQUE KEY `uniq_appeal_phrase_source` (`organization_key`, `source_key`),
+            UNIQUE KEY `uniq_appeal_phrase_content` (`organization_key`, `appeal_type`, `content_hash`),
             KEY `idx_appeal_phrase_type_active` (`appeal_type`, `is_active`, `deleted_at`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         """
     )
 
+    cursor.execute("SHOW COLUMNS FROM `appeal_phrases` LIKE 'organization_key'")
+    if not cursor.fetchone():
+        cursor.execute("""ALTER TABLE `appeal_phrases`
+            ADD COLUMN `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
+            DROP INDEX `uniq_appeal_phrase_source`, DROP INDEX `uniq_appeal_phrase_content`,
+            ADD UNIQUE KEY `uniq_appeal_phrase_source` (`organization_key`, `source_key`),
+            ADD UNIQUE KEY `uniq_appeal_phrase_content` (`organization_key`, `appeal_type`, `content_hash`)
+        """)
+    _seed_enterprise_appeal_phrases(cursor, "wuhan-zeshun")
+
+
+def _seed_enterprise_appeal_phrases(cursor, organization):
     from bit.bit_appeal_phrases import default_phrase_rows
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cursor.executemany(
         """
         INSERT IGNORE INTO `appeal_phrases` (
-            `source_key`, `appeal_type`, `content`, `content_hash`,
+            `organization_key`, `source_key`, `appeal_type`, `content`, `content_hash`,
             `is_active`, `created_at`, `updated_at`
-        ) VALUES (%s, %s, %s, %s, 1, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, 1, %s, %s)
         """,
         [
             (
+                organization,
                 row["source_key"],
                 row["appeal_type"],
                 row["content"],
@@ -315,14 +329,16 @@ def list_appeal_phrases():
     connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
+            _seed_enterprise_appeal_phrases(cursor, knowledge_organization())
             cursor.execute(
                 """
                 SELECT `id`, `appeal_type`, `content`, `is_active`,
                        `created_at`, `updated_at`
                 FROM `appeal_phrases`
-                WHERE `deleted_at` IS NULL
+                WHERE `organization_key` = %s AND `deleted_at` IS NULL
                 ORDER BY FIELD(`appeal_type`, '延误', '侵权', '禁限售', '取消率', '投诉'), `id`
-                """
+                """,
+                (knowledge_organization(),)
             )
             rows = [_serialize_appeal_phrase_row(row) for row in cursor.fetchall()]
         connection.commit()
@@ -352,15 +368,16 @@ def get_random_appeal_phrase(appeal_type):
     connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
+            _seed_enterprise_appeal_phrases(cursor, knowledge_organization())
             cursor.execute(
                 """
                 SELECT `id`, `appeal_type`, `content`, `is_active`,
                        `created_at`, `updated_at`
                 FROM `appeal_phrases`
-                WHERE `appeal_type` = %s AND `is_active` = 1 AND `deleted_at` IS NULL
+                WHERE `organization_key` = %s AND `appeal_type` = %s AND `is_active` = 1 AND `deleted_at` IS NULL
                 ORDER BY id
                 """,
-                (appeal_type,),
+                (knowledge_organization(), appeal_type),
             )
             rows = cursor.fetchall()
             row = random.choice(rows) if rows else None
@@ -380,14 +397,15 @@ def create_appeal_phrase(record):
     connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
+            _seed_enterprise_appeal_phrases(cursor, knowledge_organization())
             cursor.execute(
                 """
                 SELECT `id`, `deleted_at`
                 FROM `appeal_phrases`
-                WHERE `appeal_type` = %s AND `content_hash` = %s
+                WHERE `organization_key` = %s AND `appeal_type` = %s AND `content_hash` = %s
                 LIMIT 1
                 """,
-                (normalized["appeal_type"], normalized["content_hash"]),
+                (knowledge_organization(), normalized["appeal_type"], normalized["content_hash"]),
             )
             existing = cursor.fetchone()
             if existing and existing.get("deleted_at") is None:
@@ -399,19 +417,20 @@ def create_appeal_phrase(record):
                     UPDATE `appeal_phrases`
                     SET `content` = %s, `is_active` = %s, `updated_at` = %s,
                         `deleted_at` = NULL
-                    WHERE `id` = %s
+                    WHERE `id` = %s AND `organization_key` = %s
                     """,
-                    (normalized["content"], normalized["is_active"], now, phrase_id),
+                    (normalized["content"], normalized["is_active"], now, phrase_id, knowledge_organization()),
                 )
             else:
                 cursor.execute(
                     """
                     INSERT INTO `appeal_phrases` (
-                        `appeal_type`, `content`, `content_hash`, `is_active`,
+                        `organization_key`, `appeal_type`, `content`, `content_hash`, `is_active`,
                         `created_at`, `updated_at`
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
+                        knowledge_organization(),
                         normalized["appeal_type"],
                         normalized["content"],
                         normalized["content_hash"],
@@ -446,9 +465,10 @@ def update_appeal_phrase(phrase_id, record):
     connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
+            _seed_enterprise_appeal_phrases(cursor, knowledge_organization())
             cursor.execute(
-                "SELECT `id` FROM `appeal_phrases` WHERE `id` = %s AND `deleted_at` IS NULL",
-                (phrase_id,),
+                "SELECT `id` FROM `appeal_phrases` WHERE `id` = %s AND `organization_key` = %s AND `deleted_at` IS NULL",
+                (phrase_id, knowledge_organization()),
             )
             if not cursor.fetchone():
                 raise ValueError("话术不存在")
@@ -457,7 +477,7 @@ def update_appeal_phrase(phrase_id, record):
                 UPDATE `appeal_phrases`
                 SET `appeal_type` = %s, `content` = %s, `content_hash` = %s,
                     `is_active` = %s, `updated_at` = %s
-                WHERE `id` = %s
+                WHERE `id` = %s AND `organization_key` = %s
                 """,
                 (
                     normalized["appeal_type"],
@@ -466,6 +486,7 @@ def update_appeal_phrase(phrase_id, record):
                     normalized["is_active"],
                     now,
                     phrase_id,
+                    knowledge_organization(),
                 ),
             )
         connection.commit()
@@ -492,13 +513,14 @@ def delete_appeal_phrase(phrase_id):
     connection = _appeal_connection()
     try:
         with connection.cursor() as cursor:
+            _seed_enterprise_appeal_phrases(cursor, knowledge_organization())
             cursor.execute(
                 """
                 UPDATE `appeal_phrases`
                 SET `deleted_at` = %s, `is_active` = 0, `updated_at` = %s
-                WHERE `id` = %s AND `deleted_at` IS NULL
+                WHERE `id` = %s AND `organization_key` = %s AND `deleted_at` IS NULL
                 """,
-                (now, now, phrase_id),
+                (now, now, phrase_id, knowledge_organization()),
             )
             if cursor.rowcount == 0:
                 raise ValueError("话术不存在")
@@ -3770,6 +3792,8 @@ def _prepare_order_list_schema(connection, cursor):
 
     def initialize():
         _ensure_mercado_synced_orders_table(cursor)
+        from bit.order_payment_release import ensure_schema as ensure_release_schema
+        ensure_release_schema(cursor)
         _ensure_mercado_store_tokens_table(cursor)
         source = store_source_sql(cursor)
         _ensure_mercado_store_site_settings_table(cursor)
@@ -3795,11 +3819,13 @@ def list_orders(
     freight_checked_from="", freight_checked_to="", remark_search="",
     sort_by="ordered_at", sort_dir="desc", allowed_store_ids=None, transfer_warehouse=None,
     include_summary=True, summary_only=False, sync_identifiers_only=False, purchase_platform="",
-    freight_difference_min=None, freight_difference_max=None,
+    freight_difference_min=None, freight_difference_max=None, payment_release="",
 ):
     """分页查询当前已授权店铺的 Token 同步订单。"""
     from bit.order_purchase_platform import validate_platform, platform_filter_sql
     purchase_platform = validate_platform(purchase_platform)
+    from bit.order_payment_release import validate_filter as validate_release_filter
+    payment_release = validate_release_filter(payment_release)
     from bit.order_freight_filters import difference_range, difference_predicate
     freight_difference_min, freight_difference_max = difference_range(freight_difference_min, freight_difference_max)
     difference_active = freight_difference_min is not None or freight_difference_max is not None
@@ -3863,13 +3889,15 @@ def list_orders(
         raise ValueError("单次最多筛选 100 个业务员")
 
     if sync_identifiers_only:
-        if (country or group_name or search or remark_search or origin or freight_variance or purchase_platform or difference_active or
+        if (country or group_name or search or remark_search or origin or freight_variance or purchase_platform or difference_active or payment_release or
                 freight_checked_from or freight_checked_to or transfer_warehouse is not None or
                 summary_only or sort_by != "ordered_at"):
             raise ValueError("智赢订单编号查询仅支持日期、店铺、业务员和状态筛选")
         return _list_zying_sync_identifiers(start_at, end_exclusive,
             normalized_store_ids or None, allowed_store_ids, normalized_salespeople,
             page, page_size, sort_sql_dir, status=status)
+
+    base_filters_applied = False
 
     def build_where(
         include_country=True, include_status=True, include_origin=True,
@@ -3882,7 +3910,7 @@ def list_orders(
         def column(name):
             return f"{prefix}`{name}`"
 
-        if purchase_platform:
+        if purchase_platform and not base_filters_applied:
             clause, values = platform_filter_sql(column("purchase_order"), purchase_platform)
             clauses.append(clause)
             params.extend(values)
@@ -3922,12 +3950,16 @@ def list_orders(
             else:
                 clauses.append(f"{column('group_name')} = %s")
                 params.append(group_name)
-        if difference_active:
+        if payment_release and not base_filters_applied:
+            clauses.append(f"{column('payment_release_state')} = %s")
+            clauses.append(f"{column('data_origin')} <> 'yandex'")
+            params.append(payment_release)
+        if difference_active and not base_filters_applied:
             clause, values = difference_predicate(column("actual_freight_usd"), column("quoted_freight_usd"),
                                                   freight_difference_min, freight_difference_max)
             clauses.append(clause)
             params.extend(values)
-        if freight_variance:
+        if freight_variance and not base_filters_applied:
             quoted = column("quoted_freight_usd")
             actual = column("actual_freight_usd")
             if freight_variance == "dimensions_changed":
@@ -3961,31 +3993,32 @@ def list_orders(
                 clauses.append(f"{column('freight_local')} IS NULL")
             elif freight_variance == "pending_quote":
                 clauses.append(f"{column('quoted_freight_local')} IS NULL")
-        if start_at:
+        if start_at and not base_filters_applied:
             clauses.append(f"{column('ordered_at')} >= %s")
             params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
-        if end_exclusive:
+        if end_exclusive and not base_filters_applied:
             clauses.append(f"{column('ordered_at')} < %s")
             params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
-        if freight_start_at:
+        if freight_start_at and not base_filters_applied:
             clauses.append(f"{column('freight_checked_at')} >= %s")
             params.append(freight_start_at.strftime("%Y-%m-%d %H:%M:%S"))
-        if freight_end_exclusive:
+        if freight_end_exclusive and not base_filters_applied:
             clauses.append(f"{column('freight_checked_at')} < %s")
             params.append(freight_end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
-        if remark_search:
+        if remark_search and not base_filters_applied:
             clauses.append(f"{column('order_remark')} LIKE %s")
             params.append(f"%{str(remark_search).strip()}%")
-        if search:
+        if search and not base_filters_applied:
             pattern = f"%{search}%"
             clauses.append(
                 f"(CAST({column('id')} AS CHAR) LIKE %s OR "
-                f"{column('order_number')} LIKE %s OR {column('purchase_order')} LIKE %s OR "
+                f"{column('purchase_order')} LIKE %s OR "
                 f"{column('purchase_tracking')} LIKE %s OR "
                 f"{column('platform_tracking_number')} LIKE %s OR {column('product_id')} LIKE %s OR "
                 f"{column('title')} LIKE %s OR {column('buyer')} LIKE %s OR "
                 f"{column('purchase_remark')} LIKE %s OR {column('remark')} LIKE %s OR "
-                f"{column('shop_name')} LIKE %s OR {column('order_remark')} LIKE %s)"
+                f"{column('shop_name')} LIKE %s OR {column('order_remark')} LIKE %s OR "
+                f"{column('order_number')} LIKE %s)"
             )
             params.extend([pattern] * 12)
         return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
@@ -4093,6 +4126,10 @@ def list_orders(
                                'null'
                            ) AS `order_number`,
                            synced.`token_id` AS `store_id`,
+                           COALESCE(payment_release.`release_state`, 'unknown') AS `payment_release_state`,
+                           CAST(payment_release.`release_date` AS CHAR) AS `payment_release_date`,
+                           DATE_ADD(payment_release.`checked_at`, INTERVAL 8 HOUR) AS `payment_release_checked_at`,
+                           COALESCE(payment_release.`sync_error`, '') AS `payment_release_error`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`,
                            site_settings.`discount_rate`, site_settings.`group_name`,
@@ -4192,6 +4229,9 @@ def list_orders(
                     FROM `tmp_mercado_order_page` AS selected_page
                     STRAIGHT_JOIN `mercado_synced_orders` AS synced ON synced.`order_id` = selected_page.`id`
                     INNER JOIN {unified_stores} AS stores ON stores.`id` = synced.`token_id`
+                    LEFT JOIN `mercado_order_payment_releases` AS payment_release
+                      ON payment_release.`token_id` = synced.`token_id`
+                     AND payment_release.`order_id` = synced.`order_id`
                     LEFT JOIN `mercado_shipment_costs` AS actual_costs
                       ON actual_costs.`shipping_id` = synced.`shipping_id`
                      AND actual_costs.`token_id` = synced.`token_id`
@@ -4219,8 +4259,9 @@ def list_orders(
             # summary and only for the 200 rows returned by the current page.
             search_columns = ""
             if search:
-                search_columns = """
-                    NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null') AS `order_number`,
+                from bit.order_search_projection import pack_sql
+                search_columns = f"""
+                    {pack_sql(cursor)} AS `order_number`,
                     synced.`purchase_order`, synced.`purchase_tracking`, synced.`platform_tracking_number`,
                     synced.`product_id`, synced.`title`, synced.`buyer_name` AS `buyer`,
                     synced.`purchase_remark`, synced.`status_detail` AS `remark`,
@@ -4282,7 +4323,21 @@ def list_orders(
             # financial aggregation. Detail pricing still uses the real joins.
             needs_filter_finance = include_summary or sort_by not in {"ordered_at", "cost"} or bool(freight_variance) or difference_active
             filter_freight_local = freight_local_sql if needs_filter_finance else "NULL"
-            filter_freight_currency = freight_currency_sql if needs_filter_finance else "NULL"
+            # Internal aggregate currency may be populated even without freight:
+            # NULL freight multiplied by any rate stays NULL. Avoid re-evaluating
+            # shipped-status JSON just to choose a currency for the same row.
+            filter_freight_currency = (
+                f"UPPER(COALESCE(NULLIF(synced.`freight_currency_id`, ''), {currency_sql}))"
+                if needs_filter_finance else "NULL"
+            )
+            needs_freight_comparison = difference_active or freight_variance in {
+                "different", "different_any", "actual_higher", "actual_lower"
+            }
+            if not needs_freight_comparison:
+                # Summary and financial sorting use local freight plus currency,
+                # not these comparison-only columns. Page detail is unchanged.
+                filter_quote_usd_sql = "NULL"
+                filter_actual_usd_sql = "NULL"
             filter_cost_join = """
                     LEFT JOIN `mercado_shipment_costs` AS actual_costs
                       ON actual_costs.`shipping_id` = synced.`shipping_id`
@@ -4290,15 +4345,19 @@ def list_orders(
                      AND actual_costs.`shipment_status` IN ('shipped','delivered','not_delivered','returning','returned')
             """ if needs_filter_finance else ""
             filter_store_join = "STRAIGHT_JOIN" if not source_date_clauses else "INNER JOIN"
+            release_filter_column = "COALESCE(payment_release.release_state, 'unknown') AS payment_release_state," if payment_release else ""
+            release_filter_join = """LEFT JOIN mercado_order_payment_releases AS payment_release
+                ON payment_release.token_id=synced.token_id AND payment_release.order_id=synced.order_id""" if payment_release else ""
             filter_source_sql = f"""
                 (
                     SELECT synced.`order_id` AS `id`,
                            {search_columns}
+                           {release_filter_column}
                            synced.`token_id` AS `store_id`,
                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
                            site_settings.`salesperson`, site_settings.`group_name`,
                            synced.`shop_name`, CASE WHEN synced.`site_id` = 'YANDEX' THEN 'yandex' ELSE 'token' END AS `data_origin`,
-                           {display_status_sql}
+                           {display_status_sql if not summary_only or status else 'NULL'}
                                AS `status`,
                            {remark_column}
                            synced.`country`,
@@ -4311,8 +4370,6 @@ def list_orders(
                            CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE COALESCE(synced.`sale_fee`, 0) END AS `sale_fee`,
                            ({filter_freight_local}) AS `freight_local`,
                            ({filter_freight_currency}) AS `freight_currency_id`,
-                           CASE WHEN ({filter_freight_local}) IS NULL
-                                THEN 1 ELSE 0 END AS `freight_missing`,
                            ({quoted_local_sql}) AS `quoted_freight_local`,
                            ({quoted_currency_sql}) AS `quoted_freight_currency_id`,
                            ({filter_quote_usd_sql}) AS `quoted_freight_usd`,
@@ -4322,6 +4379,7 @@ def list_orders(
                     {filter_store_join} {unified_stores} AS stores
                       ON stores.`id` = synced.`token_id`
                     {filter_cost_join}
+                    {release_filter_join}
                     LEFT JOIN `mercado_store_site_settings` AS site_settings
                       ON site_settings.`token_id` = synced.`token_id`
                      AND site_settings.`site_id` = synced.`site_id`
@@ -4329,20 +4387,34 @@ def list_orders(
                 ) AS `order_filter_source`
             """
             base_where_sql, base_params = build_where(
-                include_country=False,
-                include_status=False,
-                include_origin=False,
-                include_salesperson=False,
-                include_group=False,
-                include_store=False,
+                include_country=summary_only,
+                include_status=summary_only,
+                include_origin=summary_only,
+                include_salesperson=summary_only,
+                include_group=summary_only,
+                include_store=summary_only,
             )
             order_filter_table = "`tmp_mercado_order_filter_source`"
             cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {order_filter_table}")
+            # Text search, date, remark and freight predicates are invariant
+            # across all facets. Evaluate once and retain only the fields needed
+            # by facets, financial aggregation and page ordering. In particular,
+            # do not materialize pack JSON / long searchable text for every match.
+            filter_columns = (
+                "id", "store_id", "ordered_at", "salesperson", "group_name",
+                "shop_name", "data_origin", "status", "country",
+                "currency_id", "order_date", "platform_currency_id",
+                "total_amount", "paid_amount", "sale_fee", "freight_local",
+                "freight_currency_id", "quoted_freight_local",
+                "quoted_freight_currency_id", "purchase_cost",
+            )
+            projection = ", ".join(f"`{name}`" for name in filter_columns)
             cursor.execute(
                 f"CREATE TEMPORARY TABLE {order_filter_table} AS "
-                f"SELECT * FROM {filter_source_sql}{base_where_sql}",
+                f"SELECT {projection} FROM {filter_source_sql}{base_where_sql}",
                 [*source_date_params, *base_params],
             )
+            base_filters_applied = True
             # Counts/facets scan this request-local table once each. Building
             # three indexes over the entire history costs more than the one
             # bounded page sort, and competes with every concurrent reader.
@@ -4452,7 +4524,7 @@ def list_orders(
                     f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' OR cny_daily_rate.`rate` IS NOT NULL "
                     f"OR cny_current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
                     f"AS `cny_exchange_rate_missing_count`, "
-                    f"COALESCE(SUM(scoped.`freight_missing`),0) AS `freight_missing_count` "
+                    f"COALESCE(SUM(scoped.`freight_local` IS NULL),0) AS `freight_missing_count` "
                     f"FROM {order_filter_table} AS scoped "
                     f"LEFT JOIN {rate_key_table} AS rate_keys "
                     f"ON rate_keys.`currency_id` = scoped.`currency_id` "
@@ -5063,7 +5135,7 @@ def get_mercado_order_access_contexts(order_ids):
         connection.close()
 
 
-def get_mercado_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False, status="", allowed_token_ids=None):
+def get_mercado_purchase_tracking_orders(order_ids, *, all_orders=False, date_start=None, date_end=None, missing_tracking=False, status="", allowed_token_ids=None, salesperson="", group_name=""):
     """一次读取所选订单的采购单号，供本机浏览器同步物流号。"""
     normalized_ids = []
     for value in order_ids or ():
@@ -5098,12 +5170,28 @@ def get_mercado_purchase_tracking_orders(order_ids, *, all_orders=False, date_st
             return []
         extra_clauses.append("synced.`token_id` IN (" + ",".join(["%s"] * len(allowed)) + ")")
         date_params.extend(allowed)
+    for field, value, empty_value in (("salesperson", salesperson, "__unassigned__"), ("group_name", group_name, "__ungrouped__")):
+        value = str(value or "").strip()
+        if len(value) > 100:
+            raise ValueError("业务员或店铺组名称不能超过 100 个字符")
+        if value == empty_value:
+            extra_clauses.append(f"TRIM(COALESCE(site_settings.`{field}`, '')) = ''")
+        elif value:
+            extra_clauses.append(f"site_settings.`{field}` = %s")
+            date_params.append(value)
+    scope_join = """
+                LEFT JOIN `mercado_store_site_settings` AS site_settings
+                  ON site_settings.`token_id` = synced.`token_id`
+                 AND site_settings.`site_id` = synced.`site_id`
+    """ if salesperson or group_name else ""
     extra_sql = "".join(" AND " + clause for clause in extra_clauses)
     connection = pymysql.connect(**config)
     try:
         with connection.cursor() as cursor:
             _ensure_mercado_synced_orders_table(cursor)
             _ensure_mercado_store_tokens_table(cursor)
+            if salesperson or group_name:
+                _ensure_mercado_store_site_settings_table(cursor)
             connection.commit()
             placeholders = ",".join(["%s"] * len(normalized_ids))
             cursor.execute(
@@ -5112,6 +5200,7 @@ def get_mercado_purchase_tracking_orders(order_ids, *, all_orders=False, date_st
                 FROM `mercado_synced_orders` AS synced
                 INNER JOIN `mercado_store_tokens` AS stores
                   ON stores.`id` = synced.`token_id`
+                {scope_join}
                 WHERE {"COALESCE(synced.`purchase_order`, '') <> ''" if all_orders else f"synced.`order_id` IN ({placeholders})"}
                 {extra_sql}
                 ORDER BY synced.`order_id`
@@ -8940,7 +9029,7 @@ def get_ai_appeal_records(limit=100, appeal_copy_mode=""):
                     or "未记录"
                 )
                 row["record_scope"] = str(raw_record.get("record_scope") or "")
-                for scope_key in ("token_id", "organization_key", "seller_id", "task_id", "round_number", "user_id"):
+                for scope_key in ("token_id", "organization_key", "seller_id", "task_id", "round_number", "user_id", "binding_mode"):
                     if scope_key in raw_record:
                         row[scope_key] = raw_record[scope_key]
             return {"total": len(rows), "rows": rows}

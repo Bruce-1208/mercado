@@ -19,7 +19,7 @@ def make_job(tmp_path, rows):
 
 def test_slow_product_does_not_block_later_items_or_progress_and_pool_is_bounded(tmp_path,monkeypatch):
     monkeypatch.setenv('BIT_PROMOTION_WORKERS','4')
-    rows=[dict(id=f'MLM{i}',status='started',offer_id=f'offer{i}') for i in range(12)]
+    rows=[dict(id=f'MLM{i}',status='started',offer_id=f'offer{i}') for i in range(70)]
     store,job,promotion,intents=make_job(tmp_path,rows)
     slow_started,release,later_done=threading.Event(),threading.Event(),threading.Event()
     guard=threading.Lock();calls=[];active=0;peak=0
@@ -33,7 +33,7 @@ def test_slow_product_does_not_block_later_items_or_progress_and_pool_is_bounded
                 assert release.wait(5)
             else:
                 assert slow_started.wait(3)
-                if item=='MLM11':later_done.set()
+                if item=='MLM69':later_done.set()
             return {}
         finally:
             with guard:active-=1
@@ -46,13 +46,13 @@ def test_slow_product_does_not_block_later_items_or_progress_and_pool_is_bounded
         assert slow_started.wait(3)
         assert later_done.wait(3), 'Later products must finish while the first request remains blocked'
         snapshot=store.latest_job(promotion['id'])
-        assert snapshot['status']=='running' and snapshot['success_count']>=8
+        assert snapshot['status']=='running' and snapshot['success_count']>=64
         assert 2<=peak<=4
     finally:
         release.set();thread.join(5)
     assert not thread.is_alive() and not errors
     assert sorted(calls)==sorted(row['id'] for row in rows)
-    assert store.latest_job(promotion['id'])['success_count']==12
+    assert store.latest_job(promotion['id'])['success_count']==70
     assert store.latest_job(promotion['id'])['unknown_count']==0
 
 
@@ -100,7 +100,17 @@ def test_real_clients_get_independent_worker_sessions_and_close_them(tmp_path,mo
 
 
 def test_worker_setting_is_capped_and_invalid_values_are_safe(monkeypatch):
-    for value,expected in [('0',1),('99',8),('invalid',4),('2',2)]:
+    for value,expected in [('0',1),('99',16),('invalid',8),('2',2)]:
         monkeypatch.setenv('BIT_PROMOTION_WORKERS',value)
         assert service._promotion_worker_count(100)==expected
         assert service._promotion_worker_count(1)==1
+
+
+def test_default_pool_uses_eight_simultaneous_workers(tmp_path,monkeypatch):
+    monkeypatch.delenv('BIT_PROMOTION_WORKERS',raising=False)
+    assert service._promotion_worker_count(100)==8
+    store,job,promotion,intents=make_job(tmp_path,[dict(id=f'MLM{i}',status='started') for i in range(8)])
+    barrier=threading.Barrier(8)
+    def withdraw(*args,**kw):barrier.wait(timeout=3);return {}
+    service._execute_job(store,job,SimpleNamespace(withdraw_item=withdraw),promotion,intents,'withdraw')
+    assert store.latest_job(promotion['id'])['success_count']==8

@@ -1,0 +1,19 @@
+[
+  {
+    "case": "directory",
+    "seconds": 0.008,
+    "options": 18
+  },
+  {
+    "case": "first_page",
+    "seconds": 0.57,
+    "rows": 100,
+    "total": 1817644
+  },
+  {
+    "case": "store_staff_filter",
+    "seconds": 1.915,
+    "rows": 100,
+    "total": 123685
+  }
+]

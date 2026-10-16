@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="21" time="66.862" timestamp="2026-10-12T16:44:38.784686+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_console_ui_browser" name="test_api_reputation_shop_name_and_database_refresh[success]" time="1.970" /><testcase classname="tests.test_console_ui_browser" name="test_api_reputation_shop_name_and_database_refresh[partial]" time="1.163" /><testcase classname="tests.test_console_ui_browser" name="test_reputation_columns_toggle_numeric_sort_and_keep_missing_values_last" time="1.946" /><testcase classname="tests.test_console_ui_browser" name="test_reputation_defaults_to_site_seven_day_orders_and_toggles_sort" time="0.964"><failure message="AssertionError: assert 16 == 17&#10; +  where 16 = count()&#10; +    where count = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='.reputation-data-table thead th'&gt;.count&#10; +      where &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='.reputation-data-table thead th'&gt; = locator('.reputation-data-table thead th')&#10; +        where locator = &lt;Page url='http://console.test/'&gt;.locator">tests/test_console_ui_browser.py:138: in test_reputation_defaults_to_site_seven_day_orders_and_toggles_sort
+    assert page.locator('.reputation-data-table thead th').count() == 17
+E   AssertionError: assert 16 == 17
+E    +  where 16 = count()
+E    +    where count = &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='.reputation-data-table thead th'&gt;.count
+E    +      where &lt;Locator frame=&lt;Frame name= url='http://console.test/'&gt; selector='.reputation-data-table thead th'&gt; = locator('.reputation-data-table thead th')
+E    +        where locator = &lt;Page url='http://console.test/'&gt;.locator</failure></testcase><testcase classname="tests.test_console_ui_browser" name="test_reputation_warning_hover_preserves_latest_message_full_text" time="1.032" /><testcase classname="tests.test_console_ui_browser" name="test_long_reputation_warning_hover_stays_in_view_and_can_scroll_to_end" time="1.582" /><testcase classname="tests.test_console_ui_browser" name="test_algorithm_strategy_preserves_selected_task_types" time="1.190" /><testcase classname="tests.test_console_ui_browser" name="test_picker_search_preserves_selection_and_handles_dynamic_options" time="1.090" /><testcase classname="tests.test_console_ui_browser" name="test_picker_keyboard_and_bulk_selection" time="0.966" /><testcase classname="tests.test_console_ui_browser" name="test_filter_layout_and_popup_fit_viewport[1440]" time="0.774" /><testcase classname="tests.test_console_ui_browser" name="test_filter_layout_and_popup_fit_viewport[1024]" time="0.729" /><testcase classname="tests.test_console_ui_browser" name="test_filter_layout_and_popup_fit_viewport[390]" time="0.808" /><testcase classname="tests.test_console_ui_browser" name="test_order_density_switch_and_compact_bulk_toolbar" time="0.748" /><testcase classname="tests.test_console_ui_browser" name="test_background_export_queues_polls_and_downloads_without_navigation" time="3.208" /><testcase classname="tests.test_console_ui_browser" name="test_background_export_stops_after_permission_revoked" time="3.717" /><testcase classname="tests.test_console_ui_browser" name="test_clearance_alerts_opens_as_lazy_workspace_tab" time="0.973" /><testcase classname="tests.test_console_ui_browser" name="test_size_charts_opens_as_lazy_workspace_tab_and_keeps_editor_state" time="0.939" /><testcase classname="tests.test_console_ui_browser" name="test_standard_size_chart_library_download_and_measured_rows" time="0.859"><failure message="playwright._impl._errors.Error: Locator.click: Error: strict mode violation: locator(&quot;.sc-reference-summary&quot;) resolved to 2 elements:&#10;    1) &lt;summary class=&quot;sc-reference-summary&quot;&gt;查看或维护单个分类模板&lt;/summary&gt; aka get_by_text(&quot;查看或维护单个分类模板&quot;)&#10;    2) &lt;summary class=&quot;sc-reference-summary&quot;&gt;自定义模板辅助：品类与尺码填写参考&lt;/summary&gt; aka get_by_text(&quot;自定义模板辅助：品类与尺码填写参考&quot;)&#10;&#10;Call log:&#10;  - waiting for locator(&quot;#size-charts-frame&quot;).content_frame.locator(&quot;.sc-reference-summary&quot;)">tests/test_console_ui_browser.py:562: in test_standard_size_chart_library_download_and_measured_rows
+    content.locator(".sc-reference-summary").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.Error: Locator.click: Error: strict mode violation: locator(".sc-reference-summary") resolved to 2 elements:
+E       1) &lt;summary class="sc-reference-summary"&gt;查看或维护单个分类模板&lt;/summary&gt; aka get_by_text("查看或维护单个分类模板")
+E       2) &lt;summary class="sc-reference-summary"&gt;自定义模板辅助：品类与尺码填写参考&lt;/summary&gt; aka get_by_text("自定义模板辅助：品类与尺码填写参考")
+E   
+E   Call log:
+E     - waiting for locator("#size-charts-frame").content_frame.locator(".sc-reference-summary")</failure></testcase><testcase classname="tests.test_console_ui_browser" name="test_standard_shoe_sizes_use_official_numeric_units_without_conversion" time="0.785"><failure message="playwright._impl._errors.Error: Locator.click: Error: strict mode violation: locator(&quot;.sc-reference-summary&quot;) resolved to 2 elements:&#10;    1) &lt;summary class=&quot;sc-reference-summary&quot;&gt;查看或维护单个分类模板&lt;/summary&gt; aka get_by_text(&quot;查看或维护单个分类模板&quot;)&#10;    2) &lt;summary class=&quot;sc-reference-summary&quot;&gt;自定义模板辅助：品类与尺码填写参考&lt;/summary&gt; aka get_by_text(&quot;自定义模板辅助：品类与尺码填写参考&quot;)&#10;&#10;Call log:&#10;  - waiting for locator(&quot;#size-charts-frame&quot;).content_frame.locator(&quot;.sc-reference-summary&quot;)">tests/test_console_ui_browser.py:630: in test_standard_shoe_sizes_use_official_numeric_units_without_conversion
+    content.locator(".sc-reference-summary").click()
+bit/mercado_click_delay.py:134: in delayed
+    result = original(target, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15524: in click
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:160: in click
+    return await self._frame.click(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:549: in click
+    await self._channel.send("click", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.Error: Locator.click: Error: strict mode violation: locator(".sc-reference-summary") resolved to 2 elements:
+E       1) &lt;summary class="sc-reference-summary"&gt;查看或维护单个分类模板&lt;/summary&gt; aka get_by_text("查看或维护单个分类模板")
+E       2) &lt;summary class="sc-reference-summary"&gt;自定义模板辅助：品类与尺码填写参考&lt;/summary&gt; aka get_by_text("自定义模板辅助：品类与尺码填写参考")
+E   
+E   Call log:
+E     - waiting for locator("#size-charts-frame").content_frame.locator(".sc-reference-summary")</failure></testcase><testcase classname="tests.test_console_ui_browser" name="test_filled_builtin_download_save_and_upload_to_other_store" time="5.724"><failure message="playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#size-charts-frame&quot;).content_frame.locator(&quot;#sc-builtin-select&quot;)&#10;    - locator resolved to &lt;select id=&quot;sc-builtin-select&quot; class=&quot;sc-builtin-select&quot;&gt;…&lt;/select&gt;&#10;  - attempting select option action&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible and enabled&#10;      - element is not visible&#10;    - retrying select option action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible and enabled&#10;       - element is not visible&#10;     - retrying select option action&#10;       - waiting 500ms">tests/test_console_ui_browser.py:686: in test_filled_builtin_download_save_and_upload_to_other_store
+    content.locator("#sc-builtin-select").select_option("builtin_v1_women_dresses")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:17512: in select_option
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:579: in select_option
+    return await self._frame.select_option(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:763: in select_option
+    return await self._channel.send("selectOption", self._timeout, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#size-charts-frame").content_frame.locator("#sc-builtin-select")
+E       - locator resolved to &lt;select id="sc-builtin-select" class="sc-builtin-select"&gt;…&lt;/select&gt;
+E     - attempting select option action
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E       - waiting 20ms
+E       2 × waiting for element to be visible and enabled
+E         - element is not visible
+E       - retrying select option action
+E         - waiting 100ms
+E       10 × waiting for element to be visible and enabled
+E          - element is not visible
+E        - retrying select option action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_console_ui_browser" name="test_reputation_store_notices_appear_in_matching_warning_cell" time="35.235"><failure message="AssertionError: assert '原有告警' == '原有告警\n\n店铺提醒...t&gt;文本&lt;/script&gt;'&#10;  &#10;  - 原有告警&#10;  ?     -&#10;  + 原有告警&#10;  - &#10;  - 店铺提醒&#10;  - 完整内容 &lt;script&gt;文本&lt;/script&gt;">tests/test_console_ui_browser.py:731: in test_reputation_store_notices_appear_in_matching_warning_cell
+    assert cell.get_attribute('data-warning-detail') == expected
+E   AssertionError: assert '原有告警' == '原有告警\n\n店铺提醒...t&gt;文本&lt;/script&gt;'
+E     
+E     - 原有告警
+E     ?     -
+E     + 原有告警
+E     - 
+E     - 店铺提醒
+E     - 完整内容 &lt;script&gt;文本&lt;/script&gt;</failure></testcase></testsuite></testsuites>

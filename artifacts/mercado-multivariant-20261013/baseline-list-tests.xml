@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="3" time="0.151" timestamp="2026-10-13T16:40:12.037881+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_product_list_applies_status_range_and_date_filters_in_database" time="0.055"><failure message="StopIteration">def test_product_list_applies_status_range_and_date_filters_in_database():
+        connection = _FakeConnection()
+        store.list_product_items(
+            search="cosplay",
+            source_type="collected",
+            review_status="approved",
+            publish_status="failed",
+            mercado_category="Costumes",
+            weight_min="100",
+            weight_max="500",
+            price_min="200",
+            price_max="900",
+            net_proceeds_min="-5",
+            net_proceeds_max="40",
+            date_from="2026-08-01",
+            date_to="2026-08-25",
+            connection_factory=lambda: connection,
+        )
+    
+&gt;       count_sql, params = next(
+            (query, params)
+            for query, params in connection.fake_cursor.queries
+            if query.startswith(f"SELECT /*+ MAX_EXECUTION_TIME(8000) */ COUNT(*) AS total FROM `{store.PRODUCT_TABLE}`")
+        )
+E       StopIteration
+
+tests/test_erp_mercadolibre_collection_store.py:1258: StopIteration</failure></testcase><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_products-list_product_items]" time="0.001"><failure message="AssertionError: assert '(SELECT `id` FROM `erp_mercadolibre_products` WHERE' in 'SELECT /*+ MAX_EXECUTION_TIME(8000) */ `erp_mercadolibre_products`.*, category.`name` AS `management_category_name`, ...ON category.`id` = `erp_mercadolibre_products`.`management_category_id` ORDER BY `erp_mercadolibre_products`.`id` DESC'">table = 'erp_mercadolibre_products'
+listing = &lt;function list_product_items at 0x1033827a0&gt;
+
+    @pytest.mark.parametrize('table,listing', [
+        (store.PRODUCT_TABLE, store.list_product_items),
+        (store.COLLECTION_TABLE, store.list_collection_items),
+    ])
+    def test_list_materializes_only_ids_before_loading_full_page(table, listing):
+        connection = _FakeConnection()
+        with patch.object(store, 'ensure_collection_tables'):
+            listing(search='sample', limit=100, offset=200,
+                    connection_factory=lambda: connection)
+        sql, params = connection.fake_cursor.queries[-1]
+&gt;       assert f'(SELECT `id` FROM `{table}` WHERE' in sql
+E       AssertionError: assert '(SELECT `id` FROM `erp_mercadolibre_products` WHERE' in 'SELECT /*+ MAX_EXECUTION_TIME(8000) */ `erp_mercadolibre_products`.*, category.`name` AS `management_category_name`, ...ON category.`id` = `erp_mercadolibre_products`.`management_category_id` ORDER BY `erp_mercadolibre_products`.`id` DESC'
+
+tests/test_erp_mercadolibre_collection_store.py:1687: AssertionError</failure></testcase><testcase classname="tests.test_erp_mercadolibre_collection_store" name="test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_collection_items-list_collection_items]" time="0.001" /></testsuite></testsuites>

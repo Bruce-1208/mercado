@@ -1,0 +1,188 @@
+[
+  {
+    "params": {},
+    "before_ms": 2126.2,
+    "after_ms": 1479.0,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "page": 2
+    },
+    "before_ms": 1939.2,
+    "after_ms": 1437.4,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "include_summary": false
+    },
+    "before_ms": 599.6,
+    "after_ms": 588.7,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "cost"
+    },
+    "before_ms": 1939.4,
+    "after_ms": 1427.4,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "sort_by": "profit",
+      "sort_dir": "asc"
+    },
+    "before_ms": 1992.5,
+    "after_ms": 1517.6,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "allowed_store_ids": [
+        1,
+        2
+      ],
+      "store_ids": [
+        2
+      ]
+    },
+    "before_ms": 128.9,
+    "after_ms": 99.9,
+    "total": 3960,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "allowed_store_ids": []
+    },
+    "before_ms": 4.7,
+    "after_ms": 4.1,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "transfer_warehouse": "yiwu"
+    },
+    "before_ms": 87.0,
+    "after_ms": 92.1,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "test00000"
+    },
+    "before_ms": 2046.9,
+    "after_ms": 2006.0,
+    "total": 1000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "Synthetic",
+      "include_summary": false
+    },
+    "before_ms": 4867.5,
+    "after_ms": 2902.9,
+    "total": 80000,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "pack123"
+    },
+    "before_ms": 2015.5,
+    "after_ms": 1994.3,
+    "total": 222,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "search": "不存在"
+    },
+    "before_ms": 1991.4,
+    "after_ms": 1977.7,
+    "total": 0,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "store_ids": [
+        2
+      ]
+    },
+    "before_ms": 1496.0,
+    "after_ms": 107.7,
+    "total": 3960,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "summary_only": true,
+      "country": "墨西哥",
+      "salesperson": "Person 1"
+    },
+    "before_ms": 1589.5,
+    "after_ms": 522.3,
+    "total": 27722,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "origin": "yandex"
+    },
+    "before_ms": 1606.3,
+    "after_ms": 1192.1,
+    "total": 793,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_variance": "actual_higher"
+    },
+    "before_ms": 1907.2,
+    "after_ms": 1860.3,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "freight_difference_min": "-2",
+      "freight_difference_max": "2"
+    },
+    "before_ms": 1888.2,
+    "after_ms": 1620.4,
+    "total": 5607,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "country": "墨西哥",
+      "salesperson": "Person 1"
+    },
+    "before_ms": 1948.5,
+    "after_ms": 1279.6,
+    "total": 27722,
+    "different_fields": []
+  },
+  {
+    "params": {
+      "start_date": "2026-01-10",
+      "end_date": "2026-01-12",
+      "summary_only": true
+    },
+    "before_ms": 113.4,
+    "after_ms": 76.9,
+    "total": 4320,
+    "different_fields": []
+  }
+]

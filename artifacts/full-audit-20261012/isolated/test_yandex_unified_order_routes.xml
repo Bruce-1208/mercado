@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="5" time="0.158" timestamp="2026-10-12T16:40:49.687281+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_yandex_unified_order_routes" name="test_list_negative_store_is_scoped_without_leaking_other_stores" time="0.014"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_yandex_unified_order_routes.py:17: in test_list_negative_store_is_scoped_without_leaking_other_stores
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_yandex_unified_order_routes" name="test_unauthorized_yandex_sync_does_not_start" time="0.003"><failure message="assert 503 == 403&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_yandex_unified_order_routes.py:25: in test_unauthorized_yandex_sync_does_not_start
+    assert response.status_code == 403
+E   assert 503 == 403
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_yandex_unified_order_routes" name="test_yandex_sync_returns_durable_progress" time="0.002"><failure message="assert 503 == 202&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_yandex_unified_order_routes.py:32: in test_yandex_sync_returns_durable_progress
+    assert response.status_code == 202
+E   assert 503 == 202
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_yandex_unified_order_routes" name="test_yandex_cannot_be_sent_to_mercado_label_api" time="0.002"><failure message="assert 503 == 400&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_yandex_unified_order_routes.py:39: in test_yandex_cannot_be_sent_to_mercado_label_api
+    assert response.status_code == 400
+E   assert 503 == 400
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_yandex_unified_order_routes" name="test_other_organizations_cannot_see_yandex_logs" time="0.002"><failure message="assert 503 == 403&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_yandex_unified_order_routes.py:46: in test_other_organizations_cannot_see_yandex_logs
+    assert response.status_code == 403
+E   assert 503 == 403
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase></testsuite></testsuites>

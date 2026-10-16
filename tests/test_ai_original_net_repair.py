@@ -92,6 +92,7 @@ def test_repair_defaults_to_preview_and_apply_checks_persisted_value():
     assert applied.committed and not applied.rolled_back
     assert "FOR UPDATE" in applied.queries[0][0]
     assert "net_proceeds_usd IS NULL" in applied.queries[1][0]
+    assert "review_status='unreviewed'" in applied.queries[1][0]
 
 
 def test_repair_rolls_back_if_net_readback_differs():

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime, timedelta, timezone
+import base64
+import binascii
+import io
 import hashlib
 import json
 from typing import Any
@@ -564,8 +567,33 @@ def execute_store_communication(
         return client.get_claim_bundle(data.get("claim_id"), section=data.get("section") or "all")
     if normalized_action == "claims-send":
         message = str(data.get("message") or "").strip()
+        images = data.get("images") or []
+        if not isinstance(images, list) or len(images) > 5:
+            raise ValueError("每次最多发送 5 张图片")
+        validated_images = []
+        from PIL import Image
+        for image in images:
+            if not isinstance(image, dict):
+                raise ValueError("图片格式错误")
+            encoded = image.get("content_base64")
+            if not isinstance(encoded, str) or len(encoded) > 7 * 1024 * 1024:
+                raise ValueError("每张图片不能超过 5 MB")
+            try:
+                content = base64.b64decode(encoded, validate=True)
+            except (ValueError, binascii.Error):
+                raise ValueError("图片编码无效") from None
+            if not content or len(content) > 5 * 1024 * 1024:
+                raise ValueError("图片不能为空且不能超过 5 MB")
+            try:
+                with Image.open(io.BytesIO(content)) as picture:
+                    fmt = picture.format
+                    picture.verify()
+                mime, suffix = {"JPEG": ("image/jpeg", "jpg"), "PNG": ("image/png", "png")}[fmt]
+            except Exception:
+                raise ValueError("仅支持有效的 JPG、PNG 图片") from None
+            validated_images.append((f"claim-image-{len(validated_images) + 1}.{suffix}", content, mime))
         translation = None
-        if data.get("auto_translate") is True:
+        if data.get("auto_translate") is True and (message or not validated_images):
             if not message:
                 raise ValueError("请输入中文索赔回复内容")
             site_id, language = _claim_language(client, token, token_id, data.get("claim_id"), get_order_contexts)
@@ -575,11 +603,21 @@ def execute_store_communication(
             message = f"English:\n{english}\n\n{label}:\n{local}"
             translation = {"source_text": data.get("message"), "english": english,
                            "local": local, "target_language": language, "site_id": site_id}
+        if validated_images:
+            role = str(data.get("receiver_role") or "").strip().lower()
+            if role not in client.CLAIM_RECEIVER_ROLES:
+                raise ValueError("接收方只支持 complainant、respondent 或 mediator")
+        attachments = list(data.get("attachments") or [])
+        for filename, content, mime in validated_images:
+            uploaded = client.upload_claim_attachment(data.get("claim_id"), filename, content, content_type=mime)
+            attachments.append(uploaded["file_name"])
+        if validated_images and not message:
+            message = "Please see the attached images."
         result = client.send_claim_message(
             data.get("claim_id"),
             message,
             receiver_role=data.get("receiver_role", ""),
-            attachments=data.get("attachments"),
+            attachments=attachments,
         )
         return {"result": result, "translation": translation} if translation else result
 

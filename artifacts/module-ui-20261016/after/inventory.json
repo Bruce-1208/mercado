@@ -1,0 +1,6568 @@
+[
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-overview",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "order-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 212.328125,
+        "right": 448.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-store-filter-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 212.328125,
+        "right": 666.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-search-input",
+        "type": "search",
+        "height": 32,
+        "width": 273,
+        "right": 945.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-start-date-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 212.328125,
+        "right": 1163.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 46,
+        "right": 1215.984375,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 46,
+        "right": 1269.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-salesperson-filter-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 189.984375,
+        "right": 425.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 190,
+        "right": 623.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-freight-variance-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 190,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-remark-search",
+        "type": "search",
+        "height": 32,
+        "width": 190,
+        "right": 1019.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-purchase-platform-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 190,
+        "right": 1217.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-freight-difference-min",
+        "type": "number",
+        "height": 32,
+        "width": 82.5,
+        "right": 1308.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-freight-difference-max",
+        "type": "number",
+        "height": 32,
+        "width": 82.5,
+        "right": 1415.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-payment-release-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.984375,
+        "right": 425.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-start-date",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 190,
+        "right": 623.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-end-date",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 190,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-orders",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "inventory-stock-search",
+        "type": "search",
+        "height": 32,
+        "width": 209.1875,
+        "right": 461.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-shelf",
+        "type": "select-one",
+        "height": 32,
+        "width": 162.703125,
+        "right": 631.890625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-status",
+        "type": "select-one",
+        "height": 32,
+        "width": 162.703125,
+        "right": 802.59375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-inbound-person",
+        "type": "select-one",
+        "height": 32,
+        "width": 162.703125,
+        "right": 973.296875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-owner",
+        "type": "select-one",
+        "height": 32,
+        "width": 162.703125,
+        "right": 1144,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 82,
+        "right": 1234,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 46,
+        "right": 1288,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-inventory",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "products-1688-search",
+        "type": "search",
+        "height": 32,
+        "width": 186.3125,
+        "right": 423.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 144.921875,
+        "right": 578.234375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-category-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 144.921875,
+        "right": 733.15625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-page-size",
+        "type": "select-one",
+        "height": 32,
+        "width": 144.921875,
+        "right": 888.078125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 962.078125,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 48,
+        "right": 1020.078125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 100,
+        "right": 1146.078125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 144.90625,
+        "right": 1300.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 288.484375,
+        "right": 525.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-review-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 288.5,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-price-min",
+        "type": "number",
+        "height": 32,
+        "width": 288.5,
+        "right": 1118.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-price-max",
+        "type": "number",
+        "height": 32,
+        "width": 288.5,
+        "right": 1414.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-weight-min",
+        "type": "number",
+        "height": 32,
+        "width": 288.484375,
+        "right": 525.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-weight-max",
+        "type": "number",
+        "height": 32,
+        "width": 288.5,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-date-from",
+        "type": "date",
+        "height": 32,
+        "width": 288.5,
+        "right": 1118.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-date-to",
+        "type": "date",
+        "height": 32,
+        "width": 288.5,
+        "right": 1414.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-sku-min",
+        "type": "number",
+        "height": 32,
+        "width": 288.484375,
+        "right": 525.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-sku-max",
+        "type": "number",
+        "height": 32,
+        "width": 288.5,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-1688-products",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "ai-original-search",
+        "type": "search",
+        "height": 32,
+        "width": 287.390625,
+        "right": 525.390625,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-generator-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 223.53125,
+        "right": 758.921875,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 223.53125,
+        "right": 992.453125,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 223.546875,
+        "right": 1226,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1300,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-original-date-from",
+        "type": "date",
+        "height": 32,
+        "width": 288,
+        "right": 526,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-date-to",
+        "type": "date",
+        "height": 32,
+        "width": 288,
+        "right": 822,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-sku-min",
+        "type": "number",
+        "height": 32,
+        "width": 288,
+        "right": 1118,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-sku-max",
+        "type": "number",
+        "height": 32,
+        "width": 288,
+        "right": 1414,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-original-products",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "mercado-list-search",
+        "type": "search",
+        "height": 32,
+        "width": 211.125,
+        "right": 449.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-management-category-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 621.34375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 793.5625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-review-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 965.78125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-publish-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.203125,
+        "right": 1137.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1209.984375,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 84,
+        "right": 1301.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-infringement-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 427.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 624.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-min",
+        "type": "number",
+        "height": 32,
+        "width": 90.65625,
+        "right": 723.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-max",
+        "type": "number",
+        "height": 32,
+        "width": 90.671875,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-min",
+        "type": "number",
+        "height": 32,
+        "width": 90.65625,
+        "right": 920.640625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-max",
+        "type": "number",
+        "height": 32,
+        "width": 90.671875,
+        "right": 1019.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-min",
+        "type": "number",
+        "height": 32,
+        "width": 90.65625,
+        "right": 1117.96875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-max",
+        "type": "number",
+        "height": 32,
+        "width": 90.671875,
+        "right": 1216.640625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 189.34375,
+        "right": 1413.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 189.34375,
+        "right": 1413.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-min",
+        "type": "number",
+        "height": 32,
+        "width": 189.328125,
+        "right": 427.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-max",
+        "type": "number",
+        "height": 32,
+        "width": 189.328125,
+        "right": 624.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-collection",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "mercado-list-search",
+        "type": "search",
+        "height": 32,
+        "width": 211.125,
+        "right": 449.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-management-category-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 621.34375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 793.5625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-review-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 965.78125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-publish-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.203125,
+        "right": 1137.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1209.984375,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 84,
+        "right": 1301.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-infringement-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 427.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 624.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-min",
+        "type": "number",
+        "height": 32,
+        "width": 90.65625,
+        "right": 723.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-max",
+        "type": "number",
+        "height": 32,
+        "width": 90.671875,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-min",
+        "type": "number",
+        "height": 32,
+        "width": 90.65625,
+        "right": 920.640625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-max",
+        "type": "number",
+        "height": 32,
+        "width": 90.671875,
+        "right": 1019.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-min",
+        "type": "number",
+        "height": 32,
+        "width": 90.65625,
+        "right": 1117.96875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-max",
+        "type": "number",
+        "height": 32,
+        "width": 90.671875,
+        "right": 1216.640625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 189.34375,
+        "right": 1413.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 189.34375,
+        "right": 1413.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-min",
+        "type": "number",
+        "height": 32,
+        "width": 189.328125,
+        "right": 427.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-max",
+        "type": "number",
+        "height": 32,
+        "width": 189.328125,
+        "right": 624.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-products",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "wdr-filter-salesperson",
+        "type": "text",
+        "height": 32,
+        "width": 152,
+        "right": 389,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-source",
+        "type": "text",
+        "height": 32,
+        "width": 152,
+        "right": 549,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-store",
+        "type": "text",
+        "height": 32,
+        "width": 152,
+        "right": 709,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-category",
+        "type": "text",
+        "height": 32,
+        "width": 152,
+        "right": 869,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-region",
+        "type": "text",
+        "height": 32,
+        "width": 152,
+        "right": 1029,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-freight-min",
+        "type": "number",
+        "height": 32,
+        "width": 152,
+        "right": 1189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-apply",
+        "type": "button",
+        "height": 32,
+        "width": 106,
+        "right": 1303,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-date-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 288.5,
+        "right": 525.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-date-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 288.5,
+        "right": 822,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-freight-max",
+        "type": "number",
+        "height": 32,
+        "width": 288.5,
+        "right": 1118.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 288.5,
+        "right": 1415,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-weight-dimensions-records",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-shipping-standards",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "publish-record-search",
+        "type": "search",
+        "height": 32,
+        "width": 217.453125,
+        "right": 467.453125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-source",
+        "type": "select-one",
+        "height": 32,
+        "width": 169.140625,
+        "right": 644.59375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-status",
+        "type": "select-one",
+        "height": 32,
+        "width": 169.125,
+        "right": 821.71875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-site",
+        "type": "select-one",
+        "height": 32,
+        "width": 169.140625,
+        "right": 998.859375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 169.125,
+        "right": 1175.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 80.28125,
+        "right": 1264.265625,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-start-date",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 223.984375,
+        "right": 473.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-end-date",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 224,
+        "right": 705.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-store-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 224,
+        "right": 937.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-group",
+        "type": "select-one",
+        "height": 32,
+        "width": 224,
+        "right": 1169.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-start-date-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 223.984375,
+        "right": 1401.96875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-publish-records",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-yandex",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-appeal",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "daily-task-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 384,
+        "right": 910,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "daily-task-computer-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 384,
+        "right": 1302,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-tasks",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "salesperson-stats-start-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 958,
+        "right": 1210,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 70,
+        "right": 1288,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-start",
+        "type": "date",
+        "height": 32,
+        "width": 377.328125,
+        "right": 629.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-end",
+        "type": "date",
+        "height": 32,
+        "width": 377.328125,
+        "right": 1014.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-all",
+        "type": "button",
+        "height": 56,
+        "width": 377.34375,
+        "right": 1400,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-salesperson-stats",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "store-analysis-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 153,
+        "right": 405,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-group",
+        "type": "select-one",
+        "height": 32,
+        "width": 153,
+        "right": 566,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-store",
+        "type": "select-one",
+        "height": 32,
+        "width": 153,
+        "right": 727,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-category-level",
+        "type": "select-one",
+        "height": 32,
+        "width": 153,
+        "right": 888,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-metric",
+        "type": "select-one",
+        "height": 32,
+        "width": 153,
+        "right": 1049,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-start-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 153,
+        "right": 1210,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-submit",
+        "type": "submit",
+        "height": 32,
+        "width": 70,
+        "right": 1288,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-start",
+        "type": "date",
+        "height": 32,
+        "width": 570,
+        "right": 822,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-end",
+        "type": "date",
+        "height": 32,
+        "width": 570,
+        "right": 1400,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-store-analysis",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "after-sale-search",
+        "type": "search",
+        "height": 32,
+        "width": 523.125,
+        "right": 779.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "after-sale-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 406.875,
+        "right": 1198,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "load-after-sale-alerts-btn",
+        "type": "button",
+        "height": 32,
+        "width": 70,
+        "right": 1280,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "after-sale-date-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 374.65625,
+        "right": 630.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "after-sale-date-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 374.671875,
+        "right": 1013.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 61.828125,
+        "right": 1083.15625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 62.015625,
+        "right": 1149.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 46,
+        "right": 1199.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-search",
+        "type": "search",
+        "height": 32,
+        "width": 523.125,
+        "right": 779.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 406.875,
+        "right": 1198,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "load-high-profit-btn",
+        "type": "button",
+        "height": 32,
+        "width": 70,
+        "right": 1280,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-date-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 374.65625,
+        "right": 630.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-date-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 374.671875,
+        "right": 1013.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 61.828125,
+        "right": 1083.15625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 62.015625,
+        "right": 1149.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 46,
+        "right": 1199.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-search",
+        "type": "search",
+        "height": 32,
+        "width": 523.125,
+        "right": 779.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 406.875,
+        "right": 1198,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "load-freight-change-btn",
+        "type": "button",
+        "height": 32,
+        "width": 70,
+        "right": 1280,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-date-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 374.65625,
+        "right": 630.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-date-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 374.671875,
+        "right": 1013.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 61.828125,
+        "right": 1083.15625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 62.015625,
+        "right": 1149.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 56,
+        "width": 46,
+        "right": 1199.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-order-analysis",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "ai-video-creator-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 475,
+        "right": 727,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 475,
+        "right": 1210,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 70,
+        "right": 1288,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-date-from",
+        "type": "date",
+        "height": 32,
+        "width": 377.328125,
+        "right": 629.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-date-to",
+        "type": "date",
+        "height": 32,
+        "width": 377.328125,
+        "right": 1014.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 242.421875,
+        "right": 494.421875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 242.4375,
+        "right": 744.859375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 32,
+        "width": 188.5625,
+        "right": 941.421875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 32,
+        "width": 188.5625,
+        "right": 1137.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 70,
+        "right": 1215.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "reset",
+        "height": 32,
+        "width": 64,
+        "right": 1287.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-video",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "store-link-store-filter-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 151.453125,
+        "right": 389.453125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 151.453125,
+        "right": 548.90625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 151.453125,
+        "right": 708.359375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-site-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 151.453125,
+        "right": 867.8125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 151.453125,
+        "right": 1027.265625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-search",
+        "type": "search",
+        "height": 32,
+        "width": 194.734375,
+        "right": 1230,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 46,
+        "right": 1284,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-product-category-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 427.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-category-trigger",
+        "type": "button",
+        "height": 36,
+        "width": 189.328125,
+        "right": 624.65625,
+        "border": "rgb(220, 228, 239)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-promotion-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-advertising-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.34375,
+        "right": 1019.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-video-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 1216.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-sales-sort",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 1413.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-page-size",
+        "type": "select-one",
+        "height": 32,
+        "width": 189.328125,
+        "right": 427.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-store-links",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-size-charts",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-automation-center",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-clearance-alerts",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-product-diagnosis",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-promotions",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-price-competition",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "ad-analysis-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 150.5,
+        "right": 388.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-group",
+        "type": "select-one",
+        "height": 32,
+        "width": 150.5,
+        "right": 547,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-store",
+        "type": "select-one",
+        "height": 32,
+        "width": 150.5,
+        "right": 705.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-account",
+        "type": "select-one",
+        "height": 32,
+        "width": 150.5,
+        "right": 864,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-site",
+        "type": "select-one",
+        "height": 32,
+        "width": 150.5,
+        "right": 1022.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-search",
+        "type": "search",
+        "height": 32,
+        "width": 193.5,
+        "right": 1224,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 70,
+        "right": 1302,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-date-from",
+        "type": "date",
+        "height": 32,
+        "width": 288,
+        "right": 526,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-date-to",
+        "type": "date",
+        "height": 32,
+        "width": 288,
+        "right": 822,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-status",
+        "type": "select-one",
+        "height": 32,
+        "width": 288,
+        "right": 1118,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 288,
+        "right": 1414,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ad-analysis",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "prohibited-risk-type-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.203125,
+        "right": 421.203125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 595.421875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 164.21875,
+        "right": 769.640625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-store-filter-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 164.21875,
+        "right": 943.859375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-search",
+        "type": "search",
+        "height": 32,
+        "width": 211.125,
+        "right": 1164.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 80.28125,
+        "right": 1255.265625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-occurred-from",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 278.484375,
+        "right": 535.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-occurred-to",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 278.5,
+        "right": 821.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-site-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 278.5,
+        "right": 1108.484375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-occurred-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 278.5,
+        "right": 1394.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-prohibited-listings",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "mercado-token-name-search",
+        "type": "search",
+        "height": 32,
+        "width": 216.78125,
+        "right": 856.78125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-token-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.609375,
+        "right": 1033.390625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-token-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.609375,
+        "right": 1210,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 70,
+        "right": 1288,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-store-tokens",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "pre-sale-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.375,
+        "right": 405.375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-group",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.375,
+        "right": 581.75,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-store-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 168.375,
+        "right": 758.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-item-id",
+        "type": "text",
+        "height": 32,
+        "width": 168.375,
+        "right": 934.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-search",
+        "type": "search",
+        "height": 32,
+        "width": 216.5,
+        "right": 1159,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-load",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1231,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1303,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-start-date",
+        "type": "date",
+        "height": 32,
+        "width": 288.5,
+        "right": 525.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-end-date",
+        "type": "date",
+        "height": 32,
+        "width": 288.5,
+        "right": 822,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-buyer-id",
+        "type": "text",
+        "height": 32,
+        "width": 288.5,
+        "right": 1118.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-start-date-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 288.5,
+        "right": 1415,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-pre-sale",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "customer-service-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.375,
+        "right": 405.375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-group",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.375,
+        "right": 581.75,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-store-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 168.375,
+        "right": 758.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-search",
+        "type": "text",
+        "height": 32,
+        "width": 216.484375,
+        "right": 982.609375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-start-date-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 168.390625,
+        "right": 1159,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-load",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1231,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1303,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-start-date",
+        "type": "date",
+        "height": 32,
+        "width": 585,
+        "right": 822,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-end-date",
+        "type": "date",
+        "height": 32,
+        "width": 585,
+        "right": 1415,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-customer-service",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-funds",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-weight-price",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-zying-collection",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "risk-result-source",
+        "type": "select-one",
+        "height": 32,
+        "width": 174.046875,
+        "right": 426.046875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-category",
+        "type": "select-one",
+        "height": 32,
+        "width": 174.046875,
+        "right": 610.09375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-level",
+        "type": "select-one",
+        "height": 32,
+        "width": 174.0625,
+        "right": 794.15625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-search",
+        "type": "search",
+        "height": 32,
+        "width": 223.78125,
+        "right": 1027.9375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-limit",
+        "type": "select-one",
+        "height": 32,
+        "width": 174.046875,
+        "right": 1211.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 46,
+        "right": 1267.984375,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-risk-check",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "infringement-knowledge-search",
+        "type": "search",
+        "height": 32,
+        "width": 340.421875,
+        "right": 585.421875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "infringement-knowledge-type-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 264.78125,
+        "right": 862.203125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "infringement-knowledge-source-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 264.796875,
+        "right": 1139,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 64,
+        "right": 1215,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1291,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-infringement-knowledge",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-infractions",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ip-rights",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "reputation-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 219.515625,
+        "right": 483.515625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "reputation-name-search",
+        "type": "search",
+        "height": 32,
+        "width": 156.796875,
+        "right": 648.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "reputation-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 208.0625,
+        "right": 508.15625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-reputation",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 230.53125,
+        "right": 494.53125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "api-reputation-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 230.53125,
+        "right": 733.0625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "api-reputation-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 230.53125,
+        "right": 971.59375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "api-reputation-search",
+        "type": "search",
+        "height": 32,
+        "width": 296.390625,
+        "right": 1275.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-api-reputation",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "ai-appeal-salesperson-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 217,
+        "right": 469,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 217,
+        "right": 694,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-copy-mode-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 217,
+        "right": 919,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-date-from-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 217,
+        "right": 1144,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 46,
+        "right": 1198,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 46,
+        "right": 1252,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-date-from",
+        "type": "date",
+        "height": 32,
+        "width": 570,
+        "right": 822,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-date-to",
+        "type": "date",
+        "height": 32,
+        "width": 570,
+        "right": 1400,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-appeals",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-access",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "account_billing",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "account_profile",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "ai-billing-salesperson",
+        "type": "select-one",
+        "height": 32,
+        "width": 197.125,
+        "right": 246.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-task-type",
+        "type": "select-one",
+        "height": 32,
+        "width": 197.140625,
+        "right": 453.265625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-model",
+        "type": "select-one",
+        "height": 32,
+        "width": 197.125,
+        "right": 660.390625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-keyword",
+        "type": "search",
+        "height": 32,
+        "width": 253.46875,
+        "right": 923.859375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-start-date-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 197.125,
+        "right": 1130.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-apply",
+        "type": "submit",
+        "height": 32,
+        "width": 64,
+        "right": 1204.984375,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-clear",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1276.984375,
+        "border": "rgb(220, 228, 239)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-start-date",
+        "type": "date",
+        "height": 32,
+        "width": 666.984375,
+        "right": 715.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-end-date",
+        "type": "date",
+        "height": 32,
+        "width": 667,
+        "right": 1390.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "ai_billing",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 295.3125,
+        "right": 347.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 295.3125,
+        "right": 650.625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 32,
+        "width": 229.6875,
+        "right": 888.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 32,
+        "width": 229.6875,
+        "right": 1126,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 70,
+        "right": 1204,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "reset",
+        "height": 32,
+        "width": 64,
+        "right": 1276,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "ai_video_details",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "task-scope",
+        "type": "select-one",
+        "height": 32,
+        "width": 270.609375,
+        "right": 363.796875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 270.625,
+        "right": 644.421875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "search",
+        "type": "text",
+        "height": 32,
+        "width": 270.609375,
+        "right": 925.03125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "ai_weight_price",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 203.078125,
+        "right": 246.078125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 203.09375,
+        "right": 459.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "height": 32,
+        "width": 157.953125,
+        "right": 627.125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 157.953125,
+        "right": 795.078125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 157.953125,
+        "right": 963.03125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "height": 32,
+        "width": 157.953125,
+        "right": 1130.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 70,
+        "right": 1210.984375,
+        "border": "rgb(23, 92, 211)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "reset",
+        "height": 32,
+        "width": 46,
+        "right": 1266.984375,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "automation_center",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "ca-store",
+        "type": "select-one",
+        "height": 32,
+        "width": 254.328125,
+        "right": 283.328125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-site",
+        "type": "select-one",
+        "height": 32,
+        "width": 254.328125,
+        "right": 547.65625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-status",
+        "type": "select-one",
+        "height": 32,
+        "width": 254.34375,
+        "right": 812,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-search",
+        "type": "search",
+        "height": 32,
+        "width": 327,
+        "right": 1149,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 64,
+        "right": 1223,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-reset",
+        "type": "button",
+        "height": 32,
+        "width": 64,
+        "right": 1297,
+        "border": "rgb(220, 228, 239)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "clearance_alerts",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 1152,
+        "right": 1189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "employee-refresh",
+        "type": "button",
+        "height": 32,
+        "width": 94,
+        "right": 1291,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "employee_tasks",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "search-input",
+        "type": "search",
+        "height": 32,
+        "width": 213.171875,
+        "right": 242.171875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "view-mode-select",
+        "type": "select-one",
+        "height": 32,
+        "width": 165.796875,
+        "right": 417.96875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "days-select-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 165.8125,
+        "right": 593.78125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "group-select",
+        "type": "select-one",
+        "height": 32,
+        "width": 165.796875,
+        "right": 769.578125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-select",
+        "type": "select-one",
+        "height": 32,
+        "width": 165.8125,
+        "right": 945.390625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "source-select",
+        "type": "select-one",
+        "height": 32,
+        "width": 165.796875,
+        "right": 1121.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "category-select",
+        "type": "select-one",
+        "height": 32,
+        "width": 165.8125,
+        "right": 1297,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "days-select",
+        "type": "select-one",
+        "height": 32,
+        "width": 1382,
+        "right": 1411,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "infraction_dashboard",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "integration_settings",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "login",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 603,
+        "right": 649,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 603,
+        "right": 649,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 32,
+        "width": 603,
+        "right": 1282,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 603,
+        "right": 1282,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      },
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 1156,
+        "right": 1191,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "employee-refresh",
+        "type": "button",
+        "height": 32,
+        "width": 94,
+        "right": 1293,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "mercado_action_center",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "mercado_collection_detail",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "storeTrigger",
+        "type": "submit",
+        "height": 32,
+        "width": 113,
+        "right": 142,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salespersonFilter",
+        "type": "select-one",
+        "height": 32,
+        "width": 138.75,
+        "right": 290.75,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "groupFilter",
+        "type": "select-one",
+        "height": 32,
+        "width": 138.765625,
+        "right": 439.515625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "siteFilter",
+        "type": "select-one",
+        "height": 32,
+        "width": 138.765625,
+        "right": 588.28125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "typeFilter",
+        "type": "select-one",
+        "height": 32,
+        "width": 138.765625,
+        "right": 737.046875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "statusFilter",
+        "type": "select-one",
+        "height": 32,
+        "width": 138.765625,
+        "right": 885.8125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "participatedFilter",
+        "type": "select-one",
+        "height": 32,
+        "width": 138.765625,
+        "right": 1034.578125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "searchFilter",
+        "type": "text",
+        "height": 32,
+        "width": 178.421875,
+        "right": 1223,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 64,
+        "right": 1297,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "mercado_promotions",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "store",
+        "type": "select-one",
+        "height": 32,
+        "width": 357.296875,
+        "right": 386.296875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "site",
+        "type": "select-one",
+        "height": 32,
+        "width": 357.296875,
+        "right": 753.59375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "search",
+        "type": "text",
+        "height": 32,
+        "width": 459.40625,
+        "right": 1223,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 64,
+        "right": 1297,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "price_competition",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "print_wallet",
+    "width": 1440
+  },
+  {
+    "fields": [
+      {
+        "id": "pd-store",
+        "type": "select-one",
+        "height": 32,
+        "width": 218.3125,
+        "right": 247.3125,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-site",
+        "type": "select-one",
+        "height": 32,
+        "width": 218.328125,
+        "right": 475.640625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-risk",
+        "type": "select-one",
+        "height": 32,
+        "width": 218.328125,
+        "right": 703.96875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-category",
+        "type": "select-one",
+        "height": 32,
+        "width": 218.328125,
+        "right": 932.296875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-search",
+        "type": "text",
+        "height": 32,
+        "width": 280.703125,
+        "right": 1223,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 64,
+        "right": 1297,
+        "border": "rgb(216, 224, 234)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "product_diagnosis",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "register",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "size_charts",
+    "width": 1440
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-overview",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "order-search-input",
+        "type": "search",
+        "height": 32,
+        "width": 248,
+        "right": 264,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-salesperson-filter-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-group-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-freight-variance-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-remark-search",
+        "type": "search",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-purchase-platform-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-freight-difference-min",
+        "type": "number",
+        "height": 32,
+        "width": 154.5,
+        "right": 182.5,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-freight-difference-max",
+        "type": "number",
+        "height": 32,
+        "width": 154.5,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-payment-release-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-start-date",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-end-date",
+        "type": "datetime-local",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-status-filter",
+        "type": "select-one",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-store-filter-trigger",
+        "type": "button",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "order-start-date-preset",
+        "type": "select-one",
+        "height": 32,
+        "width": 334,
+        "right": 362,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 32,
+        "width": 48,
+        "right": 76,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 32,
+        "width": 48,
+        "right": 132,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-orders",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "inventory-stock-search",
+        "type": "search",
+        "height": 44,
+        "width": 190,
+        "right": 232,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-shelf",
+        "type": "select-one",
+        "height": 44,
+        "width": 282,
+        "right": 336,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-status",
+        "type": "select-one",
+        "height": 44,
+        "width": 282,
+        "right": 336,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-inbound-person",
+        "type": "select-one",
+        "height": 44,
+        "width": 282,
+        "right": 336,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "inventory-stock-owner",
+        "type": "select-one",
+        "height": 44,
+        "width": 282,
+        "right": 336,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 137,
+        "right": 191,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 137,
+        "right": 336,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-inventory",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "products-1688-search",
+        "type": "search",
+        "height": 44,
+        "width": 156,
+        "right": 181,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 64,
+        "right": 253,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-status-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-review-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-price-min",
+        "type": "number",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-price-max",
+        "type": "number",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-weight-min",
+        "type": "number",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-weight-max",
+        "type": "number",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-date-from",
+        "type": "date",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-date-to",
+        "type": "date",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-sku-min",
+        "type": "number",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-sku-max",
+        "type": "number",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-category-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-page-size",
+        "type": "select-one",
+        "height": 44,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 70.5,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 68,
+        "width": 152,
+        "right": 189,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "products-1688-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 152,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-1688-products",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "ai-original-search",
+        "type": "search",
+        "height": 44,
+        "width": 150,
+        "right": 176,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 64,
+        "right": 250,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-original-date-from",
+        "type": "date",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-date-to",
+        "type": "date",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-sku-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-sku-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-generator-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-status-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      },
+      {
+        "id": "ai-original-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(217, 226, 238)",
+        "radius": "8px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-original-products",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "mercado-list-search",
+        "type": "search",
+        "height": 44,
+        "width": 146,
+        "right": 172,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 64,
+        "right": 248,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-infringement-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-status-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-management-category-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-review-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-publish-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 84,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-collection",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "mercado-list-search",
+        "type": "search",
+        "height": 44,
+        "width": 146,
+        "right": 172,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 64,
+        "right": 248,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-infringement-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-status-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-weight-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-price-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-net-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-min",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-sku-max",
+        "type": "number",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-management-category-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-review-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-publish-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 84,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-products",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "wdr-filter-apply",
+        "type": "button",
+        "height": 44,
+        "width": 121,
+        "right": 144,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-date-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-date-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-salesperson",
+        "type": "text",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-source",
+        "type": "text",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-store",
+        "type": "text",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-category",
+        "type": "text",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-region",
+        "type": "text",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-freight-min",
+        "type": "number",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-freight-max",
+        "type": "number",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "wdr-filter-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 209,
+        "right": 244,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-weight-dimensions-records",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-shipping-standards",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "publish-record-search",
+        "type": "search",
+        "height": 44,
+        "width": 206,
+        "right": 242,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-start-date",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-end-date",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-source",
+        "type": "select-one",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-status",
+        "type": "select-one",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-site",
+        "type": "select-one",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-store-trigger",
+        "type": "button",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-group",
+        "type": "select-one",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "publish-record-start-date-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 294,
+        "right": 342,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-mercado-publish-records",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-yandex",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-appeal",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "daily-task-status-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 230,
+        "right": 254,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "daily-task-computer-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-tasks",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 82,
+        "right": 106,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-start",
+        "type": "date",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-end",
+        "type": "date",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-all",
+        "type": "button",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-stats-start-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-salesperson-stats",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "store-analysis-submit",
+        "type": "submit",
+        "height": 44,
+        "width": 82,
+        "right": 106,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-start",
+        "type": "date",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-end",
+        "type": "date",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-group",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-store",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-category-level",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-metric",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-analysis-start-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 206,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-store-analysis",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "after-sale-search",
+        "type": "search",
+        "height": 44,
+        "width": 120,
+        "right": 150,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "load-after-sale-alerts-btn",
+        "type": "button",
+        "height": 44,
+        "width": 82,
+        "right": 244,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "after-sale-date-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "after-sale-date-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 72.984375,
+        "right": 114.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 73.203125,
+        "right": 192.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 56,
+        "right": 252.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "after-sale-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-search",
+        "type": "search",
+        "height": 44,
+        "width": 120,
+        "right": 150,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "load-high-profit-btn",
+        "type": "button",
+        "height": 44,
+        "width": 82,
+        "right": 244,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-date-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-date-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 72.984375,
+        "right": 114.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 73.203125,
+        "right": 192.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 56,
+        "right": 252.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "profit-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-search",
+        "type": "search",
+        "height": 44,
+        "width": 120,
+        "right": 150,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "load-freight-change-btn",
+        "type": "button",
+        "height": 44,
+        "width": 82,
+        "right": 244,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-date-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-date-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 72.984375,
+        "right": 114.984375,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 73.203125,
+        "right": 192.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 56,
+        "right": 252.1875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "freight-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 306,
+        "right": 348,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-order-analysis",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 82,
+        "right": 122,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-date-from",
+        "type": "date",
+        "height": 44,
+        "width": 170,
+        "right": 222,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-date-to",
+        "type": "date",
+        "height": 44,
+        "width": 170,
+        "right": 222,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-creator-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 222,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-video-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 170,
+        "right": 222,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 95,
+        "right": 135,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 96.21875,
+        "right": 239.21875,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 44,
+        "width": 286,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 44,
+        "width": 286,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 286,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "reset",
+        "height": 44,
+        "width": 286,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-video",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "store-link-search",
+        "type": "search",
+        "height": 44,
+        "width": 146,
+        "right": 172,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 56,
+        "right": 240,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-product-category-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-category-trigger",
+        "type": "button",
+        "height": 36,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(220, 228, 239)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-promotion-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-advertising-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-video-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-store-filter-trigger",
+        "type": "button",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-group-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-site-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-status-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-sales-sort",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "store-link-page-size",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-store-links",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-size-charts",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-automation-center",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-clearance-alerts",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-product-diagnosis",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-promotions",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-price-competition",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "ad-analysis-search",
+        "type": "search",
+        "height": 44,
+        "width": 140,
+        "right": 164,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 82,
+        "right": 254,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-date-from",
+        "type": "date",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-date-to",
+        "type": "date",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-group",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-store",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-account",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-site",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-status",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ad-analysis-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ad-analysis",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "prohibited-search",
+        "type": "search",
+        "height": 44,
+        "width": 200,
+        "right": 237,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-occurred-from",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-occurred-to",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-risk-type-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-group-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-store-filter-trigger",
+        "type": "button",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-site-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "prohibited-occurred-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 292,
+        "right": 341,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-prohibited-listings",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "mercado-token-name-search",
+        "type": "search",
+        "height": 44,
+        "width": 140,
+        "right": 164,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 82,
+        "right": 254,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-token-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "mercado-token-group-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 318,
+        "right": 354,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-store-tokens",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "pre-sale-search",
+        "type": "search",
+        "height": 44,
+        "width": 156,
+        "right": 181,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-load",
+        "type": "button",
+        "height": 44,
+        "width": 64,
+        "right": 253,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-start-date",
+        "type": "date",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-end-date",
+        "type": "date",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-group",
+        "type": "select-one",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-store-trigger",
+        "type": "button",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-item-id",
+        "type": "text",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-buyer-id",
+        "type": "text",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pre-sale-start-date-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-pre-sale",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "customer-service-search",
+        "type": "text",
+        "height": 44,
+        "width": 156,
+        "right": 181,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-load",
+        "type": "button",
+        "height": 44,
+        "width": 64,
+        "right": 253,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-start-date",
+        "type": "date",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-end-date",
+        "type": "date",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-group",
+        "type": "select-one",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-store-trigger",
+        "type": "button",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "customer-service-start-date-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-customer-service",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-funds",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-weight-price",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-zying-collection",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "risk-result-search",
+        "type": "search",
+        "height": 44,
+        "width": 146,
+        "right": 172,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 56,
+        "right": 240,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-source",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-category",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-level",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "risk-result-limit",
+        "type": "select-one",
+        "height": 44,
+        "width": 314,
+        "right": 352,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-risk-check",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "infringement-knowledge-search",
+        "type": "search",
+        "height": 44,
+        "width": 144,
+        "right": 171,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 56,
+        "right": 239,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "infringement-knowledge-type-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 312,
+        "right": 351,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "infringement-knowledge-source-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 312,
+        "right": 351,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 312,
+        "right": 351,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-infringement-knowledge",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-infractions",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ip-rights",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "reputation-name-search",
+        "type": "search",
+        "height": 44,
+        "width": 198,
+        "right": 238,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "reputation-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 249.078125,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "reputation-group-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 249.078125,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-reputation",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "api-reputation-search",
+        "type": "search",
+        "height": 44,
+        "width": 198,
+        "right": 238,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 216.4375,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "api-reputation-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 249.078125,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "api-reputation-group-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 249.078125,
+        "right": 338,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-api-reputation",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 56,
+        "right": 80,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 56,
+        "right": 144,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-date-from",
+        "type": "date",
+        "height": 44,
+        "width": 224,
+        "right": 260,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-date-to",
+        "type": "date",
+        "height": 44,
+        "width": 224,
+        "right": 260,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-salesperson-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 224,
+        "right": 260,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-group-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 224,
+        "right": 260,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-copy-mode-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 224,
+        "right": 260,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-appeal-date-from-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 224,
+        "right": 260,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-ai-appeals",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "tab-access",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "account_billing",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "account_profile",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "ai-billing-keyword",
+        "type": "search",
+        "height": 44,
+        "width": 220,
+        "right": 249,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-start-date",
+        "type": "date",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-end-date",
+        "type": "date",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-salesperson",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-task-type",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-model",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-start-date-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-apply",
+        "type": "submit",
+        "height": 44,
+        "width": 163,
+        "right": 192,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "ai-billing-clear",
+        "type": "button",
+        "height": 44,
+        "width": 161,
+        "right": 361,
+        "border": "rgb(220, 228, 239)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "ai_billing",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 112,
+        "right": 138,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 121.390625,
+        "right": 264.390625,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 44,
+        "width": 338,
+        "right": 364,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "date",
+        "height": 44,
+        "width": 338,
+        "right": 364,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 338,
+        "right": 364,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "reset",
+        "height": 44,
+        "width": 338,
+        "right": 364,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "ai_video_details",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "task-scope",
+        "type": "select-one",
+        "height": 44,
+        "width": 192,
+        "right": 235,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 304,
+        "right": 347,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "search",
+        "type": "text",
+        "height": 44,
+        "width": 304,
+        "right": 347,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "ai_weight_price",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 104,
+        "right": 135,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 104,
+        "right": 247,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "height": 44,
+        "width": 328,
+        "right": 359,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 328,
+        "right": 359,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "datetime-local",
+        "height": 44,
+        "width": 328,
+        "right": 359,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "select-one",
+        "height": 44,
+        "width": 328,
+        "right": 359,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 84,
+        "right": 115,
+        "border": "rgb(23, 92, 211)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "reset",
+        "height": 44,
+        "width": 56,
+        "right": 181,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "automation_center",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "ca-search",
+        "type": "search",
+        "height": 44,
+        "width": 152,
+        "right": 179,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 64,
+        "right": 251,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-store",
+        "type": "select-one",
+        "height": 44,
+        "width": 336,
+        "right": 363,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-site",
+        "type": "select-one",
+        "height": 44,
+        "width": 336,
+        "right": 363,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-status",
+        "type": "select-one",
+        "height": 44,
+        "width": 336,
+        "right": 363,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "ca-reset",
+        "type": "button",
+        "height": 44,
+        "width": 336,
+        "right": 363,
+        "border": "rgb(220, 228, 239)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "clearance_alerts",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "employee-refresh",
+        "type": "button",
+        "height": 44,
+        "width": 112,
+        "right": 139,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      },
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 224,
+        "right": 251,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "employee_tasks",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "search-input",
+        "type": "search",
+        "height": 44,
+        "width": 220,
+        "right": 249,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "days-select",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "view-mode-select",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "days-select-preset",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "group-select",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salesperson-select",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "source-select",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "category-select",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "infraction_dashboard",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "integration_settings",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "login",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 204,
+        "right": 241,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 204,
+        "right": 241,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "search",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "button",
+        "height": 44,
+        "width": 316,
+        "right": 353,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      },
+      {
+        "id": "employee-refresh",
+        "type": "button",
+        "height": 44,
+        "width": 112,
+        "right": 138,
+        "border": "rgb(208, 213, 221)",
+        "radius": "6px"
+      },
+      {
+        "id": "employee-filter",
+        "type": "select-one",
+        "height": 44,
+        "width": 224,
+        "right": 250,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "mercado_action_center",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "mercado_collection_detail",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "searchFilter",
+        "type": "text",
+        "height": 44,
+        "width": 148,
+        "right": 177,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 64,
+        "right": 249,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "storeTrigger",
+        "type": "submit",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "salespersonFilter",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "groupFilter",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "siteFilter",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "typeFilter",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "statusFilter",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "participatedFilter",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "mercado_promotions",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "search",
+        "type": "text",
+        "height": 44,
+        "width": 148,
+        "right": 177,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 64,
+        "right": 249,
+        "border": "rgb(37, 99, 235)",
+        "radius": "6px"
+      },
+      {
+        "id": "store",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "site",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "price_competition",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "print_wallet",
+    "width": 390
+  },
+  {
+    "fields": [
+      {
+        "id": "pd-search",
+        "type": "text",
+        "height": 44,
+        "width": 148,
+        "right": 177,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "",
+        "type": "submit",
+        "height": 44,
+        "width": 64,
+        "right": 249,
+        "border": "rgb(216, 224, 234)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-store",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-site",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-risk",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      },
+      {
+        "id": "pd-category",
+        "type": "select-one",
+        "height": 44,
+        "width": 332,
+        "right": 361,
+        "border": "rgb(182, 196, 214)",
+        "radius": "6px"
+      }
+    ],
+    "overflow": false,
+    "overflows": [],
+    "name": "product_diagnosis",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "register",
+    "width": 390
+  },
+  {
+    "fields": [],
+    "overflow": false,
+    "overflows": [],
+    "name": "size_charts",
+    "width": 390
+  }
+]

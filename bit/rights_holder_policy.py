@@ -4,7 +4,9 @@ import hashlib
 from bit import bit_mysql
 from bit.bit_runtime_lock import InterProcessLock
 from bit.bit_store_link_sync import _client_and_token
-from bit.bit_store_link_remote_update import _delete_one_link
+from bit.bit_store_link_remote_update import (
+    _delete_one_link, _is_site_listing_id, _site_listing_retention_reason,
+)
 from erp.rights_holder_policy import mark_products_infringing, same_title_links
 from erp.store_link_audit import audited, record
 
@@ -51,16 +53,29 @@ def process_rights_holder_product(token, title, reports, *, max_sold_quantity=5,
                 result["errors"].append(f"补齐权利人链接失败：{exc}")
         for row in targets:
             token_id = int(row["token_id"])
-            try:
-                if token_id not in tokens:
-                    full_token = bit_mysql.get_mercado_store_token(token_id)
-                    _, tokens[token_id] = _client_and_token(dict(full_token or {}))
-                if before_write:
-                    before_write()
-                outcome = _delete_one_link(row, tokens[token_id], required_title=title, max_sold_quantity=max_sold_quantity)
-            except Exception as exc:
-                outcome = {"link_id": row["id"], "item_id": row["item_id"],
-                           "status": "error", "errors": [str(exc)]}
+            item_id = str(row.get("item_id") or "").strip().upper()
+            if not bool(row.get("store_enabled", 1)):
+                outcome = {"link_id": row["id"], "item_id": item_id,
+                           "status": "retained", "errors": [],
+                           "retention_reason": "店铺已关闭，已跳过平台删除"}
+            elif not _is_site_listing_id(item_id, row.get("site_id")):
+                # CBT is a Global parent, not a deletable site listing. Keeping it
+                # is expected and must not turn an otherwise successful cleanup
+                # into a permanently failing retry loop.
+                outcome = {"link_id": row["id"], "item_id": item_id,
+                           "status": "retained", "errors": [],
+                           "retention_reason": _site_listing_retention_reason(item_id)}
+            else:
+                try:
+                    if token_id not in tokens:
+                        full_token = bit_mysql.get_mercado_store_token(token_id)
+                        _, tokens[token_id] = _client_and_token(dict(full_token or {}))
+                    if before_write:
+                        before_write()
+                    outcome = _delete_one_link(row, tokens[token_id], required_title=title, max_sold_quantity=max_sold_quantity)
+                except Exception as exc:
+                    outcome = {"link_id": row["id"], "item_id": row["item_id"],
+                               "status": "error", "errors": [str(exc)]}
             outcome.update(token_id=token_id, salesperson=row.get("salesperson") or "",
                            store_name=row.get("store_name") or "")
             result["links"].append(outcome)

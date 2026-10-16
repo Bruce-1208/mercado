@@ -690,6 +690,8 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending(category
         def fetchall(self):
             if "FROM `mercado_store_site_settings`" in self.sql:
                 return [{"token_id": 1, "site_id": "MLM", "group_name": "运营一组"}]
+            if "GROUP BY links.`token_id`, links.`site_id`, links.`status`" in self.sql:
+                return [{"token_id": 1, "site_id": "MLM", "status": "active", "is_current": 1, "total": 2}]
             if f"FROM `{store.STORE_LINK_TABLE}`" in self.sql and "LIMIT %s OFFSET %s" in self.sql:
                 return [{
                     "id": 1,
@@ -749,7 +751,7 @@ def test_list_store_links_filters_site_and_defaults_to_sales_descending(category
         "links.`store_name`) AGAINST (%s IN BOOLEAN MODE)"
     ) in list_sql
     assert "links.`title` LIKE %s" not in list_sql
-    assert "`remote_json`" not in list_sql
+    assert "`remote_json`" not in list_sql.split("INNER JOIN (", 1)[1]
     assert "INNER JOIN (" in list_sql
     assert "links.`token_id` = %s AND links.`site_id` = %s" in list_sql
     assert "categorized_product.`management_category_id` = %s" in list_sql
@@ -913,11 +915,13 @@ def test_recent_sales_sort_prunes_orders_before_json_aggregation(
         assert params[:len(expected_tokens)] == tuple(expected_tokens)
     else:
         assert "AND 1 = 0" in aggregate
-    # Join parameters precede the existing row-filter parameters.
+    # Facets omit the selected site to count alternatives; the page retains it.
     count_params = next(
         (p for s, p in calls if "COUNT(*) AS `total`" in s),
         tuple(sorted(set(filters.get("token_ids", [])))),
     )
+    if filters.get("site_id"):
+        count_params = (filters["site_id"], *count_params)
     assert params == tuple(expected_tokens or []) + tuple(count_params) + (25, 0)
     assert sql.count("%s") == len(params)
     assert "LEFT JOIN (" in sql  # Links with zero recent sales must remain visible.
@@ -1008,7 +1012,7 @@ def test_sync_store_writes_listing_batches_incrementally(monkeypatch):
     monkeypatch.setattr(
         bit_store_link_sync,
         "finalize_store_snapshot",
-        lambda token_id, marker: captured["finalized"].append((token_id, marker)) or 0,
+        lambda token_id, marker, **kwargs: captured["finalized"].append((token_id, marker)) or 0,
     )
     monkeypatch.setattr(
         bit_store_link_sync,
@@ -1331,9 +1335,14 @@ def test_store_link_salesperson_filters_count_page_and_recent_sales(monkeypatch,
     class Cursor:
         def __enter__(self): return self
         def __exit__(self, *_args): return False
-        def execute(self, sql, params=None): calls.append((sql, params))
+        def execute(self, sql, params=None):
+            self.sql = sql
+            calls.append((sql, params))
         def fetchone(self): return {"table_exists": 1, "total": 2}
-        def fetchall(self): return []
+        def fetchall(self):
+            if "COUNT(*) AS `total`" in self.sql:
+                return [{"token_id": 7, "site_id": "MLM", "status": "active", "is_current": 1, "total": 2}]
+            return []
 
     class Connection:
         def cursor(self): return Cursor()

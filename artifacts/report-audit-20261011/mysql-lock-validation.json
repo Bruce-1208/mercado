@@ -1,0 +1,9 @@
+{
+  "isolated_mysql_lock_test": "passed",
+  "unrelated_row_remained_locked_during_target_update": true,
+  "changed_product_ids": [
+    500
+  ],
+  "elapsed_seconds": 0.0014,
+  "business_tables_modified": false
+}

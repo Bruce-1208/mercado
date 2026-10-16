@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="1" skipped="0" tests="4" time="46.318" timestamp="2026-10-12T16:48:48.928614+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_preferences_explain_lost_runtime_and_can_retry[missing]" time="0.994" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_preferences_explain_lost_runtime_and_can_retry[invalidated]" time="0.269" /><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_real_extension_reload_reinjects_and_refreshes_old_page" time="6.211"><failure message="playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;extensions-toolbar #devMode&quot;)">tests/test_zeshun_runtime_recovery_browser.py:93: in test_real_extension_reload_reinjects_and_refreshes_old_page
+    if not developer_mode.evaluate("element =&gt; element.checked"):
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/mercado_click_delay.py:152: in delayed
+    result = original(target, expression, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15724: in evaluate
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:188: in evaluate
+    return await self._with_element(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:112: in _with_element
+    handle = await self.element_handle(timeout=timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:316: in element_handle
+    handle = await self._frame.wait_for_selector(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:369: in wait_for_selector
+    await self._channel.send(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("extensions-toolbar #devMode")</failure></testcase><testcase classname="tests.test_zeshun_runtime_recovery_browser" name="test_real_extension_reload_reinjects_and_refreshes_old_page" time="38.643"><error message="failed on teardown with &quot;Failed: Isolated functional test exceeded 45 seconds: tests/test_zeshun_runtime_recovery_browser.py::test_real_extension_reload_reinjects_and_refreshes_old_page&quot;">Isolated functional test exceeded 45 seconds: tests/test_zeshun_runtime_recovery_browser.py::test_real_extension_reload_reinjects_and_refreshes_old_page</error></testcase></testsuite></testsuites>

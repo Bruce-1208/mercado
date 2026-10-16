@@ -105,11 +105,25 @@ def _mysql_sql(sql):
     sql = sql.replace("CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS INTEGER)",
                       "CAST(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.source_index')) AS UNSIGNED)")
     sql = sql.replace("json_extract(payload,'$.owner_display_name')", "JSON_UNQUOTE(JSON_EXTRACT(payload,'$.owner_display_name'))")
+    for payload in ("payload", "ri.payload"):
+        for field in ("execution_finished_at", "execution_started_at"):
+            expr = f"json_extract({payload},'$.{field}')"
+            s_expr = f"NULLIF(JSON_UNQUOTE(JSON_EXTRACT({payload},'$.{field}')),'null')"
+            sql = sql.replace(expr, s_expr)
     for source, target in MYSQL_TABLES.items():
         sql = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(source)}(?![A-Za-z0-9_])",
                      f"`{target}`", sql)
     sql = re.sub(r"(?<![`A-Za-z0-9_])key(?![`A-Za-z0-9_])", "`key`", sql)
     return sql.replace("?", "%s")
+
+
+def _processing_time_order(payload):
+    """Match the table's finish/start timestamp, with unprocessed items last."""
+    stamps = [
+        f"NULLIF(CAST(json_extract({payload},'$.{field}') AS DECIMAL(20,6)),0)"
+        for field in ("execution_finished_at", "execution_started_at")
+    ]
+    return "COALESCE(" + ",".join(stamps) + ",0) DESC"
 
 
 class _MySQLConnection:
@@ -690,7 +704,7 @@ class Store:
         return decoded_run, [json.loads(row[0]) for row in rows]
 
     @_retry_mysql_transaction
-    def run_items(self, run_id, status="", search="", page=1, page_size=50):
+    def run_items(self, run_id, status="", search="", page=1, page_size=50, newest_first=False):
         """Return the latest task state for items belonging to one execution run."""
         if status and status not in STATUSES:
             raise ValueError("状态无效")
@@ -709,8 +723,9 @@ class Store:
             if not self._may_view(json.loads(run[0])):
                 raise ValueError("执行批次不存在")
             total = db.execute("SELECT COUNT(*) FROM run_items ri" + where, args).fetchone()[0]
+            order = _processing_time_order("ri.payload") + ",ri.sequence DESC" if newest_first else "ri.sequence"
             rows = db.execute("SELECT ri.sequence,ri.payload run_payload FROM run_items ri" + where
-                              + " ORDER BY ri.sequence LIMIT ? OFFSET ?",
+                              + " ORDER BY " + order + " LIMIT ? OFFSET ?",
                               args + [page_size, (page - 1) * page_size]).fetchall()
         result = []
         run_payload = json.loads(run[0])
@@ -786,7 +801,7 @@ class Store:
         self.log("未完全匹配，已跳过：" + str(reason) + "；继续下一件", key, "WARNING")
 
     @_retry_mysql_transaction
-    def list(self, status="", search="", page=1, page_size=50, scope=None):
+    def list(self, status="", search="", page=1, page_size=50, scope=None, newest_first=False):
         if status and status not in STATUSES:
             raise ValueError("状态无效")
         clauses, args = [], []
@@ -806,14 +821,13 @@ class Store:
         where = " WHERE " + " AND ".join(clauses) if clauses else ""
         with self.connect() as db:
             total = db.execute("SELECT COUNT(*) FROM tasks" + where, args).fetchone()[0]
-            # A task's database creation time is not the user's visible page
-            # order: old collections and retries can interleave records.  When
-            # available, follow the source page and one-based card position so
-            # processing starts at the first product on the selected page.
-            rows = db.execute("SELECT * FROM tasks" + where +
-                              " ORDER BY COALESCE(CAST(json_extract(payload,'$.source_page') AS INTEGER),2147483647),"
-                              " COALESCE(CAST(json_extract(payload,'$.source_index') AS INTEGER),2147483647),"
-                              " created_at,erp_goods_id LIMIT ? OFFSET ?",
+            # Display order is independent of the source order used by workers.
+            order = (_processing_time_order("payload") + ",created_at DESC,erp_goods_id DESC"
+                     if newest_first else
+                     "COALESCE(CAST(json_extract(payload,'$.source_page') AS INTEGER),2147483647),"
+                     "COALESCE(CAST(json_extract(payload,'$.source_index') AS INTEGER),2147483647),"
+                     "created_at,erp_goods_id")
+            rows = db.execute("SELECT * FROM tasks" + where + " ORDER BY " + order + " LIMIT ? OFFSET ?",
                               args + [page_size, (page - 1) * page_size]).fetchall()
         return {"total": total, "rows": [self.decode(row) for row in rows]}
 

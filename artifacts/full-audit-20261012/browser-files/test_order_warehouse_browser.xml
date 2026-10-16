@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="5" time="5.640" timestamp="2026-10-12T16:46:10.480774+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_order_warehouse_browser" name="test_purchase_defaults_and_saves_selected_destination[1440]" time="1.685" /><testcase classname="tests.test_order_warehouse_browser" name="test_purchase_defaults_and_saves_selected_destination[390]" time="0.963" /><testcase classname="tests.test_order_warehouse_browser" name="test_mixed_destination_batch_requires_explicit_choice" time="0.762" /><testcase classname="tests.test_order_warehouse_browser" name="test_warehouse_personnel_cannot_change_destination_in_form" time="0.690" /><testcase classname="tests.test_order_warehouse_browser" name="test_employee_warehouse_binding_required_and_submitted" time="1.344"><failure message="playwright._impl._errors.Error: Page.wait_for_function: TypeError: Cannot read properties of null (reading 'hidden')&#10;    at eval (eval at predicate (eval at evaluate (:291:30)), &lt;anonymous&gt;:1:44)&#10;    at eval (&lt;anonymous&gt;)&#10;    at predicate (eval at evaluate (:291:30), &lt;anonymous&gt;:3:36)&#10;    at next (eval at evaluate (:291:30), &lt;anonymous&gt;:25:29)&#10;    at eval (eval at evaluate (:291:30), &lt;anonymous&gt;:38:9)&#10;    at UtilityScript.evaluate (&lt;anonymous&gt;:293:16)&#10;    at UtilityScript.&lt;anonymous&gt; (&lt;anonymous&gt;:1:44)">tests/test_order_warehouse_browser.py:90: in test_employee_warehouse_binding_required_and_submitted
+    page.wait_for_function("document.getElementById('access-user-form').hidden")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:11559: in wait_for_function
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_page.py:1111: in wait_for_function
+    return await self._main_frame.wait_for_function(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:860: in wait_for_function
+    await self._channel.send("waitForFunction", self._timeout, params)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.Error: Page.wait_for_function: TypeError: Cannot read properties of null (reading 'hidden')
+E       at eval (eval at predicate (eval at evaluate (:291:30)), &lt;anonymous&gt;:1:44)
+E       at eval (&lt;anonymous&gt;)
+E       at predicate (eval at evaluate (:291:30), &lt;anonymous&gt;:3:36)
+E       at next (eval at evaluate (:291:30), &lt;anonymous&gt;:25:29)
+E       at eval (eval at evaluate (:291:30), &lt;anonymous&gt;:38:9)
+E       at UtilityScript.evaluate (&lt;anonymous&gt;:293:16)
+E       at UtilityScript.&lt;anonymous&gt; (&lt;anonymous&gt;:1:44)</failure></testcase></testsuite></testsuites>

@@ -21,8 +21,10 @@ from mercado_api.client import MercadoAPIError, MercadoLibreClient
 from mercado_api.request_budget import AdmissionTimeout, admission
 
 
-WRITABLE_TYPES = frozenset({"DEAL", "MARKETPLACE_CAMPAIGN", "PRICE_DISCOUNT"})
-READ_ONLY_TYPES = frozenset({"SELLER_CAMPAIGN", "DOD", "LIGHTNING", "CLEARANCE"})
+OFFER_ENROLLMENT_TYPES = frozenset({"SMART", "PRICE_MATCHING"})
+WRITABLE_TYPES = frozenset({"DEAL", "MARKETPLACE_CAMPAIGN", "PRICE_DISCOUNT"}) | OFFER_ENROLLMENT_TYPES
+WITHDRAWABLE_TYPES = WRITABLE_TYPES | frozenset({"SMART", "PRICE_MATCHING", "PRE_NEGOTIATED", "DOD", "LIGHTNING", "SELLER_CAMPAIGN"})
+READ_ONLY_TYPES = frozenset({"CLEARANCE", "SELLER_COUPON_CAMPAIGN"})
 
 
 def _required(value: Any, label: str) -> str:
@@ -130,11 +132,14 @@ class MercadoPromotionsClient:
         *,
         limit: int = 50,
         search_after: str = "",
+        promotion_type: str = "",
     ) -> dict[str, Any]:
         params: dict[str, Any] = {
             "user_id": _required(user_id, "子账号 user_id"),
             "limit": max(1, min(50, int(limit or 50))),
         }
+        if promotion_type:
+            params["promotion_type"] = promotion_type
         if search_after:
             params["searchAfter"] = str(search_after)
         return dict(
@@ -147,12 +152,16 @@ class MercadoPromotionsClient:
             or {}
         )
 
-    def iter_items(self, user_id: str, promotion_id: str) -> Iterator[dict[str, Any]]:
+    def iter_items(self, user_id: str, promotion_id: str, *, promotion_type: str = "") -> Iterator[dict[str, Any]]:
         cursor = ""
         seen_cursors: set[str] = set()
+        count = 0
         while True:
-            page = self.list_items_page(user_id, promotion_id, search_after=cursor)
-            results = list(page.get("results") or [])
+            page = self.list_items_page(user_id, promotion_id, search_after=cursor, promotion_type=promotion_type)
+            results = page.get("results")
+            if not isinstance(results, list) or any(not isinstance(row, dict) or not (row.get("id") or row.get("item_id")) for row in results):
+                raise MercadoAPIError("活动商品响应不完整，不能确认全部商品")
+            count += len(results)
             for row in results:
                 if isinstance(row, dict):
                     yield dict(row)
@@ -160,7 +169,12 @@ class MercadoPromotionsClient:
             next_cursor = str(
                 paging.get("searchAfter") or paging.get("search_after") or ""
             ).strip()
-            if not results or not next_cursor or next_cursor in seen_cursors:
+            if next_cursor and next_cursor in seen_cursors:
+                raise MercadoAPIError("活动商品分页游标重复，不能确认全部商品")
+            if not results or not next_cursor:
+                total = paging.get("total")
+                if total is not None and count < int(total):
+                    raise MercadoAPIError("活动商品分页提前结束，不能确认全部商品")
                 break
             seen_cursors.add(next_cursor)
             cursor = next_cursor
@@ -185,11 +199,14 @@ class MercadoPromotionsClient:
         deal_price: Any = None,
         start_date: str = "",
         finish_date: str = "",
+        offer_id: str = "",
     ) -> dict[str, Any]:
         promotion_type = _required(promotion_type, "活动类型").upper()
         if promotion_type not in WRITABLE_TYPES:
             raise ValueError(f"{promotion_type} 当前仅支持查看，不能报名")
         payload: dict[str, Any] = {"promotion_type": promotion_type}
+        if promotion_type in OFFER_ENROLLMENT_TYPES:
+            payload["offer_id"] = _required(offer_id, "官方候选优惠编号 offer_id")
         if promotion_id:
             payload["promotion_id"] = str(promotion_id)
         if promotion_type in {"DEAL", "PRICE_DISCOUNT"}:
@@ -216,8 +233,10 @@ class MercadoPromotionsClient:
         offer_id: str = "",
     ) -> dict[str, Any]:
         promotion_type = _required(promotion_type, "活动类型").upper()
-        if promotion_type not in WRITABLE_TYPES:
-            raise ValueError(f"{promotion_type} 当前仅支持查看，不能退出")
+        if promotion_type not in WITHDRAWABLE_TYPES:
+            raise ValueError(f"{promotion_type} 官方接口暂不支持退出")
+        if promotion_type in {"SMART", "PRICE_MATCHING", "PRE_NEGOTIATED"}:
+            _required(offer_id, "优惠 offer_id")
         params: dict[str, Any] = {
             "user_id": _required(user_id, "子账号 user_id"),
             "promotion_type": promotion_type,

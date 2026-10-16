@@ -3,6 +3,8 @@
 Only store coordinators take slots. Their detail workers never take a second
 store slot, avoiding nested-pool deadlocks. Existing per-module durable due
 states and inter-process task locks remain responsible for recovery/deduplication.
+Foreground reads may use reserved capacity so a long background snapshot cannot
+starve a user-visible or Agent task; same-kind, same-store work stays serialized.
 """
 from contextlib import contextmanager
 import os
@@ -30,15 +32,21 @@ class SyncBudget:
         self.wait_seconds = 0.0
 
     @contextmanager
-    def slot(self, kind, token_id):
+    def slot(self, kind, token_id, *, timeout=None, stop_event=None,
+             foreground=False):
         key = (str(kind), str(token_id))
-        urgent = kind == "orders"
+        urgent = kind == "orders" or bool(foreground)
         ticket = object()
         started = time.monotonic()
         with self.condition:
             self.waiters.append((ticket, key, urgent))
             try:
                 while True:
+                    if stop_event is not None and stop_event.is_set():
+                        raise RuntimeError("已停止")
+                    remaining = None if timeout is None else timeout - (time.monotonic() - started)
+                    if remaining is not None and remaining <= 0:
+                        raise TimeoutError("等待店铺同步名额超时")
                     eligible = [w for w in self.waiters if w[1] not in self.keys and
                                 (w[2] or self.background_active < self.limit - self.reserve)]
                     # FIFO within each class; reserved slots keep orders moving
@@ -52,7 +60,10 @@ class SyncBudget:
                         self.wait_seconds += time.monotonic() - started
                         self.condition.notify_all()
                         break
-                    self.condition.wait()
+                    self.condition.wait(
+                        min(0.5, remaining) if remaining is not None
+                        else (0.5 if stop_event is not None else None)
+                    )
             except BaseException:
                 self.waiters.remove((ticket, key, urgent))
                 self.condition.notify_all()
@@ -78,8 +89,11 @@ _budget = SyncBudget(_integer("MERCADO_SYNC_STORE_BUDGET", 8),
                      _integer("MERCADO_SYNC_ORDER_RESERVE", 2, 0))
 
 
-def run_store(kind, token_id, call, *args, **kwargs):
-    with _budget.slot(kind, token_id):
+def run_store(kind, token_id, call, *args, capacity_timeout=None,
+              capacity_stop_event=None, capacity_foreground=False, **kwargs):
+    with _budget.slot(kind, token_id, timeout=capacity_timeout,
+                      stop_event=capacity_stop_event,
+                      foreground=capacity_foreground):
         return call(*args, **kwargs)
 
 

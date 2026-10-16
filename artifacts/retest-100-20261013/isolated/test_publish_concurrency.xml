@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="13" time="0.202" timestamp="2026-10-13T13:05:03.794987+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user0]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user1]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user2]" time="0.000" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user3]" time="0.000" /><testcase classname="tests.test_publish_concurrency" name="test_only_explicit_super_admin_controls_capacity[user4]" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_shared_settings_permissions_and_roundtrip" time="0.005"><failure message="AssertionError: assert 401 == 403&#10; +  where 401 = &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt;.status_code&#10; +    where &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt; = get('/api/publish-concurrency')&#10; +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get">tests/test_publish_concurrency.py:28: in test_shared_settings_permissions_and_roundtrip
+    assert client.get('/api/publish-concurrency').status_code == 403
+E   AssertionError: assert 401 == 403
+E    +  where 401 = &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt;.status_code
+E    +    where &lt;WrapperTestResponse streamed [401 UNAUTHORIZED]&gt; = get('/api/publish-concurrency')
+E    +      where get = &lt;FlaskClient &lt;Flask 'bit.bit_interface'&gt;&gt;.get</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_ui_status_hides_capacity_without_mutating_task_commands" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_client_uses_central_settings" time="0.001" /><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[super_admin]" time="0.014"><failure message="KeyError: 'data'">tests/test_publish_concurrency.py:69: in test_all_roles_publish_with_shared_default
+    existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+tests/test_bit_interface_mercado_collection.py:1685: in test_group_publish_endpoint_applies_strategy_and_historical_account_ownership
+    payload = response.get_json()["data"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'data'</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[admin]" time="0.003"><failure message="KeyError: 'data'">tests/test_publish_concurrency.py:69: in test_all_roles_publish_with_shared_default
+    existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+tests/test_bit_interface_mercado_collection.py:1685: in test_group_publish_endpoint_applies_strategy_and_historical_account_ownership
+    payload = response.get_json()["data"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'data'</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[member]" time="0.003"><failure message="KeyError: 'data'">tests/test_publish_concurrency.py:69: in test_all_roles_publish_with_shared_default
+    existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+tests/test_bit_interface_mercado_collection.py:1685: in test_group_publish_endpoint_applies_strategy_and_historical_account_ownership
+    payload = response.get_json()["data"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'data'</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_all_roles_publish_with_shared_default[custom]" time="0.003"><failure message="KeyError: 'data'">tests/test_publish_concurrency.py:69: in test_all_roles_publish_with_shared_default
+    existing.test_group_publish_endpoint_applies_strategy_and_historical_account_ownership()
+tests/test_bit_interface_mercado_collection.py:1685: in test_group_publish_endpoint_applies_strategy_and_historical_account_ownership
+    payload = response.get_json()["data"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'data'</failure></testcase><testcase classname="tests.test_publish_concurrency" name="test_setting_persists_across_connections" time="0.002" /></testsuite></testsuites>

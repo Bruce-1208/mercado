@@ -1,0 +1,12 @@
+{
+  "python": "3.12.0",
+  "platform": "macOS-26.5.2-arm64-arm-64bit",
+  "logical_cpus": 10,
+  "memory_bytes": 17179869184,
+  "mysql_port": 13326,
+  "mysql_buffer_pool_bytes": 268435456,
+  "pool_max_connections": 12,
+  "auth_reserved_connections": 1,
+  "http_threads": 32,
+  "method": "closed-loop; stage time excludes setup; includes drain; screening shares host with isolated regression"
+}

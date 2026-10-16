@@ -4,10 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ detail.title if detail else '采集详情' }} · 美客多跟卖采集</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261012-system">
   <link rel="stylesheet" href="{{ url_for('static', filename='mercado-collection-detail.css') }}?v=20261010-quality">
+  <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261016-module-ui">
   <script defer src="{{ url_for('static', filename='mercado-collection-detail.js') }}?v=20261008"></script>
+  <script defer src="{{ url_for('static', filename='mercado-collection-attributes.js') }}?v=20261014-auto-check"></script>
 </head>
-<body>
+<body class="zs-standalone zs-collection-detail">
 {% macro metadata(rows) %}
   <dl class="detail-metadata">{% for field in rows %}<div><dt>{{ field.name }}</dt><dd>{{ field.value }}</dd></div>{% endfor %}</dl>
 {% endmacro %}
@@ -33,7 +36,7 @@
     <div class="detail-summary"><section class="detail-panel"><h2>基本信息</h2>{{ metadata(detail.basic) }}</section>
     <section class="detail-panel"><h2>价格与物流</h2>{{ metadata(detail.financial) }}<p class="detail-muted">净收益 = 美元售价 − 15% 佣金 − 当前运费</p></section></div>
   </div>
-  <section id="attributes" class="detail-panel"><h2>商品属性 <span>{{ detail.attributes|length }}</span></h2>{% if detail.attributes %}{{ metadata(detail.attributes) }}{% else %}<p class="detail-empty">未采集到商品属性</p>{% endif %}</section>
+  <section id="attributes" class="detail-panel"><h2>商品属性 <span>{{ detail.attributes|length }}</span></h2><div data-collection-attribute-detail data-collection-attribute-check="{{ detail.id }}" aria-live="polite">正在核验必填属性</div>{% if detail.attributes %}{{ metadata(detail.attributes) }}{% else %}<p class="detail-empty">未采集到商品属性</p>{% endif %}</section>
   <section id="description" class="detail-panel"><h2>商品描述</h2>{% for description in detail.descriptions %}<article class="detail-description"><h3>{{ description.name }}</h3>{% if description.title %}<p class="detail-description-title">{{ description.title }}</p>{% endif %}{% if description.text %}<div class="detail-description-text">{{ description.text }}</div>{% else %}<p class="detail-empty">未采集到商品描述</p>{% endif %}</article>{% endfor %}</section>
   <section id="variants" class="detail-panel"><h2>规格变体 <span>{{ detail.variants|length }}</span></h2>{% if detail.variants %}<div class="detail-variants">{% for variant in detail.variants %}{% set variant_index = loop.index %}<article class="detail-variant"><h3>规格 {{ loop.index }} <small>{{ variant.id }}</small></h3>{{ metadata(variant.attributes) }}<dl class="detail-metadata"><div><dt>价格</dt><dd>{{ variant.price }}</dd></div><div><dt>可售数量</dt><dd>{{ variant.quantity }}</dd></div><div><dt>SKU</dt><dd>{{ variant.sku }}</dd></div></dl>{% if variant.other %}{{ metadata(variant.other) }}{% endif %}<div class="detail-variant-images">{% for image in variant.images %}<a href="{{ image }}" target="_blank" rel="noopener noreferrer"><img src="{{ image }}" alt="规格 {{ variant_index }} 图片 {{ loop.index }}" loading="lazy"></a>{% endfor %}</div></article>{% endfor %}</div>{% else %}<p class="detail-empty">未采集到规格变体</p>{% endif %}</section>
   {% if detail.terms %}<section class="detail-panel"><h2>销售条款</h2>{{ metadata(detail.terms) }}</section>{% endif %}

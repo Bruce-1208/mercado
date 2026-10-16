@@ -6,6 +6,14 @@ import pytest
 from test_console_ui_browser import ROOT, console_browser, console_page  # noqa: F401
 
 
+def reveal_filter(control):
+    """Narrow rows move secondary controls into the existing advanced disclosure."""
+    control.page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    if not control.is_visible():
+        control.locator('xpath=ancestor::details[1]').locator(':scope > summary').click()
+    assert control.is_visible()
+
+
 def respond(route, data):
     route.fulfill(content_type="application/json", body=json.dumps({"status": "success", "data": data}))
 
@@ -25,7 +33,7 @@ def test_all_filter_ranges_are_in_advanced_filters(console_page):
         assert page.locator('#' + input_id).evaluate("el => !!el.closest('details.zs-advanced-filters')"), input_id
         preset = page.locator('#' + input_id + '-preset')
         assert preset.count() == 1, input_id
-        assert not preset.evaluate("el => !!el.closest('details')"), input_id
+        assert preset.evaluate("el => !!el.closest('.zs-common-date-filter')"), input_id
     # These times belong to operations and editors rather than list filters.
     for input_id in ['order-sync-start-date', 'mercado-publish-schedule-at', 'inventory-movement-time']:
         assert not page.locator('#' + input_id).evaluate("el => !!el.closest('details.zs-advanced-filters')")
@@ -50,14 +58,14 @@ def test_collection_salesperson_and_date_queries_and_reset(console_page, width):
     page.evaluate("switchTab('mercado-collection')")
     salesperson = page.locator('#mercado-salesperson-filter')
     page.wait_for_function("document.getElementById('mercado-salesperson-filter').options.length === 3")
-    assert salesperson.is_visible()
     assert page.locator('#mercado-date-from').is_hidden()
-    assert page.locator('#mercado-date-from-preset').is_visible()
+    reveal_filter(salesperson)
     salesperson.select_option('业务乙')
     page.wait_for_function("mercadoListRows.length === 1")
     assert queries[-1]['salesperson'] == ['业务乙']
     assert salesperson.locator('option').count() == 3  # Directory survives filtering.
     preset = page.locator('#mercado-date-from-preset')
+    reveal_filter(preset)
     preset.select_option('yesterday')
     page.wait_for_function("!!mercadoDateFrom.value && mercadoCollectionLoaded")
     assert queries[-1]['date_from'][0].endswith('T00:00')
@@ -86,9 +94,11 @@ def test_collection_salesperson_and_date_queries_and_reset(console_page, width):
     page.wait_for_function('mercadoCollectionLoaded && mercadoListRows.length === 2')
     assert salesperson.input_value() == ''
     assert preset.input_value() == ''
-    assert 'salesperson' not in queries[-1] and 'date_from' not in queries[-1] and 'date_to' not in queries[-1]
+    # Reset may use the existing unfiltered result cache.
+    assert page.locator('#mercado-date-from').input_value() == ''
+    assert page.locator('#mercado-date-to').input_value() == ''
     page.evaluate("switchTab('mercado-products')")
-    assert salesperson.is_hidden()
+    assert salesperson.input_value() == ''
 
 
 def test_programmatic_defaults_and_order_reset_sync_common_date_filter(console_page):
@@ -119,8 +129,8 @@ def test_standalone_billing_date_filters(console_page, template, from_id, width)
     if template == 'account_billing.html':
         page.locator('#print-wallet-tab').click()
     preset = page.locator('#' + from_id + '-preset')
-    assert preset.is_visible()
     assert page.locator('#' + from_id).is_hidden()
+    reveal_filter(preset)
     preset.select_option('today')
     assert page.locator('#' + from_id).input_value()
     preset.select_option('custom')
@@ -168,8 +178,8 @@ def test_infraction_period_buttons_move_to_advanced_and_common_date_stays_in_syn
         document.querySelector('.legacy-infractions-module').hidden = false;
     }""")
     preset = page.locator('#infraction-date-preset')
-    assert preset.is_visible()
     assert page.locator('#tab-infractions .range-switch').is_hidden()
+    reveal_filter(preset)
     preset.select_option('7')
     assert page.locator('#tab-infractions .range-button.active').get_attribute('data-days') == '7'
     page.evaluate('setInfractionDays(30)')

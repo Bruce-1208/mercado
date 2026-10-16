@@ -1,0 +1,403 @@
+--- before/bit/bit_mysql.py
++++ bit/bit_mysql.py
+@@ -3893,6 +3893,8 @@
+             normalized_store_ids or None, allowed_store_ids, normalized_salespeople,
+             page, page_size, sort_sql_dir, status=status)
+ 
++    base_filters_applied = False
++
+     def build_where(
+         include_country=True, include_status=True, include_origin=True,
+         include_salesperson=True, include_group=True, include_store=True,
+@@ -3904,7 +3906,7 @@
+         def column(name):
+             return f"{prefix}`{name}`"
+ 
+-        if purchase_platform:
++        if purchase_platform and not base_filters_applied:
+             clause, values = platform_filter_sql(column("purchase_order"), purchase_platform)
+             clauses.append(clause)
+             params.extend(values)
+@@ -3944,12 +3946,12 @@
+             else:
+                 clauses.append(f"{column('group_name')} = %s")
+                 params.append(group_name)
+-        if difference_active:
++        if difference_active and not base_filters_applied:
+             clause, values = difference_predicate(column("actual_freight_usd"), column("quoted_freight_usd"),
+                                                   freight_difference_min, freight_difference_max)
+             clauses.append(clause)
+             params.extend(values)
+-        if freight_variance:
++        if freight_variance and not base_filters_applied:
+             quoted = column("quoted_freight_usd")
+             actual = column("actual_freight_usd")
+             if freight_variance == "dimensions_changed":
+@@ -3983,22 +3985,22 @@
+                 clauses.append(f"{column('freight_local')} IS NULL")
+             elif freight_variance == "pending_quote":
+                 clauses.append(f"{column('quoted_freight_local')} IS NULL")
+-        if start_at:
++        if start_at and not base_filters_applied:
+             clauses.append(f"{column('ordered_at')} >= %s")
+             params.append(start_at.strftime("%Y-%m-%d %H:%M:%S"))
+-        if end_exclusive:
++        if end_exclusive and not base_filters_applied:
+             clauses.append(f"{column('ordered_at')} < %s")
+             params.append(end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+-        if freight_start_at:
++        if freight_start_at and not base_filters_applied:
+             clauses.append(f"{column('freight_checked_at')} >= %s")
+             params.append(freight_start_at.strftime("%Y-%m-%d %H:%M:%S"))
+-        if freight_end_exclusive:
++        if freight_end_exclusive and not base_filters_applied:
+             clauses.append(f"{column('freight_checked_at')} < %s")
+             params.append(freight_end_exclusive.strftime("%Y-%m-%d %H:%M:%S"))
+-        if remark_search:
++        if remark_search and not base_filters_applied:
+             clauses.append(f"{column('order_remark')} LIKE %s")
+             params.append(f"%{str(remark_search).strip()}%")
+-        if search:
++        if search and not base_filters_applied:
+             pattern = f"%{search}%"
+             clauses.append(
+                 f"(CAST({column('id')} AS CHAR) LIKE %s OR "
+@@ -4242,8 +4244,9 @@
+             # summary and only for the 200 rows returned by the current page.
+             search_columns = ""
+             if search:
+-                search_columns = """
+-                    NULLIF(JSON_UNQUOTE(JSON_EXTRACT(synced.`raw_json`, '$.pack_id')), 'null') AS `order_number`,
++                from bit.order_search_projection import pack_sql
++                search_columns = f"""
++                    {pack_sql(cursor)} AS `order_number`,
+                     synced.`purchase_order`, synced.`purchase_tracking`, synced.`platform_tracking_number`,
+                     synced.`product_id`, synced.`title`, synced.`buyer_name` AS `buyer`,
+                     synced.`purchase_remark`, synced.`status_detail` AS `remark`,
+@@ -4335,7 +4338,7 @@
+                            DATE_ADD(synced.`date_created`, INTERVAL 8 HOUR) AS `ordered_at`,
+                            site_settings.`salesperson`, site_settings.`group_name`,
+                            synced.`shop_name`, CASE WHEN synced.`site_id` = 'YANDEX' THEN 'yandex' ELSE 'token' END AS `data_origin`,
+-                           {display_status_sql}
++                           {display_status_sql if not summary_only or status else 'NULL'}
+                                AS `status`,
+                            {remark_column}
+                            synced.`country`,
+@@ -4348,8 +4351,6 @@
+                            CASE WHEN synced.`site_id` = 'YANDEX' THEN NULL ELSE COALESCE(synced.`sale_fee`, 0) END AS `sale_fee`,
+                            ({filter_freight_local}) AS `freight_local`,
+                            ({filter_freight_currency}) AS `freight_currency_id`,
+-                           CASE WHEN ({filter_freight_local}) IS NULL
+-                                THEN 1 ELSE 0 END AS `freight_missing`,
+                            ({quoted_local_sql}) AS `quoted_freight_local`,
+                            ({quoted_currency_sql}) AS `quoted_freight_currency_id`,
+                            ({filter_quote_usd_sql}) AS `quoted_freight_usd`,
+@@ -4375,11 +4376,25 @@
+             )
+             order_filter_table = "`tmp_mercado_order_filter_source`"
+             cursor.execute(f"DROP TEMPORARY TABLE IF EXISTS {order_filter_table}")
++            # Text search, date, remark and freight predicates are invariant
++            # across all facets. Evaluate once and retain only the fields needed
++            # by facets, financial aggregation and page ordering. In particular,
++            # do not materialize pack JSON / long searchable text for every match.
++            filter_columns = (
++                "id", "store_id", "ordered_at", "salesperson", "group_name",
++                "shop_name", "data_origin", "status", "country",
++                "currency_id", "order_date", "platform_currency_id",
++                "total_amount", "paid_amount", "sale_fee", "freight_local",
++                "freight_currency_id", "quoted_freight_local",
++                "quoted_freight_currency_id", "purchase_cost",
++            )
++            projection = ", ".join(f"`{name}`" for name in filter_columns)
+             cursor.execute(
+                 f"CREATE TEMPORARY TABLE {order_filter_table} AS "
+-                f"SELECT * FROM {filter_source_sql}{base_where_sql}",
++                f"SELECT {projection} FROM {filter_source_sql}{base_where_sql}",
+                 [*source_date_params, *base_params],
+             )
++            base_filters_applied = True
+             # Counts/facets scan this request-local table once each. Building
+             # three indexes over the entire history costs more than the one
+             # bounded page sort, and competes with every concurrent reader.
+@@ -4489,7 +4504,7 @@
+                     f"COALESCE(SUM(CASE WHEN scoped.`data_origin` = 'yandex' OR cny_daily_rate.`rate` IS NOT NULL "
+                     f"OR cny_current_rate.`rate` IS NOT NULL THEN 0 ELSE 1 END),0) "
+                     f"AS `cny_exchange_rate_missing_count`, "
+-                    f"COALESCE(SUM(scoped.`freight_missing`),0) AS `freight_missing_count` "
++                    f"COALESCE(SUM(scoped.`freight_local` IS NULL),0) AS `freight_missing_count` "
+                     f"FROM {order_filter_table} AS scoped "
+                     f"LEFT JOIN {rate_key_table} AS rate_keys "
+                     f"ON rate_keys.`currency_id` = scoped.`currency_id` "
+--- before/bit/bit_interface.py
++++ bit/bit_interface.py
+@@ -9875,9 +9875,9 @@
+         warehouse = user_warehouse(get_current_workbench_user())
+         if warehouse is not None:
+             params["transfer_warehouse"] = warehouse
+-        from bit.order_read_cache import read
+-        data = read(db_list_orders, params, scope=get_current_workbench_user(),
+-                    refresh=request.args.get("refresh") == "1")
++        from bit.order_read_cache import read_authorized
++        data = read_authorized(db_list_orders, params, user=get_current_workbench_user(),
++                               refresh=request.args.get("refresh") == "1")
+     except ValueError as exc:
+         return jsonify({"status": "error", "message": str(exc)}), 400
+     except Exception as exc:
+--- before/bit/order_read_cache.py
++++ bit/order_read_cache.py
+@@ -9,6 +9,22 @@
+ _LOCK = threading.Lock()
+ _FLIGHTS = {}
+ _GENERATION = 0
++
++
++def read_authorized(loader, params, *, user, refresh=False):
++    """Share identical resolved order queries within an organization.
++
++    Call only after authentication and after store, salesperson and warehouse
++    restrictions have been resolved into params. list_orders is a pure read of
++    those params: account identity does not change its returned fields. The
++    complete params remain in the cache key; a permission change therefore uses
++    a different entry on the next request. Unknown tenant contexts retain the
++    original per-user isolation.
++    """
++    organization = (user or {}).get("organization_key")
++    scope = ({"organization_key": organization, "resolved_orders": 1}
++             if organization and (user or {}).get("id") else user)
++    return read(loader, params, scope=scope, refresh=refresh)
+ 
+ 
+ def invalidate():
+--- before/bit/order_search_projection.py
++++ bit/order_search_projection.py
+@@ -0,0 +1,58 @@
++"""Optional, database-maintained pack text for exact existing LIKE semantics.
++
++No request performs DDL. Deploy the maintenance script during a write pause;
++unmigrated databases keep the original JSON expression.
++"""
++import re
++import threading
++import time
++
++import pymysql
++
++TABLE = "mercado_synced_orders"
++COLUMN = "_pack_search_value"
++EXPRESSION = "NULLIF(JSON_UNQUOTE(JSON_EXTRACT(`raw_json`, '$.pack_id')), 'null')"
++DEFINITION = ("LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin "
++              f"GENERATED ALWAYS AS ({EXPRESSION}) STORED")
++_CACHE = {}
++_LOCK = threading.Lock()
++
++
++def normalized(expression):
++    # INFORMATION_SCHEMA may escape quotes and add charset introducers. Keep
++    # quoted JSON paths/literals case-sensitive, including their whitespace.
++    tokens = re.findall(r"'(?:''|[^'])*'|`[^`]*`|[A-Za-z_][A-Za-z_0-9]*|\S",
++                        str(expression).replace("\\'", "'"))
++    return tuple(token if token.startswith("'") else token.strip("`").lower()
++                 for token in tokens if token.lower() != "_utf8mb4")
++
++
++def inspect(cursor):
++    cursor.execute(
++        "SELECT GENERATION_EXPRESSION, DATA_TYPE, COLLATION_NAME, EXTRA "
++        "FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() "
++        "AND TABLE_NAME=%s AND COLUMN_NAME=%s", (TABLE, COLUMN))
++    row = cursor.fetchone()
++    if row and (normalized(row["GENERATION_EXPRESSION"]) != normalized(EXPRESSION)
++                or row["DATA_TYPE"] != "longtext"
++                or row["COLLATION_NAME"] != "utf8mb4_bin"
++                or "STORED GENERATED" not in row["EXTRA"]):
++        raise ValueError("Order search projection has an incompatible definition")
++    return bool(row)
++
++
++def pack_sql(cursor):
++    fallback = EXPRESSION.replace("`raw_json`", "synced.`raw_json`")
++    connection = getattr(cursor, "connection", None)
++    if not isinstance(connection, pymysql.connections.Connection):
++        return fallback
++    key = (connection.host, connection.port, connection.unix_socket,
++           connection.user, connection.db)
++    with _LOCK:
++        expires, present = _CACHE.get(key, (0, False))
++        if expires <= time.monotonic():
++            present = inspect(cursor)
++            if len(_CACHE) >= 32:
++                _CACHE.clear()
++            _CACHE[key] = (time.monotonic() + 60, present)
++    return f"synced.`{COLUMN}`" if present else fallback
+--- before/scripts/optimize_order_search_projection.py
++++ scripts/optimize_order_search_projection.py
+@@ -0,0 +1,52 @@
++"""Inspect order search projection; --apply requires a planned write pause.
++
++MySQL rebuilds the table for a STORED generated column. This script never runs
++from an HTTP request. Reads remain available, but writes pause during COPY;
++allow disk space for a second copy of the table. Existing rows and subsequent
++raw_json updates are maintained by MySQL, without backfill freshness gaps.
++
++python -m scripts.optimize_order_search_projection --database NAME [--apply]
++"""
++import argparse
++import json
++import time
++
++from bit.order_search_projection import COLUMN, DEFINITION, TABLE, inspect
++
++
++def optimize(connection, *, database, apply=False):
++    with connection.cursor() as cursor:
++        cursor.execute("SELECT DATABASE() AS db")
++        actual = cursor.fetchone()["db"]
++        if actual != database or actual in {"mysql", "sys", "information_schema", "performance_schema"}:
++            raise ValueError("Explicit application database must match the connection")
++        cursor.execute("SET SESSION lock_wait_timeout=5")
++        before = inspect(cursor)
++        start = time.monotonic()
++        if apply and not before:
++            cursor.execute(f"ALTER TABLE `{TABLE}` ADD COLUMN `{COLUMN}` {DEFINITION}, "
++                           "ALGORITHM=COPY, LOCK=SHARED")
++        return {"database": actual, "present_before": before,
++                "present_after": inspect(cursor), "applied": bool(apply and not before),
++                "elapsed_seconds": round(time.monotonic() - start, 3),
++                "deployment_requirement": "COPY rebuild: pause writes and reserve table-copy disk space"}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--database", required=True)
++    parser.add_argument("--apply", action="store_true")
++    args = parser.parse_args()
++    import pymysql
++    from bit.db_pool import default_connection_config
++    config = default_connection_config()
++    config.update(autocommit=True, read_timeout=1800)
++    connection = pymysql.connect(**config)
++    try:
++        print(json.dumps(optimize(connection, database=args.database, apply=args.apply)))
++    finally:
++        connection.close()
++
++
++if __name__ == "__main__":
++    main()
+--- before/tests/test_order_authorized_cache.py
++++ tests/test_order_authorized_cache.py
+@@ -0,0 +1,69 @@
++"""Authorization is resolved on every request, before sharing order reads."""
++import ast
++from pathlib import Path
++from unittest.mock import Mock
++
++from flask import Flask, has_request_context, jsonify, request
++
++from bit import order_read_cache as cache
++
++
++def test_route_shares_equal_visibility_but_rechecks_all_scope_restrictions():
++    cache.invalidate()
++    user = {"id": 1, "organization_key": "a", "role_key": "member"}
++    allowed = [1]
++    warehouse = [None]
++    own_store = [False]
++    loader = Mock(side_effect=lambda **params: {"rows": [{"store_id": params["store_ids"][0]}]})
++    app = Flask(__name__)
++    namespace = dict(app=app, request=request, jsonify=jsonify,
++        has_request_context=has_request_context,
++        workbench_user_own_store_only=lambda: own_store[0],
++        workbench_user_salesperson=lambda: user["personal_name"],
++        _authorized_order_store_ids=lambda: set(allowed),
++        user_warehouse=lambda value: warehouse[0],
++        get_current_workbench_user=lambda: dict(user), db_list_orders=loader)
++    names = {"api_orders", "_order_list_query_params", "_parse_int_param"}
++    nodes = [node for node in ast.parse(Path("bit/bit_interface.py").read_text()).body
++             if isinstance(node, ast.FunctionDef) and node.name in names]
++    for node in nodes:
++        node.decorator_list = []
++    exec(compile(ast.Module(body=nodes, type_ignores=[]), "<order-route>", "exec"), namespace)
++    app.add_url_rule("/api/orders", view_func=namespace["api_orders"])
++    client = app.test_client()
++    assert client.get("/api/orders").json["data"]["rows"] == [{"store_id": 1}]
++    user["id"] = 2
++    assert client.get("/api/orders").status_code == 200
++    assert loader.call_count == 1
++    # Revocation changes the effective scope immediately, inside the cache TTL.
++    allowed[:] = [2]
++    assert client.get("/api/orders").json["data"]["rows"] == [{"store_id": 2}]
++    assert loader.call_count == 2
++    assert client.get("/api/orders?store_id=1").json["data"]["rows"] == []
++    assert loader.call_count == 2
++    user["organization_key"] = "b"
++    assert client.get("/api/orders").status_code == 200
++    assert loader.call_count == 3
++    warehouse[0] = "shahu"
++    assert client.get("/api/orders").status_code == 200
++    assert loader.call_count == 4
++    assert loader.call_args.kwargs["transfer_warehouse"] == "shahu"
++    own_store[0] = True
++    user["personal_name"] = "Alice"
++    assert client.get("/api/orders").status_code == 200
++    user["personal_name"] = "Bob"
++    assert client.get("/api/orders").status_code == 200
++    assert loader.call_count == 6
++    assert loader.call_args.kwargs["salesperson"] == "Bob"
++    assert client.get("/api/orders?refresh=1").status_code == 200
++    assert loader.call_count == 7
++    cache.invalidate()
++
++
++def test_unknown_organization_keeps_account_isolation():
++    cache.invalidate()
++    loader = Mock(return_value={"rows": []})
++    for uid in (1, 2):
++        cache.read_authorized(loader, {}, user={"id": uid})
++    assert loader.call_count == 2
++    cache.invalidate()
+--- before/tests/test_order_search_projection.py
++++ tests/test_order_search_projection.py
+@@ -0,0 +1,42 @@
++from unittest.mock import MagicMock
++
++import pytest
++
++from bit.order_search_projection import EXPRESSION, inspect, pack_sql
++from scripts.optimize_order_search_projection import optimize
++
++
++def definition(**changes):
++    return {"GENERATION_EXPRESSION": EXPRESSION, "DATA_TYPE": "longtext",
++            "COLLATION_NAME": "utf8mb4_bin", "EXTRA": "STORED GENERATED", **changes}
++
++
++@pytest.mark.parametrize("changes", [
++    {"GENERATION_EXPRESSION": "raw_json"}, {"DATA_TYPE": "varchar"},
++    {"GENERATION_EXPRESSION": EXPRESSION.replace("pack_id", "Pack_id")},
++    {"GENERATION_EXPRESSION": EXPRESSION.replace("pack_id", "pa ck_id")},
++    {"COLLATION_NAME": "utf8mb4_general_ci"}, {"EXTRA": "VIRTUAL GENERATED"},
++])
++def test_incompatible_projection_is_rejected(changes):
++    cursor = MagicMock()
++    cursor.fetchone.return_value = definition(**changes)
++    with pytest.raises(ValueError, match="incompatible"):
++        inspect(cursor)
++
++
++def test_dry_run_and_database_guard_never_change_schema():
++    connection = MagicMock()
++    cursor = connection.cursor.return_value.__enter__.return_value
++    cursor.fetchone.side_effect = [{"db": "test_orders"}, None, None]
++    assert optimize(connection, database="test_orders")["applied"] is False
++    assert not any("ALTER TABLE" in call.args[0] for call in cursor.execute.call_args_list)
++    cursor.fetchone.side_effect = [{"db": "unexpected_database"}]
++    with pytest.raises(ValueError, match="must match"):
++        optimize(connection, database="test_orders", apply=True)
++    assert not any("ALTER TABLE" in call.args[0] for call in cursor.execute.call_args_list)
++
++
++def test_non_mysql_cursor_uses_original_expression_without_ddl():
++    cursor = MagicMock()
++    assert pack_sql(cursor) == EXPRESSION.replace("`raw_json`", "synced.`raw_json`")
++    cursor.execute.assert_not_called()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bit.knowledge_organization import organization
 import threading
 from datetime import datetime
 from typing import Any, Callable
@@ -45,15 +46,22 @@ def ensure_overview_sync_settings_table(cursor: Any) -> None:
         cursor.execute(
             f"""
             CREATE TABLE IF NOT EXISTS `{SETTINGS_TABLE}` (
+                `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
                 `scope` VARCHAR(64) NOT NULL,
                 `enabled` TINYINT(1) NOT NULL DEFAULT 1,
                 `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                     ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (`scope`)
+                PRIMARY KEY (`organization_key`, `scope`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """
         )
+        cursor.execute(f"SHOW COLUMNS FROM `{SETTINGS_TABLE}` LIKE 'organization_key'")
+        if not cursor.fetchone():
+            cursor.execute(f"""ALTER TABLE `{SETTINGS_TABLE}`
+                ADD COLUMN `organization_key` VARCHAR(64) NOT NULL DEFAULT 'wuhan-zeshun',
+                DROP PRIMARY KEY, ADD PRIMARY KEY (`organization_key`, `scope`)
+            """)
         _schema_ready = True
 
 
@@ -69,8 +77,8 @@ def get_overview_sync_settings(
             ensure_overview_sync_settings_table(cursor)
             cursor.execute(
                 f"SELECT `scope`, `enabled`, `updated_at` FROM `{SETTINGS_TABLE}` "
-                "WHERE `scope` = %s",
-                (normalized,),
+                "WHERE `scope` = %s AND `organization_key` = %s",
+                (normalized, organization()),
             )
             row = cursor.fetchone() or {}
     finally:
@@ -101,13 +109,13 @@ def set_overview_sync_enabled(
             ensure_overview_sync_settings_table(cursor)
             cursor.execute(
                 f"""
-                INSERT INTO `{SETTINGS_TABLE}` (`scope`, `enabled`, `updated_at`)
-                VALUES (%s, %s, %s)
+                INSERT INTO `{SETTINGS_TABLE}` (`organization_key`, `scope`, `enabled`, `updated_at`)
+                VALUES (%s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     `enabled` = VALUES(`enabled`),
                     `updated_at` = VALUES(`updated_at`)
                 """,
-                (normalized, int(enabled), _now()),
+                (organization(), normalized, int(enabled), _now()),
             )
         connection.commit()
     except BaseException:
@@ -129,3 +137,18 @@ __all__ = [
     "get_overview_sync_settings",
     "set_overview_sync_enabled",
 ]
+
+
+def due_enterprise_predicate(cursor, scope):
+    """Schedulers honor each token owner's switch before LIMIT is applied."""
+    from flask import has_request_context
+    ensure_overview_sync_settings_table(cursor)
+    owner_sql = "COALESCE(NULLIF(NULLIF(tokens.`organization_key`, 'default'), ''), 'wuhan-zeshun')"
+    sql = f"""NOT EXISTS (SELECT 1 FROM `{SETTINGS_TABLE}` enterprise_setting
+        WHERE enterprise_setting.`organization_key` = {owner_sql}
+          AND enterprise_setting.`scope` = %s AND enterprise_setting.`enabled` = 0)"""
+    params = [_normalize_scope(scope)]
+    if has_request_context():
+        sql += f" AND {owner_sql} = %s"
+        params.append(organization())
+    return sql, params

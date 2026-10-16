@@ -16,6 +16,8 @@ from test_ai_original_budget_routes import isolated_function
 
 def row(pid, status="pending", platform="mercadolibre", serialized=False):
     draft = {"status": status, "title_es": "Saved title", "title": "Saved title",
+             "title_pt": "Saved title", "description_pt": "Saved description", "description": "Saved description",
+             "image_generation_method": "local_background_removal", "attributes": [{"id": "MATERIAL", "value_name": "Plastic"}],
              "main_image_url": "/saved-ai-white.jpg", "description_es": "Saved description"}
     snapshot = {"original_1688": {"title": "供应商商品"},
                 "ai_original": draft if platform == "mercadolibre" else {},

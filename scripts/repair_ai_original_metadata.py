@@ -18,9 +18,25 @@ def needs_repair(row, state):
             or state.get('failed_step') in ('category', 'attributes', 'variations'))
 
 
+def images_repairable(row, snapshot):
+    from erp.ai_original_images import restore_product_variation_image_sources, variation_image_sources, variation_white_image_ready
+    state = snapshot.get('ai_original') or {}
+    original = snapshot.get('original_1688') or {}
+    if (state.get('status') not in {'failed', 'incomplete', 'pending'}
+            or not re.fullmatch(r'CBT[0-9]+', str(row.get('category_id') or ''))
+            or state.get('missing_required_attributes')
+            or not (state.get('preparation') or {}).get('variations_ready')):
+        return False
+    rows = restore_product_variation_image_sources(state.get('variations') or [], original,
+                                                   state.get('source_variations') or [])
+    return bool(rows and len(rows) == len(original.get('variations') or [])
+                and all(variation_white_image_ready(v) or variation_image_sources(v) for v in rows))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--images-only', action='store_true', help='Finish image stages only when every SKU has a verified source')
     parser.add_argument('--actor-id', type=int, default=1)
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--ids', type=int, nargs='*')
@@ -35,8 +51,10 @@ def main():
         cursor.execute("SELECT id FROM mercado_store_tokens WHERE enabled=1 AND site_id='CBT' ORDER BY id LIMIT 1")
         token = cursor.fetchone()
     connection.close()
+    def eligible(row, snapshot):
+        return images_repairable(row, snapshot) if args.images_only else needs_repair(row, snapshot.get('ai_original') or {})
     ids = [r['id'] for r in rows if (not args.ids or r['id'] in args.ids)
-           and needs_repair(r, json.loads(r['source_snapshot_json'] or '{}').get('ai_original') or {})]
+           and eligible(r, json.loads(r['source_snapshot_json'] or '{}'))]
     print(json.dumps({'candidates': ids, 'count': len(ids), 'apply': args.apply}), flush=True)
     if not args.apply:
         return
@@ -61,21 +79,24 @@ def main():
                 if isinstance(snapshot, str): snapshot = json.loads(snapshot)
                 snapshot = deepcopy(snapshot)
                 state = snapshot.get('ai_original') or {}
-                if not needs_repair(row, state): return {'id': pid, 'status': 'already_repaired'}
+                if not eligible(row, snapshot): return {'id': pid, 'status': 'already_repaired'}
                 (output / f'{pid}-before.json').write_text(json.dumps(row, ensure_ascii=False, default=str))
                 revision = int(state.get('edit_revision') or 0)
                 budget_revision = int((state.get('generation_budget') or {}).get('revision') or 0)
                 # Acquiring the distributed lock proves an old processing marker has no worker.
-                state.update(status='pending', error='')
+                state.update(status='pending', error='', generated_by=actor.get('display_name') or actor.get('username') or '管理员',
+                             generated_by_user_id=args.actor_id)
                 snapshot['ai_original'] = state
                 row['source_snapshot_json'] = snapshot
-                def save(step, partial):
+                def save(step, partial, listing_fields=None):
                     nonlocal budget_revision
                     check_owner()
                     snapshot['ai_original'] = deepcopy(partial)
                     snapshot.setdefault('marketplace_listings', {})['mercadolibre'] = deepcopy(partial)
                     change = {'source_snapshot_json': snapshot, 'expected_ai_original_revision': revision,
                               'review_status': 'unreviewed'}
+                    if listing_fields:
+                        change.update(listing_fields)
                     next_budget_revision = int((partial.get('generation_budget') or {}).get('revision') or 0)
                     if next_budget_revision != budget_revision:
                         change['expected_generation_budget_revision'] = budget_revision
@@ -88,10 +109,14 @@ def main():
                         **app.ai_billing_actor_context(actor), task_id=str(row['source_item_id']))(
                         row, api_key=key, model=QWEN_MODEL, base_url=QWEN_BASE_URL,
                         category_client=DatabaseMercadoLibreClient(token['id']), cost_control=True,
-                        before_model_request=check_owner, on_preparation_checkpoint=save, metadata_only=True)
+                        before_model_request=check_owner, on_preparation_checkpoint=save, metadata_only=not args.images_only)
                     final = result['ai_original']
-                    save('metadata_ready', final)
-                    status = 'metadata_ready'
+                    if args.images_only:
+                        snapshot = json.loads(result['source_snapshot_json'])
+                    save('completed' if args.images_only else 'metadata_ready', final,
+                         {key: result[key] for key in ('title', 'description_text', 'main_image_url')
+                          if key in result} if args.images_only else None)
+                    status = 'completed' if args.images_only else 'metadata_ready'
                     error = ''
                 except OriginalPreparationError as exc:
                     final = exc.state

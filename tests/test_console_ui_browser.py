@@ -357,7 +357,10 @@ def test_filter_layout_and_popup_fit_viewport(console_page, width):
         .map(e => e.getBoundingClientRect().height).filter(Boolean)
     """)
     assert set(heights) == {32}
-    page.locator("#order-store-filter-trigger").click()
+    trigger = page.locator("#order-store-filter-trigger")
+    if not trigger.is_visible():
+        trigger.locator('xpath=ancestor::details[1]').locator(':scope > summary').click()
+    trigger.click()
     box = page.locator("#order-store-filter-picker .market-multi-panel").bounding_box()
     assert box and box["x"] >= 0 and box["x"] + box["width"] <= width
     assert box["y"] >= 0 and box["y"] + box["height"] <= 1000

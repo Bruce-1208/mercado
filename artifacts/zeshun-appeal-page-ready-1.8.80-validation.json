@@ -1,0 +1,21 @@
+{
+  "version": "1.8.80",
+  "package": "zeshun-collector-extension-1.8.80-appeal-page-ready.zip",
+  "sha256": "78d5538051d2a892024524d1456a7c9a5f4e12fa1b893634831bf65a0303c7a7",
+  "tests": {
+    "runner_and_mail": 55,
+    "offline_chromium_page_and_popup": 21
+  },
+  "covered": [
+    "usable page while loading",
+    "immediate context injection",
+    "account hydration retries",
+    "hung navigation timeout",
+    "hung tab read timeout",
+    "stop during hung probe",
+    "pending navigation and same-url reload",
+    "no duplicate startup navigation"
+  ],
+  "server_restart_required": false,
+  "live_appeals_sent": false
+}

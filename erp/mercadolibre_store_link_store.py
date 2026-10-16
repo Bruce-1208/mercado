@@ -1190,6 +1190,7 @@ def finalize_store_snapshot(
     token_id: int,
     sync_marker: str,
     *,
+    scan_started_at: str | None = None,
     connection_factory: Callable[[], Any] | None = None,
 ) -> int:
     """Hide links absent from a fully completed incremental scan."""
@@ -1205,8 +1206,9 @@ def finalize_store_snapshot(
             cursor.execute(
                 f"UPDATE `{STORE_LINK_TABLE}` SET `is_current` = 0 "
                 "WHERE `token_id` = %s AND (`sync_marker` IS NULL OR `sync_marker` <> %s) "
-                "AND COALESCE(`status`, '') <> 'deleted'",
-                (token_id, marker),
+                "AND COALESCE(`status`, '') <> 'deleted'"
+                + (" AND `last_synced_at` < %s" if scan_started_at else ""),
+                (token_id, marker, scan_started_at) if scan_started_at else (token_id, marker),
             )
             changed = int(cursor.rowcount or 0)
         connection.commit()
@@ -1652,6 +1654,69 @@ def _store_link_metadata(
 
 
 
+def _filtered_store_link_statistics(cursor, conditions, values, *, site_id, status,
+                                    current_only, known_sites, use_cache):
+    """Count facets and the result from one snapshot of the same predicates.
+
+    Site/status/current predicates are applied below so each picker can still
+    show alternatives, including zero-result sites, without losing its value.
+    """
+    where = " WHERE " + " AND ".join(conditions) if conditions else ""
+    sql = (
+        "SELECT links.`token_id`, links.`site_id`, links.`status`, links.`is_current`, "
+        "COUNT(*) AS `total`, MAX(links.`last_synced_at`) AS `last_synced_at` "
+        f"FROM `{STORE_LINK_TABLE}` AS links{where} "
+        "GROUP BY links.`token_id`, links.`site_id`, links.`status`, links.`is_current`"
+    )
+    def load():
+        cursor.execute(sql, tuple(values))
+        return [dict(row) for row in cursor.fetchall()]
+
+    if use_cache:
+        from bit.bit_mysql import config
+        database_key = tuple(str(config.get(k, "")) for k in
+                             ("host", "port", "database", "db", "user"))
+        rows = _filtered_count_cache.get_or_load((database_key, sql, tuple(values)), load)
+    else:
+        rows = load()
+    sites = {str(row["site_id"]): 0 for row in known_sites if row.get("site_id")}
+    if site_id:
+        sites.setdefault(site_id, 0)
+    summary = {"all_count": 0, "current_count": 0, "store_count": 0, "last_synced_at": None}
+    status_counts = {"": 0}
+    current_stores = set()
+    for row in rows:
+        row_site = str(row.get("site_id") or "")
+        row_status = str(row.get("status") or "")
+        count = int(row.get("total") or 0)
+        current = bool(row.get("is_current"))
+        matches_site = not site_id or row_site == site_id
+        matches_status = not status or row_status == status
+        if matches_site and (current or not current_only):
+            status_counts[""] += count
+            if row_status:
+                status_counts[row_status] = status_counts.get(row_status, 0) + count
+        if matches_status and (current or not current_only) and row_site:
+            sites[row_site] = sites.get(row_site, 0) + count
+        if not (matches_site and matches_status):
+            continue
+        summary["all_count"] += count
+        if current:
+            summary["current_count"] += count
+            current_stores.add(row["token_id"])
+            synced = row.get("last_synced_at")
+            if synced and (not summary["last_synced_at"] or synced > summary["last_synced_at"]):
+                summary["last_synced_at"] = synced
+    summary["store_count"] = len(current_stores)
+    return {
+        "summary": _json_safe_row(summary),
+        "sites": [_json_safe_row({"site_id": site, "link_count": count})
+                  for site, count in sorted(sites.items())],
+        "status_counts": status_counts,
+        "total": summary["current_count" if current_only else "all_count"],
+    }
+
+
 def list_store_links(
     *,
     search: str = "",
@@ -1705,13 +1770,17 @@ def list_store_links(
     elif token_id not in (None, ""):
         conditions.append("links.`token_id` = %s")
         values.append(int(token_id))
-    elif scoped_token_ids is not None:
+    if scoped_token_ids is not None:
         if not scoped_token_ids:
             conditions.append("1 = 0")
         else:
             placeholders = ", ".join(["%s"] * len(scoped_token_ids))
             conditions.append(f"links.`token_id` IN ({placeholders})")
             values.extend(scoped_token_ids)
+    # Keep facet predicates separate; all other filters and permissions apply
+    # identically to rows, totals, site options, and status options.
+    facet_conditions = [condition for condition in conditions if condition != "links.`is_current` = 1"]
+    facet_values = list(values)
     site_id = str(site_id or "").strip().upper()[:16]
     if site_id:
         conditions.append("links.`site_id` = %s")
@@ -1722,6 +1791,8 @@ def list_store_links(
     if status:
         conditions.append("links.`status` = %s")
         values.append(status)
+    facet_tail_start = len(conditions)
+    facet_value_start = len(values)
     category_filter = str(management_category_id or "").strip().lower()
     if category_filter in {"uncategorized", "unclassified", "none"}:
         conditions.append(
@@ -1902,14 +1973,18 @@ def list_store_links(
                         marker=marker,
                         enabled=enabled,
                         token_ids=marker_scope_token_ids,
-                        site_id=site_id,
+                        site_id="",
                     )
             where_sql = (
                 " WHERE " + " AND ".join(filtered_conditions)
                 if filtered_conditions else ""
             )
+            facet_conditions.extend(filtered_conditions[facet_tail_start:])
+            facet_values.extend(filtered_values[facet_value_start:])
+            status_counts = None
             scoped_only_filter = (
                 scoped_token_ids is not None
+                and current_only
                 and not selected_token_ids
                 and token_id in (None, "")
                 and not site_id
@@ -1925,26 +2000,18 @@ def list_store_links(
                 total = int(summary.get(
                     "current_count" if current_only else "all_count"
                 ) or 0)
-            elif not filtered_conditions:
-                total = int(summary.get("all_count") or 0)
             elif filtered_conditions == ["links.`is_current` = 1"]:
                 total = int(summary.get("current_count") or 0)
             else:
-                count_sql = f"SELECT COUNT(*) AS `total`{links_from_sql}{where_sql}"
-                def load_count():
-                    cursor.execute(count_sql, tuple(filtered_values))
-                    return int((cursor.fetchone() or {}).get("total") or 0)
-                if connection_factory is not None:
-                    total = load_count()
-                else:
-                    from bit.bit_mysql import config
-                    database_key = tuple(str(config.get(k, "")) for k in
-                                         ("host", "port", "database", "db", "user"))
-                    # Include the actual SQL predicates AND permission scope.
-                    # Cached totals never bypass the live row authorization query.
-                    count_key = (database_key, count_sql, tuple(filtered_values),
-                                 None if scoped_token_ids is None else tuple(scoped_token_ids))
-                    total = _filtered_count_cache.get_or_load(count_key, load_count)
+                statistics = _filtered_store_link_statistics(
+                    cursor, facet_conditions, facet_values, site_id=site_id,
+                    status=status, current_only=current_only, known_sites=sites,
+                    use_cache=connection_factory is None,
+                )
+                summary = statistics["summary"]
+                sites = statistics["sites"]
+                status_counts = statistics["status_counts"]
+                total = statistics["total"]
             pages = max(1, (total + page_size - 1) // page_size)
             page = min(page, pages)
             recent_sales_join_sql = ""
@@ -2112,6 +2179,7 @@ def list_store_links(
         "groups": groups,
         "mercado_categories": mercado_categories,
         "summary": summary,
+        "status_counts": status_counts,
         "total": total,
         "page": page,
         "page_size": page_size,

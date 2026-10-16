@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="10" skipped="0" tests="35" time="0.609" timestamp="2026-10-12T16:40:01.674942+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_mercado_communications" name="test_pre_sale_search_and_answer_use_official_marketplace_resources" time="0.002" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_item_and_buyer_filters_use_official_query_names" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_sort_uses_official_query_names_and_validates_values" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_post_sale_messages_are_pack_scoped_and_include_translation" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_workbench_reads_pack_without_marking_messages_as_read" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_cbt_pack_read_uses_global_endpoint_and_returns_marketplace_seller" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_cbt_pack_read_preserves_permission_denial_without_refreshing" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_unread_conversations_are_enriched_with_local_order_context" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_claim_bundle_reads_claim_detail_messages_reason_and_reputation" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_claim_message_validates_receiver_role_and_uses_action_endpoint" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_claims_1_detail_and_messages_fall_back_to_post_purchase_api" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_claims_1_reply_falls_back_to_legacy_messages_endpoint" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_claim_search_supports_after_sale_type_and_date_filters" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_claim_search_rejects_invalid_type_and_inverted_dates" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_claim_adapter_defaults_unfiltered_search_to_opened" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_claim_adapter_uses_cbt_marketplace_child_sellers_and_merges_results" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_unauthorized_request_refreshes_once_and_retries_with_new_token" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_model_6_forbidden_has_actionable_error" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_workbench_adapter_refreshes_server_side_without_returning_token" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_summary_returns_status_totals_for_dashboard_tabs" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_translation_converts_local_question_text_to_chinese" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_translation_can_auto_detect_question_source_language" time="0.001" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_chinese_reply_is_translated_to_buyer_language_before_send" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_pre_sale_aggregate_queries_stores_with_thread_pool" time="0.008"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:644: in test_pre_sale_aggregate_queries_stores_with_thread_pool
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_aggregate_queries_claim_stores_with_thread_pool" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:700: in test_customer_service_aggregate_queries_claim_stores_with_thread_pool
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_aggregate_keeps_single_store_failure_isolated" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:734: in test_customer_service_aggregate_keeps_single_store_failure_isolated
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_view_can_read_but_cannot_reply" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:768: in test_customer_service_view_can_read_but_cannot_reply
+    assert read.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_view_can_read_pre_sale_summary" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:790: in test_customer_service_view_can_read_pre_sale_summary
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_view_can_request_pre_sale_translation" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:813: in test_customer_service_view_can_request_pre_sale_translation
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_pre_sale_workbench_module_has_filters_table_pagination_and_reply" time="0.010"><failure message="assert '线程完成查询' in '&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\n...  &lt;script src=&quot;{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n'">tests/test_mercado_communications.py:835: in test_pre_sale_workbench_module_has_filters_table_pagination_and_reply
+    assert '线程完成查询' in template
+E   assert '线程完成查询' in '&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\n...  &lt;script src="{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n'</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_manager_can_send_claim_message" time="0.002"><failure message="assert 503 == 200&#10; +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code">tests/test_mercado_communications.py:870: in test_customer_service_manager_can_send_claim_message
+    assert response.status_code == 200
+E   assert 503 == 200
+E    +  where 503 = &lt;WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]&gt;.status_code</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_claim_can_open_exact_store_bit_browser" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_customer_service_claim_browser_uses_order_shop_name_hint" time="0.000" /><testcase classname="tests.test_mercado_communications" name="test_customer_service_claim_browser_requires_exact_store_binding" time="0.004"><failure message="requests.exceptions.ConnectionError: HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/list (Caused by NewConnectionError(&quot;HTTPConnection(host='127.0.0.1', port=54345): Failed to establish a new connection: Functional regression blocks business-service networking&quot;))">/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connection.py:204: in _new_conn
+    sock = connection.create_connection(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/util/connection.py:85: in create_connection
+    raise err
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/util/connection.py:73: in create_connection
+    sock.connect(sa)
+artifacts/full-audit-20261012/run_regression.py:23: in isolated_connect
+    raise PermissionError("Functional regression blocks business-service networking")
+E   PermissionError: Functional regression blocks business-service networking
+
+The above exception was the direct cause of the following exception:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connection.py:500: in request
+    self.endheaders()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/http/client.py:1314: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/http/client.py:1074: in _send_output
+    self.send(msg)
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/http/client.py:1018: in send
+    self.connect()
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connection.py:331: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connection.py:219: in _new_conn
+    raise NewConnectionError(
+E   urllib3.exceptions.NewConnectionError: HTTPConnection(host='127.0.0.1', port=54345): Failed to establish a new connection: Functional regression blocks business-service networking
+
+The above exception was the direct cause of the following exception:
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/requests/adapters.py:645: in send
+    resp = conn.urlopen(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/urllib3/util/retry.py:535: in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/list (Caused by NewConnectionError("HTTPConnection(host='127.0.0.1', port=54345): Failed to establish a new connection: Functional regression blocks business-service networking"))
+
+During handling of the above exception, another exception occurred:
+tests/test_mercado_communications.py:975: in test_customer_service_claim_browser_requires_exact_store_binding
+    bit_interface._open_mercado_claim_browser(9, "5568513900")
+bit/bit_interface.py:23244: in _open_mercado_claim_browser
+    window_id = getBrowserIdByName(candidate)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_api.py:211: in getBrowserIdByName
+    browsers = listBrowsers(page_size=page_size, max_pages=max_pages)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_api.py:188: in listBrowsers
+    response = _post_browser_api(
+bit/bit_api.py:134: in _post_browser_api
+    return _send_browser_api(endpoint, payload, request_timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+bit/bit_api.py:138: in _send_browser_api
+    response = requests.post(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/requests/sessions.py:592: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/requests/sessions.py:706: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/requests/adapters.py:678: in send
+    raise ConnectionError(e, request=request)
+E   requests.exceptions.ConnectionError: HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/list (Caused by NewConnectionError("HTTPConnection(host='127.0.0.1', port=54345): Failed to establish a new connection: Functional regression blocks business-service networking"))</failure></testcase><testcase classname="tests.test_mercado_communications" name="test_customer_service_supports_owner_group_aggregation_and_row_store_replies" time="0.006"><failure message="assert 'customerServiceAllRows = await customerServiceLoadPostSale(stores, search)' in '&lt;!DOCTYPE html&gt;\n&lt;html lang=&quot;zh-CN&quot; data-ui-version=&quot;2026-10-04-responsive-ui&quot;&gt;\n&lt;head&gt;\n    &lt;meta charset=&quot;UTF-8&quot;&gt;\n...  &lt;script src=&quot;{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012&quot;&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n'">tests/test_mercado_communications.py:986: in test_customer_service_supports_owner_group_aggregation_and_row_store_replies
+    assert "customerServiceAllRows = await customerServiceLoadPostSale(stores, search)" in template
+E   assert 'customerServiceAllRows = await customerServiceLoadPostSale(stores, search)' in '&lt;!DOCTYPE html&gt;\n&lt;html lang="zh-CN" data-ui-version="2026-10-04-responsive-ui"&gt;\n&lt;head&gt;\n    &lt;meta charset="UTF-8"&gt;\n...  &lt;script src="{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012"&gt;&lt;/script&gt;\n&lt;/body&gt;\n&lt;/html&gt;\n'</failure></testcase></testsuite></testsuites>

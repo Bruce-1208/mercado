@@ -18,13 +18,14 @@ def browser():
         instance.close()
 
 
-def open_page(browser, html, *, direct=False, capture=False):
+def open_page(browser, html, *, direct=False, capture=False, platform='pdd'):
     page = browser.new_page()
-    page.route('https://mobile.yangkeduo.com/**', lambda route: route.fulfill(
+    host = 'trade.1688.com' if platform == '1688' else 'mobile.yangkeduo.com'
+    page.route(f'https://{host}/**', lambda route: route.fulfill(
         content_type='text/html; charset=utf-8', body='<meta charset="utf-8">' + html))
     if capture:
         page.add_init_script(path=str(EXTENSION / 'purchase-tracking-page.js'))
-    page.goto('https://mobile.yangkeduo.com/' + (f'order.html?order_sn={ORDER}' if direct else 'orders.html'))
+    page.goto(f'https://{host}/' + (f'order.html?order_sn={ORDER}' if direct else 'orders.html'))
     page.evaluate('window.chrome={runtime:{onMessage:{addListener:fn=>window.purchaseListener=fn}}}')
     page.add_script_tag(path=str(EXTENSION / 'purchase-tracking-content.js'))
     return page
@@ -41,6 +42,64 @@ def test_missing_search_is_failure_not_skipped(browser):
     assert result['status'] == 'failed'
     assert result['fatal']
     assert '未执行查询' in result['message']
+    page.close()
+
+
+@pytest.mark.parametrize('width', [1440, 390])
+@pytest.mark.parametrize('field', [
+    '<label for="buyer-query">订单编号：</label><input id="buyer-query">',
+    '<div><span>订单号：</span><span><input></span></div>',
+    '<input name="tradeId">',
+    '<input aria-label="订单号码">',
+    '<span id="caption">订单编号</span><input aria-labelledby="caption">',
+])
+def test_1688_delayed_labelled_search_ignores_product_search(browser, width, field):
+    page = open_page(browser, f'''<input id="product" placeholder="搜索商品"><button onclick="window.wrongSearch=true">搜索</button>
+      <section id="buyer"></section><section id="result"></section>
+      <script>
+      window.loadBuyer = () => document.querySelector('#buyer').innerHTML = {json.dumps(field + '<button onclick="searchOrder()">查 询</button>')};
+      function searchOrder() {{
+        window.searched = document.querySelector('#buyer input').value;
+        document.querySelector('#result').innerHTML = '订单编号：{ORDER}<p>物流单号：SF123456789</p>';
+      }}
+      </script>''', platform='1688')
+    page.set_viewport_size({'width': width, 'height': 900})
+    page.evaluate('setTimeout(window.loadBuyer, 750)')
+    result = fetch(page)
+    assert result['status'] == 'synced'
+    assert page.evaluate('window.searched') == ORDER
+    assert page.evaluate('Boolean(window.wrongSearch)') is False
+    assert page.locator('#product').input_value() == ''
+    page.close()
+
+
+def test_1688_expands_filters_and_submits_order_field(browser):
+    page = open_page(browser, f'''<button onclick="document.querySelector('#filters').hidden=false;window.expanded=(window.expanded||0)+1">更多筛选</button>
+      <section id="filters" hidden><label>订单号<input></label>
+        <input type="button" value="查询" onclick="document.querySelector('#result').innerHTML='订单编号：{ORDER}<p>待发货</p>'">
+      </section><section id="result"></section>''', platform='1688')
+    assert fetch(page)['status'] == 'pending'
+    assert page.evaluate('window.expanded') == 1
+    page.close()
+
+
+def test_1688_no_order_search_waits_then_fails_without_using_product_search(browser):
+    page = open_page(browser, '<input placeholder="搜索商品"><button onclick="window.wrongSearch=true">搜索</button><p>没有符合条件的订单</p>', platform='1688')
+    page.clock.install()
+    page.evaluate('order => { window.resultPromise = new Promise(resolve => purchaseListener({type:"FETCH_PURCHASE_TRACKING",purchaseOrder:order},null,resolve)); }', ORDER)
+    page.clock.run_for(13000)
+    result = page.evaluate('window.resultPromise')
+    assert result['status'] == 'failed'
+    assert result['fatal']
+    assert '未执行查询' in result['message']
+    assert page.evaluate('Boolean(window.wrongSearch)') is False
+    page.close()
+
+
+def test_1688_login_expiry_during_search_wait_is_reported(browser):
+    page = open_page(browser, '<section>订单列表加载中</section>', platform='1688')
+    page.evaluate("setTimeout(() => document.querySelector('section').textContent='请先登录', 500)")
+    assert fetch(page)['status'] == 'not_logged_in'
     page.close()
 
 

@@ -2,6 +2,7 @@
 import logging
 import inspect
 import json
+import re
 from functools import wraps
 
 from flask import Blueprint, abort, g, has_request_context, jsonify, render_template, request
@@ -17,6 +18,7 @@ _PRIVATE_COST_FIELDS = frozenset({
     "cost_nano", "reserved_nano", "cap_nano", "budget_limit_enabled",
     "estimated_cost_cny", "cost_known", "cost_status", "rate_metadata",
     "pricing_source", "pricing_verified_on",
+    "total_tokens", "prompt_tokens", "completion_tokens", "input_tokens", "output_tokens", "cached_tokens",
 })
 _COST_DIAGNOSTICS = (
     "费用记录", "费用待确认", "调用费用", "剩余预算", "本次预算",
@@ -24,11 +26,26 @@ _COST_DIAGNOSTICS = (
 )
 
 
+def hide_cost_diagnostic(text):
+    # Older task logs already contain formatted budget summaries. Keep the
+    # actionable product error while removing each appended accounting field.
+    if not (any(marker in text for marker in (*_COST_DIAGNOSTICS, '金额不限额', '待核对预留', '复用结果'))
+            or re.search(r'\b[\d,]+\s*Tokens?\b', text, re.I)):
+        return text
+    lines = []
+    for line in text.split('\n'):
+        parts = [part for part in re.split(r'\s*·\s*', line) if not (
+            any(marker in part for marker in (*_COST_DIAGNOSTICS, '金额不限额', '待核对预留', '复用结果'))
+            or re.search(r'\b[\d,]+\s*Tokens?\b', part, re.I))]
+        lines.append(' · '.join(parts))
+    return '\n'.join(lines).strip() or '生成任务需要重试或人工处理，已保留生成结果。'
+
+
 def hide_ai_costs(value, *, diagnostic=False):
     """Copy public payloads; never modify durable ledgers or worker state."""
     if isinstance(value, dict):
         return {key: hide_ai_costs(item, diagnostic=diagnostic or key in {
-            "message", "error", "errors", "logs", "log", "blocked_reason", "last_error",
+            "message", "error", "ai_error", "errors", "logs", "log", "blocked_reason", "last_error",
         }) for key, item in value.items() if key not in _PRIVATE_COST_FIELDS}
     if isinstance(value, list):
         return [hide_ai_costs(item, diagnostic=diagnostic) for item in value]
@@ -42,8 +59,8 @@ def hide_ai_costs(value, *, diagnostic=False):
             else:
                 cleaned = hide_ai_costs(decoded, diagnostic=diagnostic)
                 return json.dumps(cleaned, ensure_ascii=False) if cleaned != decoded else value
-        if diagnostic and any(marker in value for marker in _COST_DIAGNOSTICS):
-            return "生成任务需要重试或人工处理，已保留生成结果。"
+        if diagnostic:
+            return hide_cost_diagnostic(value)
     return value
 
 

@@ -168,3 +168,31 @@ def test_product_result_writes_only_selected_product(monkeypatch, current, statu
     assert repository.db.PRODUCT_TABLE in updates[0][0]
     assert updates[0][1][-1] == 12
     assert connection.commit.called
+
+
+def test_product_result_resets_ai_original_marketplace_reviews(monkeypatch):
+    connection = MagicMock()
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = {
+        'id': 12, 'collection_item_id': None, 'source_type': 'ai_original',
+        'weight_g': 10, 'review_status': 'approved',
+        'source_snapshot_json': json.dumps({'marketplace_listings': {
+            'amazon': {'review_status': 'approved'},
+            'yandex': {'review_status': 'approved'},
+        }}),
+    }
+    monkeypatch.setattr(repository.db, '_connect', lambda: connection)
+    monkeypatch.setattr(repository.db, 'ensure_collection_tables', lambda _: None)
+
+    repository.save_result(
+        {'product_item_id': 12, 'collection_item_id': None,
+         'erp_goods_id': 'product:12:run', 'collection_before': {'weight_g': 10}},
+        'checked', 'ok', {'weight_g': 20},
+    )
+
+    update = next(call.args for call in cursor.execute.call_args_list
+                  if call.args[0].startswith('UPDATE'))
+    assert "`review_status`='unreviewed'" in update[0]
+    snapshot = json.loads(update[1][1])
+    assert snapshot['marketplace_listings']['amazon']['review_status'] == 'unreviewed'
+    assert snapshot['marketplace_listings']['yandex']['review_status'] == 'unreviewed'

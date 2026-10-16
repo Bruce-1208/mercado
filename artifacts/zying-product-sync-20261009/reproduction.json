@@ -1,0 +1,5 @@
+{
+  "old_code": "concurrent snapshot insert blocked",
+  "mysql_code": 1205,
+  "error": "Lock wait timeout exceeded; try restarting transaction"
+}

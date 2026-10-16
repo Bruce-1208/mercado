@@ -71,7 +71,7 @@ def test_account_failure_is_recorded_independently_for_remaining_products(monkey
         db_get_mercado_product_items_by_ids=lambda ids: [{'id': ids[0], 'source_type': 'ai_original'}],
         db_update_ai_original_product=lambda pid, changes: saved.append(pid))
     exec(compile(ast.Module(body=[node], type_ignores=[]), '<worker>', 'exec'), namespace)
-    namespace['_run_ai_original_task']([{'id': i} for i in range(1, 5)], workers=1)
+    namespace['_run_ai_original_task']([{'id': i} for i in range(1, 5)], workers=1, billing_actor={'actor_id': 1})
     assert attempted == [1, 2, 3, 4]
     assert saved == [1, 1, 2, 2, 3, 3, 4, 4]
     assert calls == [1, 1, 1, 1]

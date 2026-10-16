@@ -1,0 +1,114 @@
+[
+  {
+    "name": "all-orders",
+    "params": {},
+    "expected": 80000,
+    "actual": 80000,
+    "ok": true
+  },
+  {
+    "name": "page2",
+    "params": {
+      "page": 2
+    },
+    "expected": 80000,
+    "actual": 80000,
+    "ok": true
+  },
+  {
+    "name": "store-access",
+    "params": {
+      "allowed_store_ids": [
+        1,
+        2
+      ]
+    },
+    "expected": 7920,
+    "actual": 7920,
+    "ok": true
+  },
+  {
+    "name": "no-access",
+    "params": {
+      "allowed_store_ids": []
+    },
+    "expected": 0,
+    "actual": 0,
+    "ok": true
+  },
+  {
+    "name": "foreign-store",
+    "params": {
+      "allowed_store_ids": [
+        1
+      ],
+      "store_ids": [
+        2
+      ]
+    },
+    "expected": 0,
+    "actual": 0,
+    "ok": true
+  },
+  {
+    "name": "warehouse",
+    "params": {
+      "transfer_warehouse": "shahu"
+    },
+    "expected": 40000,
+    "actual": 40000,
+    "ok": true
+  },
+  {
+    "name": "child-order-search",
+    "params": {
+      "search": "test00000100"
+    },
+    "expected": 1,
+    "actual": 1,
+    "ok": true
+  },
+  {
+    "name": "pack-search",
+    "params": {
+      "search": "pack123"
+    },
+    "expected": 222,
+    "actual": 222,
+    "ok": true
+  },
+  {
+    "name": "product-search",
+    "params": {
+      "search": "product42"
+    },
+    "expected": 1760,
+    "actual": 1760,
+    "ok": true
+  },
+  {
+    "name": "no-results",
+    "params": {
+      "search": "not-found-unique"
+    },
+    "expected": 0,
+    "actual": 0,
+    "ok": true
+  },
+  {
+    "name": "summary-scope",
+    "params": {
+      "allowed_store_ids": [
+        2
+      ],
+      "summary_only": true
+    },
+    "expected": 3960,
+    "actual": 3960,
+    "ok": true
+  },
+  {
+    "name": "pagination-no-overlap",
+    "ok": true
+  }
+]

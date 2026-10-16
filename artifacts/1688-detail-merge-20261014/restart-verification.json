@@ -1,0 +1,48 @@
+[
+  {
+    "path": "/login",
+    "status": 200
+  },
+  {
+    "path": "/static/1688-products.js",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/1688-products.css",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/sku-matrix.css",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "port": 5001,
+    "status": "success",
+    "group": "worker",
+    "db_limit": 4
+  },
+  {
+    "port": 5002,
+    "status": "success",
+    "group": "orders",
+    "db_limit": 4
+  },
+  {
+    "port": 5003,
+    "status": "success",
+    "group": "stores",
+    "db_limit": 4
+  },
+  {
+    "port": 5004,
+    "status": "success",
+    "group": "maintenance",
+    "db_limit": 2
+  },
+  {
+    "database_probe": "ok"
+  }
+]

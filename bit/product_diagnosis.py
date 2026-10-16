@@ -36,11 +36,17 @@ def _read(client, path, **kwargs):
     except Exception as exc:
         # Keep credentials/request URLs and exception bodies out of stored results.
         text = str(exc).lower()
-        if "(403)" in text or "forbidden" in text:
+        status_match = re.search(r"\((?:http\s+)?(\d{3})\)", text)
+        status = getattr(exc, "status_code", None) or (int(status_match[1]) if status_match else None)
+        if status == 401 or "access token 已失效" in text:
+            return {"status": "error", "message": "店铺授权已失效，请刷新授权后重新诊断"}
+        if status == 403 or "forbidden" in text:
             return {"status": "restricted", "message": "店铺模式或应用权限不支持此接口"}
-        if "(404)" in text or "not found" in text or "not_found" in text:
+        if status == 404 and path.endswith("/performance"):
+            return {"status": "no_data", "message": "平台尚未生成此商品的刊登质量评分"}
+        if status == 404 or "not found" in text or "not_found" in text:
             return {"status": "no_data", "message": "平台尚未生成此项数据，或商品不存在"}
-        if "(400)" in text and ("cbt" in text or "not supported" in text):
+        if status == 400 and ("cbt" in text or "not supported" in text):
             return {"status": "unsupported", "message": "此商品模型不支持该接口"}
         return {"status": "error", "message": "平台数据读取失败，请重新诊断；持续失败时检查授权"}
 
@@ -96,10 +102,15 @@ def collect_product(client, row, summary):
     exp = experience.get("data")
     if experience.get("status") == "ok":
         if isinstance(exp, list):
-            exp = next((v for v in exp if isinstance(v, dict) and str(v.get("item_id") or "") == item_id), None)
+            # UP endpoints also return arrays in production, keyed by up_id
+            # rather than item_id. Never use the first row from another product.
+            exp = next((v for v in exp if isinstance(v, dict)
+                        and (v.get("item_id") == item_id or (up_id and v.get("up_id") == up_id))
+                        and (not v.get("item_id") or v["item_id"] == item_id)
+                        and (not v.get("up_id") or v["up_id"] == up_id)), None)
         if not isinstance(exp, dict) or (exp.get("up_id") and exp["up_id"] != up_id) or (exp.get("item_id") and exp["item_id"] != item_id):
             sources["experience"] = {"status": "no_data", "message": "平台未返回当前站点商品的购物体验"}
-        elif score((exp.get("reputation") or {}).get("value")) is None:
+        elif not isinstance(exp.get("reputation"), dict) or score(exp["reputation"].get("value")) is None:
             sources["experience"] = {"status": "no_data", "message": "平台购物体验样本不足，暂不能评分"}
         else:
             experience["data"] = exp
@@ -129,6 +140,7 @@ def load_links(token_id, site_id="", after_id=0):
 
 
 def run_scan(run, store):
+    from bit.bit_order_sync import _token_expiring
     from bit.clearance_sources import _client_for_store
     from bit.sync_capacity import run_store
     scope_errors = list(run.get("scope_errors") or [])
@@ -141,9 +153,13 @@ def run_scan(run, store):
                 summary = current_stores({token_id}).get(token_id)
                 if not summary:
                     raise ValueError("店铺授权已停用或移除")
-                client, _ = _client_for_store(token_id)
+                client, token = _client_for_store(token_id)
                 after_id = run["cursor_link"] if token_id == run["cursor_token"] else 0
                 for row in load_links(token_id, scope.get("site_id", ""), after_id):
+                    # A full-store scan can outlive the access token. Reuse the
+                    # existing persisted refresh flow before it expires.
+                    if _token_expiring(token):
+                        client, token = _client_for_store(token_id)
                     result = run_store("product-diagnosis", token_id, lambda: collect_product(client, row, summary))
                     store.save(result, run["id"])
                 store.finish_scope(run["id"], token_id, scope.get("site_id", ""))

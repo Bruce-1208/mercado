@@ -1,0 +1,107 @@
+{
+  "started_at": "2026-10-10 14:01:14",
+  "finished_at": "2026-10-10 14:01:21",
+  "stopped": false,
+  "total": 6,
+  "printed": 1,
+  "partial": 0,
+  "no_orders": 5,
+  "failed": 0,
+  "skipped": 0,
+  "results": [
+    {
+      "shop_name": "光彩夺目",
+      "site": "墨西哥",
+      "status": "no_orders",
+      "message": "没有未打印订单",
+      "attempts": 0,
+      "selected_count": 0,
+      "shipment_count": 0,
+      "failed_count": 0,
+      "fallback_used": false,
+      "finished_at": "2026-10-10 14:01:16"
+    },
+    {
+      "shop_name": "光彩夺目",
+      "site": "巴西",
+      "status": "no_orders",
+      "message": "没有未打印订单",
+      "attempts": 0,
+      "selected_count": 0,
+      "shipment_count": 0,
+      "failed_count": 0,
+      "fallback_used": false,
+      "finished_at": "2026-10-10 14:01:16"
+    },
+    {
+      "shop_name": "光彩夺目",
+      "site": "智利",
+      "status": "no_orders",
+      "message": "没有未打印订单",
+      "attempts": 0,
+      "selected_count": 0,
+      "shipment_count": 0,
+      "failed_count": 0,
+      "fallback_used": false,
+      "finished_at": "2026-10-10 14:01:16"
+    },
+    {
+      "shop_name": "光彩夺目",
+      "site": "哥伦比亚",
+      "status": "no_orders",
+      "message": "没有未打印订单",
+      "attempts": 0,
+      "selected_count": 0,
+      "shipment_count": 0,
+      "failed_count": 0,
+      "fallback_used": false,
+      "finished_at": "2026-10-10 14:01:16"
+    },
+    {
+      "shop_name": "光彩夺目",
+      "site": "阿根廷",
+      "status": "printed",
+      "message": "已通过 API 生成 2 个面单",
+      "attempts": 1,
+      "selected_count": 2,
+      "shipment_count": 2,
+      "failed_count": 0,
+      "fallback_used": false,
+      "finished_at": "2026-10-10 14:01:21",
+      "output_files": [
+        "/Users/a11/mercado/outputs/order_print/mercado-api-labels-20261010-140117-d186dfea.pdf",
+        "/Users/a11/mercado/outputs/order_print/mercado-api-labels-20261010-140120-1ddc2053.pdf"
+      ]
+    },
+    {
+      "shop_name": "光彩夺目",
+      "site": "乌拉圭",
+      "status": "no_orders",
+      "message": "没有未打印订单",
+      "attempts": 0,
+      "selected_count": 0,
+      "shipment_count": 0,
+      "failed_count": 0,
+      "fallback_used": false,
+      "finished_at": "2026-10-10 14:01:21"
+    }
+  ],
+  "task_id": "640f76a083b14c269cb80c0c8d4d6f87",
+  "download_path": "/Users/a11/mercado/outputs/order_print/mercado-api-labels-20261010-140121-640f76a0.pdf",
+  "download_name": "mercado-api-labels-20261010-140121-640f76a0.pdf",
+  "printed_order_ids": [
+    "2000018857481010",
+    "2000018878302508"
+  ],
+  "printed_order_count": 2,
+  "shipment_count": 2,
+  "wallet_charge_cents": 0,
+  "output_files": [
+    "/Users/a11/mercado/outputs/order_print/mercado-api-labels-20261010-140117-d186dfea.pdf",
+    "/Users/a11/mercado/outputs/order_print/mercado-api-labels-20261010-140120-1ddc2053.pdf"
+  ],
+  "output_error": "",
+  "store_worker_count": 1,
+  "fallback_store_count": 0,
+  "status": "completed"
+}

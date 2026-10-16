@@ -1,0 +1,36 @@
+{
+  "id": 68,
+  "name": "遥遥领先3号店",
+  "campaigns": [
+    {
+      "promotion_id": "P-MLM17611046",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3498531671",
+      "before": 0,
+      "local_id": 1329,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLM17923024",
+      "type": "DEAL",
+      "site": "MLM",
+      "seller_id": "3498531671",
+      "before": 0,
+      "local_id": 1331,
+      "jobs": [],
+      "remaining": 0
+    },
+    {
+      "promotion_id": "P-MLB17909028",
+      "type": "DEAL",
+      "site": "MLB",
+      "seller_id": "3500661574",
+      "before": 0,
+      "local_id": 1333,
+      "jobs": [],
+      "remaining": 0
+    }
+  ]
+}

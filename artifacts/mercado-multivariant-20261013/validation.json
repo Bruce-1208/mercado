@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-13",
+  "scope": "美客多采集、快照准备、编辑保存、本土普通刊登、传统 CBT 刊登、User Products 商品族",
+  "tests": {
+    "total": 348,
+    "passed": 346,
+    "failed": 2,
+    "failures": [
+      {
+        "module": "tests.test_erp_mercadolibre_collection_store",
+        "name": "test_product_list_applies_status_range_and_date_filters_in_database",
+        "baseline_reproduced": true
+      },
+      {
+        "module": "tests.test_erp_mercadolibre_collection_store",
+        "name": "test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_products-list_product_items]",
+        "baseline_reproduced": true
+      }
+    ]
+  },
+  "browser_widths": [
+    1440,
+    1024,
+    390
+  ],
+  "verification": [
+    "2 色 × 2 尺码",
+    "独立 SKU、库存与图片",
+    "零库存与缺省库存",
+    "本土变体统一刊登价格",
+    "图片编号与 URL 映射",
+    "不完整规格与未解析图片阻止上架",
+    "201 个变体不截断",
+    "超过 500 个变体显式拒绝",
+    "编辑保存、键盘焦点、导航、多选、表格滚动"
+  ],
+  "external_mutations": "无真实刊登、上传、消息发送、同步或扣费；接口均为模拟",
+  "activation": "服务端更新后，加载 1.8.85 插件并刷新美客多页面；此前缺失的变体需重新采集",
+  "official_contracts": [
+    "https://global-selling.mercadolibre.com/devsite/api-docs/price-per-variation-cbt",
+    "https://global-selling.mercadolibre.com/devsite/en_us/support-for-integrators/variations-global-selling"
+  ],
+  "package": "zeshun-collector-1.8.85.zip"
+}

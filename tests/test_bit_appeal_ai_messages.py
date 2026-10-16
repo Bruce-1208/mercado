@@ -95,6 +95,7 @@ def test_get_agent_messages_supports_new_maxwell_assistant_nodes(monkeypatch):
 
 
 def test_handle_delay_waits_for_and_records_each_group_reply(monkeypatch):
+    monkeypatch.setattr(bit_appeal_ai, "get_appeal_package_ids", lambda name, site, ids: ["200000001001", "200000001002"])
     monkeypatch.setattr(bit_appeal_ai, "save_ai_appeal_group_record", lambda *args, **kwargs: None)
     sent_messages = []
     records = []
@@ -137,7 +138,7 @@ def test_handle_delay_waits_for_and_records_each_group_reply(monkeypatch):
         "Bruce",
     )
 
-    assert sent_messages == ["1001、1002请复核"]
+    assert sent_messages == ["200000001001、200000001002请复核"]
     assert wait_calls == [
         (
             ["历史回复"],

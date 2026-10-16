@@ -8,6 +8,7 @@ function setup(platform = 'amazon') {
   const nodes = new Map();
   const requests = [];
   const context = vm.createContext({
+    URLSearchParams, structuredClone,
     document: {
       addEventListener() {}, querySelectorAll() { return []; },
       getElementById(id) {
@@ -15,7 +16,7 @@ function setup(platform = 'amazon') {
         return nodes.get(id);
       },
     },
-    window: {confirm() { throw new Error('Unexpected publishing confirmation'); }},
+    window: {catalogOperationMarkup(_row, markup) { return markup; }, confirm() { throw new Error('Unexpected publishing confirmation'); }},
     localStorage: {getItem() { return null; }, removeItem() {}},
     fetch: async (url, options = {}) => {
       requests.push({url, body: options.body ? JSON.parse(options.body) : null});
@@ -23,6 +24,8 @@ function setup(platform = 'amazon') {
     },
   });
   const run = code => vm.runInContext(code, context);
+  run(fs.readFileSync(path.join(__dirname, '../bit/static/sku-matrix.js'), 'utf8'));
+  run('globalThis.ZeshunSku = window.ZeshunSku');
   for (const file of ['ai-original-products.js', 'ai-original-workbench.js']) {
     run(fs.readFileSync(path.join(__dirname, '../bit/static', file), 'utf8'));
   }
@@ -43,7 +46,7 @@ test('a completed Mercado listing is pending on Amazon, without Mercado copy or 
   assert.match(markup, /本平台尚无草稿/);
   assert.doesNotMatch(markup, /Mercado only|mercado-only.jpg|净收益|CBT 类目/);
   assert.equal(nodes.get('ai-original-count-approved').textContent, 0);
-  assert.equal(nodes.get('ai-original-count-unreviewed').textContent, 1);
+  assert.equal(nodes.get('ai-original-count-pending').textContent, 1);
 });
 
 test('explicitly cleared source net stays blank while a later manually saved AI net is shown', () => {
@@ -65,6 +68,20 @@ test('platform status filtering and select all use independent draft statuses', 
     toggleAllAiOriginalProducts(true);`);
   assert.deepEqual(Array.from(run('[...aiOriginalSelected]')), [2]);
   assert.equal(run('aiOriginalPlatformStatus(aiOriginalRows[0], "mercadolibre")'), 'completed');
+});
+
+test('row-level infringement overrides an approved target-platform draft', () => {
+  const {run} = setup('amazon');
+  run(`Object.assign(aiOriginalRows[0], {
+    review_status:'infringing', weight_g:100, weight_basis:'ai_original_manual',
+    net_proceeds_usd:5, package_length_cm:10, package_width_cm:10, package_height_cm:10
+  });
+  aiOriginalRows[0].marketplace_listings.amazon = {
+    status:'completed', review_status:'approved', title:'Lamp', description:'Description',
+    bullet_points:['Metal body'], attributes:[{id:'material', value_name:'Metal'}],
+    main_image_url:'https://example.com/lamp.jpg'
+  };`);
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0], "amazon")'), 'suspected');
 });
 
 test('generation sends chosen platform and template and excludes Mercado store token', async () => {
@@ -151,6 +168,45 @@ test('manual checklist distinguishes suggested or edited net from persisted net 
   assert.equal(run('aiOriginalRows[0].net_proceeds_usd'), 12);
 });
 
+test('unknown Mercado generation states fail while manual-only failures remain recoverable', () => {
+  const {run} = setup('mercadolibre');
+  run(`aiOriginalRows[0] = {
+    id:1, category_id:'CBT123', ai_status:'legacy_ready', review_status:'unreviewed',
+    weight_g:100, weight_basis:'ai_original_manual', net_proceeds_usd:5,
+    package_length_cm:10, package_width_cm:10, package_height_cm:10,
+    title_es:'Titulo', title_pt:'Titulo', description_es:'Descripcion', description_pt:'Descricao',
+    main_image_url:'/test-ai-white.jpg',
+    ai_original:{status:'legacy_ready', category_id:'CBT123', image_generation_method:'local_background_removal',
+      attributes:[{id:'MATERIAL', value_name:'Steel'}], validation:{errors:[],warnings:[]}}
+  };`);
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'failed');
+
+  run(`aiOriginalRows[0].ai_status = 'failed';
+    aiOriginalRows[0].ai_original.status = 'failed';
+    aiOriginalRows[0].ai_original.failed_step = 'weight';
+    aiOriginalRows[0].weight_g = null;`);
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'incomplete');
+  run('aiOriginalRows[0].weight_g = 100');
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'unreviewed');
+});
+
+test('stored Mercado language validation errors remain failed even when manually approved', () => {
+  const {run} = setup('mercadolibre');
+  run(`Object.assign(aiOriginalRows[0], {
+    category_id:'CBT123', review_status:'approved', weight_g:100,
+    weight_basis:'ai_original_manual', net_proceeds_usd:5,
+    package_length_cm:10, package_width_cm:10, package_height_cm:10,
+    title_es:'Beautiful Wooden Toy Train For Small Children',
+    title_pt:'Beautiful Wooden Toy Train For Small Children',
+    description_es:'Descripcion', description_pt:'Descricao',
+    main_image_url:'/test-ai-white.jpg', ai_original:{status:'completed', category_id:'CBT123',
+      image_generation_method:'local_background_removal',
+      attributes:[{id:'MATERIAL', value_name:'Steel'}],
+      validation:{errors:['西语标题疑似整段英文'], warnings:[]}}
+  });`);
+  assert.equal(run('aiOriginalProductStatus(aiOriginalRows[0])'), 'failed');
+});
+
 test('parameter save rejects stale net or incomplete approval in the server readback', async () => {
   for (const saved of [
     {id: 1, net_proceeds_usd: 99, review_status: 'approved'},
@@ -158,13 +214,17 @@ test('parameter save rejects stale net or incomplete approval in the server read
     {id: 2, net_proceeds_usd: 14.75, review_status: 'approved'},
   ]) {
     const {run, nodes} = setup('mercadolibre');
-    run(`aiOriginalRows[0].net_proceeds_usd = 10;
+    run(`Object.assign(aiOriginalRows[0], {net_proceeds_usd:10, description_es:'Descripcion', description_pt:'Descricao',
+        main_image_url:'/test-ai-white.jpg', package_length_cm:10, package_width_cm:10, package_height_cm:10,
+        ai_original:{status:'completed',category_id:'CBT123',image_generation_method:'local_background_removal',attributes:[{id:'MATERIAL',value_name:'Steel'}],validation:{errors:[],warnings:[]}}});
+      for (const prefix of ['length','width','height']) document.getElementById('ai-original-'+prefix+'-1').value='10';
+      document.getElementById('ai-original-category-1').value='CBT123';
       document.getElementById('ai-original-weight-1').value = '100';
       document.getElementById('ai-original-net-1').value = '14.75';
       fetch = async () => ({ok:true, json: async () => ({status:'success', data:${JSON.stringify(saved)}})});
       loadAiOriginalProducts = async () => {throw new Error('Unexpected refresh after unverified save');};`);
-    await run('saveAiOriginalProduct(1)');
-    assert.match(nodes.get('ai-original-task-status').textContent, /保存失败：保存后回读的净收益、实重或审核状态不一致/);
+    await run('saveAiOriginalProduct(1, true)');
+    assert.match(nodes.get('ai-original-task-status').textContent, /保存失败：保存后回读的尺寸、净收益、实重或审核状态不一致/);
     assert.equal(run('aiOriginalRows[0].net_proceeds_usd'), 10);
     assert.equal(nodes.get('ai-original-net-1').value, '14.75');
   }

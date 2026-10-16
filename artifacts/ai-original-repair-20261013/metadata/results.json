@@ -1,0 +1,370 @@
+[
+  {
+    "id": 17267953,
+    "status": "metadata_ready",
+    "category_id": "CBT417302",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17267954,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268451,
+    "status": "metadata_ready",
+    "category_id": "CBT116636",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268468,
+    "status": "metadata_ready",
+    "category_id": "CBT430968",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 13091058,
+    "status": "metadata_ready",
+    "category_id": "CBT24790",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268477,
+    "status": "metadata_ready",
+    "category_id": "CBT116631",
+    "attributes": 14,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268486,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268495,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268512,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268522,
+    "status": "metadata_ready",
+    "category_id": "CBT116631",
+    "attributes": 9,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268539,
+    "status": "metadata_ready",
+    "category_id": "CBT393901",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268564,
+    "status": "metadata_ready",
+    "category_id": "CBT179254",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268521,
+    "status": "metadata_ready",
+    "category_id": "CBT457468",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268590,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268599,
+    "status": "metadata_ready",
+    "category_id": "CBT417302",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268656,
+    "status": "metadata_ready",
+    "category_id": "CBT179254",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268665,
+    "status": "metadata_ready",
+    "category_id": "CBT435356",
+    "attributes": 11,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268698,
+    "status": "metadata_ready",
+    "category_id": "CBT402994",
+    "attributes": 14,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268795,
+    "status": "metadata_ready",
+    "category_id": "CBT34325",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268581,
+    "status": "metadata_ready",
+    "category_id": "CBT116631",
+    "attributes": 9,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268796,
+    "status": "metadata_ready",
+    "category_id": "CBT116633",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268797,
+    "status": "metadata_ready",
+    "category_id": "CBT116636",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268806,
+    "status": "metadata_ready",
+    "category_id": "CBT378397",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268814,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 10,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268815,
+    "status": "metadata_ready",
+    "category_id": "CBT430982",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268816,
+    "status": "metadata_ready",
+    "category_id": "CBT116633",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268817,
+    "status": "metadata_ready",
+    "category_id": "CBT455687",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268818,
+    "status": "metadata_ready",
+    "category_id": "CBT378164",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268819,
+    "status": "metadata_ready",
+    "category_id": "CBT430973",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268821,
+    "status": "metadata_ready",
+    "category_id": "CBT432047",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268822,
+    "status": "metadata_ready",
+    "category_id": "CBT44414",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268820,
+    "status": "metadata_ready",
+    "category_id": "CBT430982",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268823,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268825,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 11,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268824,
+    "status": "metadata_ready",
+    "category_id": "CBT430973",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268826,
+    "status": "metadata_ready",
+    "category_id": "CBT116633",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268827,
+    "status": "metadata_ready",
+    "category_id": "CBT116636",
+    "attributes": 8,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268829,
+    "status": "metadata_ready",
+    "category_id": "CBT10096",
+    "attributes": 9,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268828,
+    "status": "metadata_ready",
+    "category_id": "CBT95415",
+    "attributes": 11,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268830,
+    "status": "metadata_ready",
+    "category_id": "CBT412712",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268831,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 12,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268832,
+    "status": "metadata_ready",
+    "category_id": "CBT116629",
+    "attributes": 11,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268834,
+    "status": "metadata_ready",
+    "category_id": "CBT388628",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17318199,
+    "status": "metadata_ready",
+    "category_id": "CBT9980",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17268833,
+    "status": "metadata_ready",
+    "category_id": "CBT417712",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 17318200,
+    "status": "variations_incomplete",
+    "category_id": "CBT9980",
+    "attributes": 8,
+    "error": "自动映射已尝试 3 次：AI 变体选项 0 的属性不符合目标分类（属性ID重复：COLOR=White），未保存",
+    "missing": []
+  }
+]

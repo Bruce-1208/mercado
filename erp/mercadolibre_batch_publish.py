@@ -8,6 +8,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Callable, Iterable, Mapping
@@ -23,10 +24,51 @@ from erp.mercadolibre_attribute_rules import (
 )
 from erp.mercadolibre_follow_sell import MercadoLibreClient, MercadoLibreError, follow_sell
 from erp.mercadolibre_translation import marketplace_site_name, normalize_marketplace_site
+from erp.mercadolibre_virtual_ean import ensure_virtual_eans, product_identity
 
 
 _refresh_locks_guard = threading.Lock()
 _refresh_locks: dict[int, threading.Lock] = {}
+_publish_slots = threading.Condition()
+_active_publishers = 0
+
+
+def publication_worker_limit() -> int:
+    """Leave room for authorization and background work in the same process."""
+    from bit.db_pool import _connection_limit, _env_int
+
+    limit = _connection_limit()
+    reserved = min(limit - 1, _env_int("MYSQL_POOL_AUTH_RESERVED", 1, 0, 10))
+    return max(1, limit - reserved - 1)
+
+
+@contextmanager
+def _publication_slot():
+    global _active_publishers
+    # Share admission across batches, and wait before borrowing any connection.
+    with _publish_slots:
+        _publish_slots.wait_for(lambda: _active_publishers < publication_worker_limit())
+        _active_publishers += 1
+    try:
+        yield
+    finally:
+        with _publish_slots:
+            _active_publishers -= 1
+            _publish_slots.notify_all()
+
+
+def _save_product_state(update_state, product_id, **changes):
+    from bit.db_pool import PoolAcquireTimeout
+
+    # Only retry admission failures, never replay publication or an ambiguous
+    # SQL/network error. The store has not acquired a connection in this case.
+    for attempt in range(3):
+        try:
+            return update_state(product_id, **changes)
+        except PoolAcquireTimeout:
+            if attempt == 2:
+                raise
+            time.sleep(0.1 * (2 ** attempt))
 
 
 def _token_refresh_lock(token_id: int) -> threading.Lock:
@@ -196,7 +238,11 @@ def product_publish_issues(product_row: Mapping[str, Any], *, defer_infringement
                 raw_snapshot = {}
         prepared = raw_snapshot.get("ai_original") if isinstance(raw_snapshot, Mapping) else {}
         prepared = prepared if isinstance(prepared, Mapping) else {}
-        if prepared.get("status") != "completed":
+        manual_only_failure = (
+            prepared.get("status") in {"failed", "incomplete"}
+            and prepared.get("failed_step") in {"weight", "dimensions", "net_proceeds", "manual_fields"}
+        )
+        if prepared.get("status") != "completed" and not manual_only_failure:
             issues.append("AI 原创任务尚未完成")
         for field, label in (("title_es", "西班牙语"), ("title_pt", "葡萄牙语")):
             title = str(prepared.get(field) or "").strip()
@@ -446,7 +492,7 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
         isinstance(plugin_snapshot, Mapping)
         and str(plugin_snapshot.get("source_type") or "").strip().lower() == "zying"
     )
-    if is_zying:
+    if is_zying and "attributes" not in (snapshot.get("manual_product_fields") or []):
         existing_attributes = [
             normalized
             for attribute in source.get("attributes") or []
@@ -478,14 +524,20 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
     })
     main_image_url = str(row.get("main_image_url") or "").strip()
     if main_image_url:
-        pictures = [
-            picture for picture in list(source.get("pictures") or [])
-            if str(
+        pictures = []
+        main_picture = {"source": main_image_url}
+        for picture in list(source.get("pictures") or []):
+            url = str(
                 picture.get("secure_url") or picture.get("url") or picture.get("source")
                 if isinstance(picture, Mapping) else picture
-            ).strip() != main_image_url
-        ]
-        source["pictures"] = [{"source": main_image_url}, *pictures]
+            ).strip()
+            if url == main_image_url:
+                # SKU picture_ids must still resolve after switching the main image.
+                if isinstance(picture, Mapping):
+                    main_picture = dict(picture)
+            else:
+                pictures.append(picture)
+        source["pictures"] = [main_picture, *pictures]
     description = snapshot.get("description") or {}
     if row.get("description_text") is not None:
         description = {"plain_text": str(row.get("description_text") or "")}
@@ -508,6 +560,37 @@ def _product_source_snapshot(row: Mapping[str, Any]) -> dict[str, Any] | None:
         "package_height_cm": row.get("package_height_cm"),
         "scrape_status": "ok",
     }
+
+
+def _english_original_variations(variations):
+    """Finish English SKU names before both preflight and publication snapshots."""
+    from erp.mercadolibre_translation import translate_texts
+    pending = {}
+    for variation in variations:
+        for key in ('attribute_combinations', 'attributes', 'properties'):
+            for attribute in variation.get(key) or []:
+                value = str(attribute.get('value_name') or '').strip()
+                if re.search(r'[\u3400-\u9fff]', value):
+                    pending.setdefault(value, []).append(attribute)
+    texts = list(pending)
+    for offset in range(0, len(texts), 100):
+        batch = texts[offset:offset + 100]
+        translated = translate_texts(batch, 'zh-CN', 'en')
+        if len(translated) != len(batch):
+            raise ValueError('变体英文翻译不完整，已停止上架')
+        for original, english in zip(batch, translated):
+            if not english.strip() or re.search(r'[\u3400-\u9fff]', english):
+                raise ValueError('变体英文翻译未完成，已停止上架')
+            for attribute in pending[original]:
+                attribute['value_name'] = english
+    for index, variation in enumerate(variations, 1):
+        values = [str(a.get('value_name') or '').strip()
+                  for a in variation.get('attribute_combinations') or []]
+        if not values or any(not value for value in values):
+            raise ValueError(f'SKU {index} 缺少规格名称，请补齐后再上架')
+        for key in ('name', 'label', 'sku_name', 'title'):
+            variation[key] = ' / '.join(values)
+    return variations
 
 
 def _prepared_listing_from_product_row(
@@ -568,6 +651,8 @@ def _prepared_listing_from_product_row(
             # the 1688 attributes remain untouched in ``original_1688``.
             source["attributes"] = generated_attributes
         generated_variations = []
+        from erp.sku_matrix import supplier_net_proceeds, sku_identity
+        supplier_rows = {sku_identity(v): v for v in (snapshot.get('original_1688') or {}).get('variations') or []}
         from erp.ai_original_images import missing_variation_white_images
         if missing_variation_white_images(prepared, raw_snapshot.get("original_1688")):
             raise ValueError("每个 SKU 都需要白底主图，请重新执行 AI 任务补齐后再上架")
@@ -575,30 +660,27 @@ def _prepared_listing_from_product_row(
             if not isinstance(raw_variation, Mapping):
                 continue
             variation = dict(raw_variation)
-            localized_suffix = "pt" if portuguese else "es"
+            supplier = supplier_rows.get(sku_identity(variation)) or {}
+            variation['net_proceeds_usd'] = supplier_net_proceeds(variation.get('price', supplier.get('price')))
+            # CBT variant identity is English on every destination site.
             for container_key in ("attribute_combinations", "attributes", "properties"):
-                localized_attributes = []
-                for raw_attribute in variation.get(container_key) or []:
-                    if not isinstance(raw_attribute, Mapping):
-                        continue
-                    attribute = dict(raw_attribute)
-                    attribute["name"] = (
-                        attribute.get(f"name_{localized_suffix}") or attribute.get("name")
-                    )
-                    attribute["value_name"] = (
-                        attribute.get(f"value_name_{localized_suffix}")
-                        or attribute.get("value_name")
-                        or attribute.get(f"value_{localized_suffix}")
-                        or attribute.get("value")
-                    )
-                    localized_attributes.append(attribute)
-                if localized_attributes:
-                    variation[container_key] = localized_attributes
+                variation[container_key] = [
+                    {**a, "name": a.get("name_en") or a.get("id") or a.get("name"),
+                     "value_name": a.get("value_name_en") or a.get("value_en") or a.get("value_name") or a.get("value")}
+                    for a in variation.get(container_key) or [] if isinstance(a, Mapping)
+                ]
+            label = " / ".join(str(a.get("value_name") or "") for a in variation.get("attribute_combinations") or [])
             for key in ("name", "label", "sku_name", "title"):
-                variation[key] = variation.get(f"{key}_{localized_suffix}") or variation.get(key)
+                variation[key] = variation.get(f"{key}_en") or label or variation.get(key)
+            from erp.ai_original_images import product_secondary_images
+            gallery = product_secondary_images(raw_snapshot.get("original_1688"), prepared.get("variations") or [])
+            variation["image"] = variation["white_image_url"]
+            variation["images"] = [variation["white_image_url"], *gallery]
+            variation["pictures"] = [{"source": url} for url in variation["images"]]
+            variation.pop("picture_ids", None)
             generated_variations.append(variation)
         if "variations" in prepared:
-            source["variations"] = generated_variations
+            source["variations"] = _english_original_variations(generated_variations)
         snapshot["description"] = {"plain_text": description_text}
     elif (
         isinstance(snapshot.get("ai_copy"), Mapping)
@@ -619,6 +701,8 @@ def _prepared_listing_from_product_row(
         source["title"] = title
         source["site_id"] = str(destination_site_id or "").strip().upper()
         snapshot["description"] = {"plain_text": description_text}
+    from erp.sku_matrix import sync_single_sku_cover
+    sync_single_sku_cover(source)
     source.setdefault("id", str(row.get("source_item_id") or ""))
     source.setdefault("site_id", str(source.get("id") or "")[:3])
     from erp.mercadolibre_source_store import _merge_package_attributes
@@ -626,6 +710,7 @@ def _prepared_listing_from_product_row(
     source["attributes"] = _merge_package_attributes(
         list(source.get("attributes") or []), snapshot
     )
+    source = ensure_virtual_eans(source, product_identity(row))
     return source, dict(snapshot["description"])
 
 
@@ -691,6 +776,7 @@ def publish_product_batch(
     prepared_drafts: Mapping[str, Any] | None = None,
     retry_drafts: Mapping[str, Any] | None = None,
     infringement_preflight: Callable[..., Any] | None = None,
+    enforce_infringement: bool = True,
 ) -> dict[str, Any]:
     rows = [dict(row) for row in product_rows or []]
     minimum = minimum_publish_net_proceeds_usd(minimum_net_proceeds_usd)
@@ -726,7 +812,7 @@ def publish_product_batch(
             "跨站点发布需要 Global Selling(CBT) 店铺"
         )
     store_name = str(token.get("display_name") or token.get("nickname") or token_id)
-    worker_count = min(workers, len(rows))
+    worker_count = min(workers, len(rows), publication_worker_limit())
     record_ids: dict[int, int] = {}
     reusable_user_product_ids = {
         int(product_id): str(user_product_id)
@@ -760,7 +846,7 @@ def publish_product_batch(
     worker_local = threading.local()
     result_lock = threading.Lock()
     result_slots: list[dict[str, Any] | None] = [None] * len(rows)
-    published = failed = pending_review = completed = 0
+    published = failed = pending_review = completed = persistence_failed = 0
     account_listing_blocked = threading.Event()
     account_listing_block_reason = ""
     batch_started = time.perf_counter()
@@ -775,20 +861,32 @@ def publish_product_batch(
             worker_local.mercado_client = mercado_client
         return mercado_client
 
-    def save_record(record_id: int, **changes: Any) -> None:
+    def save_record(record_id: int, **changes: Any) -> str:
         if not record_id or update_record is None:
-            return
-        try:
-            update_record(record_id, **changes)
-        except Exception:
-            logging.exception("保存 Mercado 产品上架记录失败: record_id=%s", record_id)
+            return ""
+        last_error: Exception | None = None
+        for attempt in range(1, 4):
+            try:
+                update_record(record_id, **changes)
+                return ""
+            except Exception as exc:
+                last_error = exc
+                if attempt < 3:
+                    time.sleep(0.05 * attempt)
+                    continue
+                logging.exception(
+                    "保存 Mercado 产品上架记录失败（已重试 %s 次）: record_id=%s",
+                    attempt,
+                    record_id,
+                )
+        return str(last_error or "保存上架记录失败")[:1000]
 
     def finish(
         index: int,
         row: Mapping[str, Any],
         item_result: dict[str, Any],
     ) -> None:
-        nonlocal published, failed, pending_review, completed
+        nonlocal published, failed, pending_review, completed, persistence_failed
         with result_lock:
             result_slots[index] = item_result
             for stage, duration in dict(item_result.get("timings") or {}).items():
@@ -805,14 +903,18 @@ def publish_product_batch(
                 pending_review += 1
             else:
                 failed += 1
+            if item_result.get("record_persisted") is False:
+                persistence_failed += 1
             progress = {
                 "current": completed,
                 "total": len(rows),
                 "product_id": int(row.get("id") or 0),
                 "source_item_id": str(row.get("source_item_id") or ""),
                 "published_count": published,
+                "result": dict(item_result),
                 "failed_count": failed,
                 "pending_review_count": pending_review,
+                "persistence_failed_count": persistence_failed,
                 "worker_count": worker_count,
                 "average_stage_seconds": {
                     stage: round(total / max(1, completed), 4)
@@ -824,6 +926,10 @@ def publish_product_batch(
             on_progress(progress)
 
     def publish_one(index: int, row: Mapping[str, Any]) -> None:
+        with _publication_slot():
+            publish_one_admitted(index, row)
+
+    def publish_one_admitted(index: int, row: Mapping[str, Any]) -> None:
         nonlocal account_listing_block_reason
         item_started = time.perf_counter()
         product_id = int(row.get("id") or 0)
@@ -838,9 +944,10 @@ def publish_product_batch(
         }
         try:
             from bit.infringement_publish import validate_publication
-            validate_publication(row, site_id)
+            if enforce_infringement:
+                validate_publication(row, site_id)
             if is_ai_original:
-                issues = product_publish_issues(row, site_id=site_id)
+                issues = product_publish_issues(row, defer_infringement=not enforce_infringement, site_id=site_id)
                 if issues:
                     raise ValueError("、".join(issues))
             publish_net_proceeds = discounted_net_proceeds_usd(
@@ -870,7 +977,8 @@ def publish_product_batch(
                     + (account_listing_block_reason or "平台拒绝该账号刊登")
                 )
             save_record(record_id, status="publishing", started=True)
-            update_state(
+            _save_product_state(
+                update_state,
                 product_id,
                 status="publishing",
                 store_name=store_name,
@@ -887,8 +995,22 @@ def publish_product_batch(
                 prepared_listing = _complete_ai_publication_attributes(
                     row, prepared_listing, worker_client(), **dict(ai_completion_options or {})
                 )
+            if prepared_listing is not None:
+                sku_pricing = []
+                for index, variation in enumerate(prepared_listing[0].get('variations') or [], 1):
+                    amount = _decimal_value(variation.get('net_proceeds_usd'))
+                    if is_ai_original and (amount is None or amount <= 0):
+                        raise ValueError(f'SKU {index} 缺少采购价，无法计算独立净收益，请在 1688 产品区补充')
+                    if amount is not None and amount > 0:
+                        variation['publish_net_proceeds_usd'] = discounted_net_proceeds_usd(
+                            {**row, 'net_proceeds_usd': amount}, resolved_discount_rate, resolved_net_proceeds_ratio, minimum)
+                        sku_pricing.append({'sku_id': variation.get('sku_id') or variation.get('id'),
+                                            'source_net_proceeds_usd': float(amount),
+                                            'publish_net_proceeds_usd': variation['publish_net_proceeds_usd']})
+                if sku_pricing:
+                    pricing_metadata['skus'] = sku_pricing
             def checkpoint_draft(draft):
-                if infringement_preflight:
+                if enforce_infringement and infringement_preflight:
                     infringement_preflight(row, draft, site_id)
                 # Checkpoint failure must stop before the remote create call.
                 # Do not use save_record(), which deliberately swallows errors
@@ -897,8 +1019,10 @@ def publish_product_batch(
                            "net_proceeds_calculation": pricing_metadata}
                 if record_id and update_record is not None:
                     update_record(record_id, status="publishing", result=details)
-                update_state(product_id, status="publishing", store_name=store_name,
-                             token_id=int(token_id), result=details)
+                _save_product_state(
+                    update_state, product_id, status="publishing", store_name=store_name,
+                    token_id=int(token_id), result=details,
+                )
 
             publication = follow_sell(
                 worker_client(),
@@ -908,6 +1032,8 @@ def publish_product_batch(
                 destination_site_id=site_id,
                 source_from_database=True,
                 prepared_listing=prepared_listing,
+                virtual_ean_identity=(None if prepared_listing is not None else
+                                      product_identity(row)),
                 existing_user_product_id=reusable_user_product_ids.get(product_id),
                 publish=True,
                 on_prepared=checkpoint_draft,
@@ -918,7 +1044,18 @@ def publish_product_batch(
             published_item_id = _published_item_id(publication)
             state_warning = ""
             try:
-                update_state(
+                from erp.mercadolibre_published_links import save_published_store_links
+                save_published_store_links(
+                    {**token, "id": int(token_id)}, publication, site_id=site_id,
+                    product=row, quantity=quantity, client=worker_client(),
+                )
+            except Exception as link_exc:
+                # Never retry a remote publication because its local projection failed.
+                state_warning = f"；店铺链接即时写入失败，请刷新核对，勿重复上架：{link_exc}"[:2000]
+                logging.exception("已上架商品写入店铺链接失败: product_id=%s", product_id)
+            try:
+                _save_product_state(
+                    update_state,
                     product_id,
                     status="published",
                     store_name=store_name,
@@ -928,12 +1065,12 @@ def publish_product_batch(
                     finished=True,
                 )
             except Exception as state_exc:
-                state_warning = f"；保存产品最新状态时出错: {state_exc}"[:2000]
+                state_warning += f"；保存产品最新状态时出错: {state_exc}"[:2000]
                 logging.exception(
                     "Mercado 产品已上架，但保存产品状态失败: product_id=%s",
                     product_id,
                 )
-            save_record(
+            persistence_error = save_record(
                 record_id,
                 status="published",
                 published_item_id=published_item_id,
@@ -954,6 +1091,8 @@ def publish_product_batch(
                 "timings": dict(publication.get("timings") or {}),
                 "minimum_net_proceeds_usd": float(minimum),
                 "minimum_applied": pricing_metadata["minimum_applied"],
+                "record_persisted": not bool(persistence_error),
+                "persistence_error": persistence_error,
                 "message": (
                     (
                         "已复用现有 User Product 并开通目标站点；"
@@ -972,6 +1111,10 @@ def publish_product_batch(
                     + (f"；低于最低净收益 USD {minimum:.2f}，按 USD {publish_net_proceeds:.2f} 上架"
                        if pricing_metadata["minimum_applied"] else "")
                     + f"{state_warning}"
+                    + (
+                        f"；平台已上架，但保存上架记录失败，请勿重复上架：{persistence_error}"
+                        if persistence_error else ""
+                    )
                 ),
             }
         except Exception as exc:
@@ -994,7 +1137,8 @@ def publish_product_batch(
                         account_listing_block_reason = message
                         account_listing_blocked.set()
             try:
-                update_state(
+                _save_product_state(
+                    update_state,
                     product_id,
                     status=outcome,
                     store_name=store_name,
@@ -1007,7 +1151,7 @@ def publish_product_batch(
                 )
             except Exception as state_exc:
                 message = f"{message}；保存失败状态时出错: {state_exc}"[:2000]
-            save_record(
+            persistence_error = save_record(
                 record_id,
                 status=outcome,
                 failure_reason=message,
@@ -1021,6 +1165,11 @@ def publish_product_batch(
                 },
                 finished=True,
             )
+            if persistence_error:
+                message = (
+                    f"{message}；保存上架结果失败，请先核对平台状态后再处理："
+                    f"{persistence_error}"
+                )[:2000]
             item_result = {
                 "record_id": record_id,
                 "product_id": product_id,
@@ -1029,6 +1178,8 @@ def publish_product_batch(
                 "preflight": getattr(exc, "preflight_report", None),
                 "published_item_id": "",
                 "timings": {"total": round(time.perf_counter() - item_started, 4)},
+                "record_persisted": not bool(persistence_error),
+                "persistence_error": persistence_error,
                 "message": message,
             }
         finish(index, row, item_result)
@@ -1069,6 +1220,7 @@ def publish_product_batch(
         "published_count": published,
         "failed_count": failed,
         "pending_review_count": pending_review,
+        "persistence_failed_count": persistence_failed,
         "elapsed_seconds": round(elapsed_seconds, 3),
         "items_per_minute": round(
             len(results) / elapsed_seconds * 60, 2

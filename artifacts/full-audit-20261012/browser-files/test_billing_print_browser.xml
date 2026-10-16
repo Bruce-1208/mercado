@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="42.993" timestamp="2026-10-12T16:43:36.671479+08:00" hostname="11deMac-mini.local"><testcase classname="tests.test_billing_print_browser" name="test_unified_payment_print_details_filters_and_permissions[1440-super_admin]" time="5.878"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#print-wallet-record-date-from&quot;)&#10;    - locator resolved to &lt;input type=&quot;date&quot; class=&quot;zs-empty-date&quot; id=&quot;print-wallet-record-date-from&quot; data-date-filter-initialized=&quot;true&quot;/&gt;&#10;    - fill(&quot;2026-10-01&quot;)&#10;  - attempting fill action&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and editable&#10;       - element is not visible&#10;     - retrying fill action&#10;       - waiting 500ms">tests/test_billing_print_browser.py:78: in test_unified_payment_print_details_filters_and_permissions
+    page.locator("#print-wallet-record-date-from").fill("2026-10-01")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#print-wallet-record-date-from")
+E       - locator resolved to &lt;input type="date" class="zs-empty-date" id="print-wallet-record-date-from" data-date-filter-initialized="true"/&gt;
+E       - fill("2026-10-01")
+E     - attempting fill action
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and editable
+E          - element is not visible
+E        - retrying fill action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_billing_print_browser" name="test_unified_payment_print_details_filters_and_permissions[390-enterprise_admin]" time="5.430"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#print-wallet-record-date-from&quot;)&#10;    - locator resolved to &lt;input type=&quot;date&quot; class=&quot;zs-empty-date&quot; id=&quot;print-wallet-record-date-from&quot; data-date-filter-initialized=&quot;true&quot;/&gt;&#10;    - fill(&quot;2026-10-01&quot;)&#10;  - attempting fill action&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and editable&#10;       - element is not visible&#10;     - retrying fill action&#10;       - waiting 500ms">tests/test_billing_print_browser.py:78: in test_unified_payment_print_details_filters_and_permissions
+    page.locator("#print-wallet-record-date-from").fill("2026-10-01")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#print-wallet-record-date-from")
+E       - locator resolved to &lt;input type="date" class="zs-empty-date" id="print-wallet-record-date-from" data-date-filter-initialized="true"/&gt;
+E       - fill("2026-10-01")
+E     - attempting fill action
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and editable
+E          - element is not visible
+E        - retrying fill action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_billing_print_browser" name="test_unified_payment_print_details_filters_and_permissions[1440-warehouse]" time="5.432"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#print-wallet-record-date-from&quot;)&#10;    - locator resolved to &lt;input type=&quot;date&quot; class=&quot;zs-empty-date&quot; id=&quot;print-wallet-record-date-from&quot; data-date-filter-initialized=&quot;true&quot;/&gt;&#10;    - fill(&quot;2026-10-01&quot;)&#10;  - attempting fill action&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and editable&#10;       - element is not visible&#10;     - retrying fill action&#10;       - waiting 500ms">tests/test_billing_print_browser.py:78: in test_unified_payment_print_details_filters_and_permissions
+    page.locator("#print-wallet-record-date-from").fill("2026-10-01")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#print-wallet-record-date-from")
+E       - locator resolved to &lt;input type="date" class="zs-empty-date" id="print-wallet-record-date-from" data-date-filter-initialized="true"/&gt;
+E       - fill("2026-10-01")
+E     - attempting fill action
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and editable
+E          - element is not visible
+E        - retrying fill action
+E          - waiting 500ms</failure></testcase><testcase classname="tests.test_billing_print_browser" name="test_unified_payment_print_details_filters_and_permissions[390-member]" time="25.847"><failure message="playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.&#10;Call log:&#10;  - waiting for locator(&quot;#print-wallet-record-date-from&quot;)&#10;    - locator resolved to &lt;input type=&quot;date&quot; class=&quot;zs-empty-date&quot; id=&quot;print-wallet-record-date-from&quot; data-date-filter-initialized=&quot;true&quot;/&gt;&#10;    - fill(&quot;2026-10-01&quot;)&#10;  - attempting fill action&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;    - waiting 20ms&#10;    2 × waiting for element to be visible, enabled and editable&#10;      - element is not visible&#10;    - retrying fill action&#10;      - waiting 100ms&#10;    10 × waiting for element to be visible, enabled and editable&#10;       - element is not visible&#10;     - retrying fill action&#10;       - waiting 500ms">tests/test_billing_print_browser.py:78: in test_unified_payment_print_details_filters_and_permissions
+    page.locator("#print-wallet-record-date-from").fill("2026-10-01")
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/sync_api/_generated.py:15870: in fill
+    self._sync(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_locator.py:212: in fill
+    return await self._frame.fill(self._selector, strict=True, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:590: in fill
+    await self._fill(**locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_frame.py:602: in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:69: in send
+    return await self._connection.wrap_api_call(
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/playwright/_impl/_connection.py:558: in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+E   playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+E   Call log:
+E     - waiting for locator("#print-wallet-record-date-from")
+E       - locator resolved to &lt;input type="date" class="zs-empty-date" id="print-wallet-record-date-from" data-date-filter-initialized="true"/&gt;
+E       - fill("2026-10-01")
+E     - attempting fill action
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E       - waiting 20ms
+E       2 × waiting for element to be visible, enabled and editable
+E         - element is not visible
+E       - retrying fill action
+E         - waiting 100ms
+E       10 × waiting for element to be visible, enabled and editable
+E          - element is not visible
+E        - retrying fill action
+E          - waiting 500ms</failure></testcase></testsuite></testsuites>

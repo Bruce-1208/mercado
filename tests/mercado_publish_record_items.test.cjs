@@ -63,3 +63,22 @@ test('right click copies only the product ID and prevents navigation', () => {
     assert.equal(copies.at(-1)[0], 'MLM12345');
     assert.equal(copies.at(-1)[1].message, '产品编号已复制');
 });
+
+test('recovers successful global IDs from array responses when the stored scalar ID is empty', () => {
+    const row = {site_id: 'MLM', published_item_id: '', result_json: {result: [
+        {id: 'CBT123'}, {id: 'CBT456'}, {id: 'CBT123'}, {id: 'CBT789', error: 'failed'},
+    ]}};
+    assert.deepEqual(items(row), [{id: 'CBT123', url: ''}, {id: 'CBT456', url: ''}]);
+    const html = context.renderMercadoPublishRecordItems(row);
+    assert.match(html, /<details class="publish-record-details publish-record-items">/);
+    assert.match(html, /共 2 个编号/);
+    assert.doesNotMatch(html, / open|href=/);
+});
+
+test('reads nested response wrappers but never picks up source or request product IDs', () => {
+    const row = {site_id: 'MLM', result_json: {source_item_id: 'MLM999', payload: {id: 'MLM888'},
+        result: {raw_response: [{result: {site_items: [{item_id: 'MLM123'}, {item_id: 'MLM456'}]}}]}}};
+    assert.deepEqual(items(row).map(item => item.id), ['MLM123', 'MLM456']);
+    assert.match(context.renderMercadoPublishRecordItems(row), /共 2 个编号/);
+    assert.doesNotMatch(context.renderMercadoPublishRecordItems({published_item_id: 'MLM123'}), /<details/);
+});

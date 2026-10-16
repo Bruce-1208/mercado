@@ -8,6 +8,13 @@ import pytest
 from erp import mercadolibre_batch_publish as batch_publish
 
 
+@pytest.fixture(autouse=True)
+def offline_published_links(monkeypatch, tmp_path):
+    monkeypatch.setenv('MERCADO_VIRTUAL_EAN_DB', str(tmp_path / 'virtual-eans.sqlite3'))
+    from erp import mercadolibre_published_links
+    monkeypatch.setattr(mercadolibre_published_links, "save_published_store_links", lambda *a, **kw: {"total": 1})
+
+
 def _rows():
     return [
         {"id": 11, "source_item_id": "MLM111", "source_url": "https://example/MLM111", "review_status": "approved", "weight_g": 350, "weight_basis": "plugin_actual", "billable_weight_g": 350, "shipping_weight_rule": "free_shipping:actual_weight_only:official_global_selling_cainiao_rate_card", "profitability_updated_at": "2026-09-12 12:00:00", "profitability_source": "mercadolibre_official_api", "net_proceeds_usd": 10},
@@ -20,6 +27,7 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
     record_create_calls = []
     record_update_calls = []
     thread_ids = set()
+    progress_results = []
 
     def fake_follow_sell(client, source_url, **kwargs):
         assert kwargs["publish"] is True
@@ -57,10 +65,15 @@ def test_batch_publish_continues_after_an_item_failure_and_records_each_state():
             created_by="测试用户",
             create_records=create_records,
             update_record=lambda record_id, **changes: record_update_calls.append((record_id, changes)),
+            on_progress=lambda info: progress_results.append(info['result']),
         )
 
     assert result["published_count"] == 1
     assert result["failed_count"] == 1
+    assert {item['product_id']: item['status'] for item in progress_results} == {
+        11: 'published', 12: 'failed',
+    }
+    assert next(item for item in progress_results if item['status'] == 'published')['published_item_id'] == 'CBT999'
     assert result["site_id"] == "MLB"
     assert result["site_name"] == "巴西"
     assert result["worker_count"] == 2
@@ -496,6 +509,53 @@ def test_successful_upload_is_not_reported_failed_when_latest_state_save_fails()
     )
 
 
+def test_successful_upload_retries_terminal_record_save_and_warns_not_to_retry():
+    record_updates = []
+
+    def update_record(record_id, **changes):
+        record_updates.append((record_id, changes))
+        if changes.get("status") == "published":
+            raise RuntimeError("publish record database unavailable")
+
+    with patch.object(
+        batch_publish,
+        "_token_record",
+        return_value={"display_name": "测试店铺", "access_token": "secret"},
+    ), patch.object(
+        batch_publish,
+        "follow_sell",
+        return_value={"result": {"id": "CBT999"}},
+    ) as follow_sell, patch.object(batch_publish.time, "sleep") as sleep:
+        result = batch_publish.publish_product_batch(
+            [_rows()[0]],
+            token_id=7,
+            site_id="MLB",
+            update_state=lambda *_args, **_kwargs: None,
+            client=object(),
+            batch_id="batch-persistence-failure",
+            create_records=lambda *_args, **_kwargs: {11: 103},
+            update_record=update_record,
+        )
+
+    terminal_updates = [
+        changes for record_id, changes in record_updates
+        if record_id == 103 and changes.get("status") == "published"
+    ]
+    assert len(terminal_updates) == 3
+    assert [entry.args[0] for entry in sleep.call_args_list] == [0.05, 0.1]
+    follow_sell.assert_called_once()
+    assert result["published_count"] == 1
+    assert result["failed_count"] == 0
+    assert result["persistence_failed_count"] == 1
+    item = result["results"][0]
+    assert item["status"] == "published"
+    assert item["published_item_id"] == "CBT999"
+    assert item["record_persisted"] is False
+    assert "publish record database unavailable" in item["persistence_error"]
+    assert "平台已上架" in item["message"]
+    assert "请勿重复上架" in item["message"]
+
+
 def test_500_item_publish_orchestration_has_low_local_overhead():
     snapshot = (
         '{"source":{"site_id":"MLM","title":"Producto",'
@@ -576,8 +636,9 @@ def test_family_result_does_not_expose_one_variants_up_id_for_reuse():
     assert batch_publish._published_item_id(publication) == "MLM1"
 
 
+@pytest.mark.parametrize("enforce", [False, True])
 @pytest.mark.parametrize("draft_risk", [False, True])
-def test_infringement_is_held_for_review_while_other_products_publish(draft_risk):
+def test_infringement_is_held_for_review_while_other_products_publish(draft_risk, enforce):
     from bit.infringement_state import content_hash
     from bit.infringement_publish import InfringementReviewRequired
     rows = _rows()
@@ -607,7 +668,13 @@ def test_infringement_is_held_for_review_while_other_products_publish(draft_risk
             create_records=lambda *args, **kwargs: {11: 101, 12: 102},
             update_record=lambda record_id, **changes: records.append((record_id, changes)),
             infringement_preflight=preflight if draft_risk else None,
+            enforce_infringement=enforce,
         )
+    if not enforce:
+        assert result["published_count"] == 2
+        assert result["pending_review_count"] == 0
+        assert len(uploaded) == 2
+        return
     assert result["published_count"] == 1
     assert result["failed_count"] == 0
     assert result["pending_review_count"] == 1
@@ -615,3 +682,50 @@ def test_infringement_is_held_for_review_while_other_products_publish(draft_risk
     assert uploaded == [rows[1]["source_url"]]
     assert any(i == 11 and change["status"] == "pending_review" for i, change in states)
     assert any(i == 101 and change["status"] == "pending_review" for i, change in records)
+
+
+def test_explicitly_removed_zying_attributes_are_not_recovered_from_capture():
+    row = {**_rows()[0], "source_type": "zying", "source_snapshot_json": {
+        "source": {"id": "CBT846456655", "attributes": []},
+        "manual_product_fields": ["attributes"],
+    }}
+    with patch.object(batch_publish, "_zying_snapshot_attributes", return_value=[
+        {"id": "MATERIAL", "value_name": "Old material"}
+    ]) as recover:
+        source, _ = batch_publish._prepared_listing_from_product_row(row)
+    recover.assert_not_called()
+    assert not any(attribute["id"] == "MATERIAL" for attribute in source["attributes"])
+
+
+def test_switching_main_image_keeps_sku_picture_id():
+    row = {**_rows()[0], "main_image_url": "https://example.test/blue.jpg",
+           "source_snapshot_json": {"source": {
+               "pictures": [{"id": "RED", "source": "https://example.test/red.jpg"},
+                            {"id": "BLUE", "source": "https://example.test/blue.jpg"}],
+               "variations": [{"picture_ids": ["BLUE"]}],
+           }}}
+    snapshot = batch_publish._product_source_snapshot(row)
+    assert snapshot["source"]["pictures"][0]["id"] == "BLUE"
+    assert snapshot["source"]["variations"][0]["picture_ids"] == ["BLUE"]
+
+
+@pytest.mark.parametrize('write_fails', [False, True])
+def test_success_projects_link_before_progress_without_republishing(monkeypatch, write_fails):
+    from erp import mercadolibre_published_links
+    events = []
+    def save(*args, **kwargs):
+        events.append('link')
+        assert args[0]['id'] == 7
+        if write_fails:
+            raise RuntimeError('offline write failure')
+    monkeypatch.setattr(mercadolibre_published_links, 'save_published_store_links', save)
+    monkeypatch.setattr(batch_publish, '_token_record', lambda _: {'display_name': '测试店铺'})
+    with patch.object(batch_publish, 'follow_sell', return_value={'result': {'id': 'MLM999'}}) as publish:
+        result = batch_publish.publish_product_batch(
+            _rows()[:1], token_id=7, client=object(), update_state=lambda *a, **kw: None,
+            on_progress=lambda info: events.append(info['result']['status']))
+    assert events == ['link', 'published']
+    assert result['published_count'] == 1
+    assert result['failed_count'] == 0
+    assert ('店铺链接即时写入失败' in result['results'][0]['message']) == write_fails
+    publish.assert_called_once()

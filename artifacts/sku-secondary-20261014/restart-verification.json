@@ -1,0 +1,55 @@
+[
+  {
+    "path": "/login",
+    "status": 200
+  },
+  {
+    "path": "/static/sku-matrix.js",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/sku-matrix.css",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/1688-products.js",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/ai-original-products.js",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "path": "/static/mercado-product-editor.js",
+    "status": 200,
+    "matches_workspace": true
+  },
+  {
+    "port": 5001,
+    "status": "success",
+    "group": "worker",
+    "http_status": 200
+  },
+  {
+    "port": 5002,
+    "status": "success",
+    "group": "orders",
+    "http_status": 200
+  },
+  {
+    "port": 5003,
+    "status": "success",
+    "group": "stores",
+    "http_status": 200
+  },
+  {
+    "port": 5004,
+    "status": "success",
+    "group": "maintenance",
+    "http_status": 200
+  }
+]

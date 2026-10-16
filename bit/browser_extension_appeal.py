@@ -1,8 +1,8 @@
 """Single-store appeal planning for a browser extension.
 
 The browser owns Mercado navigation and submission. The server binds each run
-to one authorized store, shares the Agent's phrases/AI copy and saves its normal
-appeal records. No browser window or multi-store scheduler is started here.
+to one browser session (or a legacy authorized store), shares the Agent's
+phrases/AI copy and saves its normal appeal records. No browser window or multi-store scheduler is started here.
 """
 
 from __future__ import annotations
@@ -39,6 +39,16 @@ def enabled(value):
     return bool(value)
 
 
+def browser_record_belongs_to_user(record, user, organization):
+    """Browser-only records belong to their creator, never an OAuth name alias."""
+    return bool(user and user.get("access_version") == 1
+                and record.get("binding_mode") == "browser"
+                and record.get("token_id") == 0
+                and record.get("organization_key") == organization
+                and record.get("user_id") == user.get("id")
+                and int(user.get("id") or 0) > 0)
+
+
 def site_id(value):
     text = str(value or "").strip()
     for code, (short, name) in SITE_INFO.items():
@@ -57,6 +67,8 @@ def normalize_params(payload, identity):
     selected = list(dict.fromkeys(site_id(value) for value in sites))
     allowed = {row["site_id"] for row in identity["sites"]}
     if not selected or set(selected) - allowed:
+        if identity.get("binding_mode") == "browser":
+            raise AppealError("只能执行当前浏览器店铺可用的直邮站点", 403)
         raise AppealError("只能执行当前店铺已开启申诉的授权站点", 403)
     mode = str(payload.get("mode") or "人工客服").strip()
     copy_mode = str(payload.get("appeal_copy_mode") or "普通模式").strip()
@@ -78,7 +90,7 @@ def normalize_params(payload, identity):
         raise AppealError("自定义话术过长")
     return {"forms": [form for form in FORMS if form in forms],
             "sites": selected, "mode": mode, "appeal_copy_mode": copy_mode,
-            "loop_count": count, "message": message}
+            "loop_count": count, "message": message, "screenshot_mode": enabled(payload.get("screenshot_mode"))}
 
 
 def _identifiers(values, form, site):
@@ -184,23 +196,50 @@ class AppealService:
     def __init__(self, *, scoped_tokens, token_loader, api_key, record_writer,
                  root=None, accounts_loader=marketplace_accounts,
                  identifiers_loader=store_identifiers, phrase_loader=None,
-                 copy_generator=None, products_loader=None):
+                 copy_generator=None, products_loader=None, packages_loader=None):
         self.scoped_tokens, self.token_loader = scoped_tokens, token_loader
         self.api_key, self.record_writer = api_key, record_writer
         self.accounts_loader, self.identifiers_loader = accounts_loader, identifiers_loader
         self.phrase_loader, self.copy_generator = phrase_loader, copy_generator
         self.products_loader = products_loader
+        self.packages_loader = packages_loader
         self.root = Path(root or os.environ.get("BIT_BROWSER_EXTENSION_APPEAL_ROOT") or
                          Path(__file__).resolve().parent / "runtime_locks" / "browser_extension_appeals")
 
     def context(self, user, payload):
         seller = str(payload.get("seller_id") or "").strip()
-        if not re.fullmatch(r"\d+", seller):
+        if not re.fullmatch(r"[1-9]\d*", seller):
             raise AppealError("无法读取当前美客多登录账号，请打开已登录的店铺后台")
+        if payload.get("binding_mode") == "browser":
+            raw_sites = payload.get("sites")
+            if not isinstance(raw_sites, list) or not raw_sites or len(raw_sites) > len(SITE_INFO):
+                raise AppealError("无法读取当前浏览器店铺的可用站点")
+            sites, seen = [], set()
+            for raw in raw_sites:
+                if not isinstance(raw, dict):
+                    raise AppealError("浏览器站点信息格式无效")
+                code = site_id(raw.get("site_id"))
+                account = str(raw.get("seller_id") or seller).strip()
+                if code in seen or not re.fullmatch(r"[1-9]\d*", account):
+                    raise AppealError("浏览器站点账号信息无效")
+                seen.add(code)
+                sites.append({"site_id": code, "site_code": SITE_INFO[code][0],
+                              "site_name": SITE_INFO[code][1], "seller_id": account})
+            nickname = str(payload.get("nickname") or "").strip()[:160]
+            return self._identity_snapshot({
+                "binding_mode": "browser", "token_id": 0, "seller_id": seller,
+                "root_seller_id": seller, "sites": sites,
+                "allowed_seller_ids": sorted({seller, *(s["seller_id"] for s in sites)}),
+                "shop_name": nickname or f"美客多账号 {seller}", "nickname": nickname,
+                "organization_key": str(user.get("organization_key") or "wuhan-zeshun"),
+            })
         rows = [row for row in self.scoped_tokens(user) if enabled(row.get("enabled", True))]
+        if not rows:
+            raise AppealError("当前泽顺账号没有可用的本人授权店铺，请检查店铺是否启用及账号的店铺权限", 403)
         direct = [row for row in rows if str(row.get("meli_user_id") or "") == seller]
         candidates = direct or rows
         matches = []
+        account_read_failed = False
         for row in candidates:
             token_id = int(row.get("id") or 0)
             if token_id <= 0:
@@ -213,6 +252,7 @@ class AppealService:
             except Exception:
                 if direct:
                     raise AppealError("当前店铺授权账号校验失败，请检查授权后重试", 503) from None
+                account_read_failed = True
                 continue
             root_seller = str(row.get("meli_user_id") or "")
             if seller != root_seller and seller not in {str(a.get("user_id")) for a in accounts}:
@@ -233,8 +273,12 @@ class AppealService:
                             "shop_name": str(row.get("display_name") or row.get("nickname") or ""),
                             "nickname": str(row.get("nickname") or ""), "sites": sites,
                             "allowed_seller_ids": sorted({root_seller, *(s["seller_id"] for s in sites)})})
-        if len(matches) != 1:
-            raise AppealError("当前美客多账号无法唯一匹配本人授权店铺", 403)
+        if len(matches) > 1:
+            raise AppealError(f"当前美客多账号（ID：{seller}）匹配到多个本人授权店铺，请检查重复授权配置", 403)
+        if not matches:
+            if account_read_failed:
+                raise AppealError(f"部分店铺授权资料读取失败，暂时无法确认当前美客多账号（ID：{seller}）的归属，请稍后重试；持续失败请检查店铺授权", 503)
+            raise AppealError(f"当前美客多账号（ID：{seller}）未匹配到本人授权店铺，请确认浏览器登录的店铺已在泽顺授权、已启用，且当前泽顺账号有该店铺权限", 403)
         return self._identity_snapshot(matches[0])
 
     @staticmethod
@@ -256,6 +300,10 @@ class AppealService:
         if task["user_id"] != int(user.get("id") or 0):
             raise AppealError("只能操作本人创建的插件申诉任务", 403)
         identity = task["identity"]
+        if identity.get("binding_mode") == "browser":
+            if identity["organization_key"] != str(user.get("organization_key") or "wuhan-zeshun"):
+                raise AppealError("任务所属企业已变更，请重新开始申诉", 403)
+            return task
         rows = [row for row in self.scoped_tokens(user)
                 if int(row.get("id") or 0) == identity["token_id"]]
         if len(rows) != 1 or not enabled(rows[0].get("enabled", True)) or str(rows[0].get("meli_user_id") or "") != identity["root_seller_id"]:
@@ -335,16 +383,17 @@ class AppealService:
                 current = {"identifiers": {}, "phrases": {}, "groups": []}
                 task["rounds"][str(number)] = current
                 for form in task["params"]["forms"]:
-                    if task["params"]["mode"] == "人工客服" and (task["params"]["message"] or form == "投诉"):
+                    if task["params"]["mode"] == "人工客服" and task["params"]["message"] and form not in REPUTATION_FORMS:
                         for site in task["params"]["sites"]:
                             current["identifiers"][site + ":" + form] = []
                         continue
-                    if form in REPUTATION_FORMS:
+                    if form in REPUTATION_FORMS or task["identity"].get("binding_mode") == "browser":
                         continue
                     for site in task["params"]["sites"]:
                         current["identifiers"][site + ":" + form] = _identifiers(
                             self.identifiers_loader(task["identity"], form, site), form, site)
-            supplied = payload.get("reputation_identifiers") or {}
+            browser_bound = task["identity"].get("binding_mode") == "browser"
+            supplied = payload.get("browser_identifiers" if browser_bound else "reputation_identifiers") or {}
             if not isinstance(supplied, dict):
                 raise AppealError("声誉订单采集结果格式无效")
             for raw_site, forms in supplied.items():
@@ -352,15 +401,55 @@ class AppealService:
                 if site not in task["params"]["sites"] or not isinstance(forms, dict):
                     raise AppealError("订单采集结果包含未选择的店铺站点", 403)
                 for form, values in forms.items():
-                    if form not in REPUTATION_FORMS or form not in task["params"]["forms"]:
+                    if (not browser_bound and form not in REPUTATION_FORMS) or form not in task["params"]["forms"]:
                         raise AppealError("订单采集结果包含未选择的任务类型")
-                    key, ids = site + ":" + form, _identifiers(values, form, site)
+                    key = site + ":" + form
+                    if form in REPUTATION_FORMS:
+                        if isinstance(values, dict) and "pack_ids" in values and set(values) <= {"pack_ids", "order_ids"}:
+                            from bit.appeal_evidence import normalize_ids
+                            ids = normalize_ids(values["pack_ids"])
+                            sales = _identifiers(values.get("order_ids", []), form, site)
+                            if sales:
+                                ids = list(dict.fromkeys(ids + self._packages(user, task["identity"], site, sales)))
+                        else:
+                            ids = _identifiers(values, form, site)
+                            if ids:
+                                ids = _identifiers(self._packages(user, task["identity"], site, ids), form, site)
+                    else:
+                        ids = _identifiers(values, form, site)
                     if key in current["identifiers"] and current["identifiers"][key] != ids:
                         raise AppealError("本轮已签发的申诉编号不能修改", 409)
                     current["identifiers"][key] = ids
+            if browser_bound and "browser_products" in payload:
+                products = payload["browser_products"]
+                if not isinstance(products, dict) or len(products) > 10000:
+                    raise AppealError("浏览器商品资料格式无效")
+                allowed_ids = {value for values in current["identifiers"].values() for value in values}
+                saved = current.setdefault("products", {})
+                for item_id, product in products.items():
+                    if item_id not in allowed_ids or not isinstance(product, dict):
+                        raise AppealError("浏览器商品资料不属于本轮申诉编号")
+                    normalized = {"product_id": item_id, "title": str(product.get("title") or "").strip()[:500],
+                                  "description": str(product.get("description") or "").strip()[:1600]}
+                    if item_id in saved and saved[item_id] != normalized:
+                        raise AppealError("本轮已绑定的商品资料不能修改", 409)
+                    saved[item_id] = normalized
             self._build_groups(task, current, number)
             self._write(task)
             return self._snapshot(task, number)
+
+    def _packages(self, user, identity, site, values):
+        from bit.appeal_evidence import resolve_with_token
+        if self.packages_loader:
+            return self.packages_loader(identity, site, values)
+        # A browser-only run may resolve sales only through the user's own authorized store.
+        bound = identity
+        if identity.get("binding_mode") == "browser":
+            bound = self.context(user, {"seller_id": identity["seller_id"]})["identity"]
+        if site not in {row["site_id"] for row in bound["sites"]}:
+            raise AppealError("当前店铺未授权该申诉站点，不能核实包裹号", 403)
+        return resolve_with_token(self.token_loader(bound["token_id"]), site, values,
+                                  accounts=self.accounts_loader(self.token_loader(bound["token_id"])))
 
     def _build_groups(self, task, current, number):
         from bit.bit_appeal_phrases import render_appeal_phrase, select_appeal_phrase
@@ -374,7 +463,7 @@ class AppealService:
                 ai = task["params"]["appeal_copy_mode"] == "AI话术模式" and form in ("侵权", "禁限售")
                 size = 3 if ai else {"延误": 5, "投诉": 2}.get(form, 10)
                 if manual:
-                    if task["params"]["message"] or form == "投诉":
+                    if task["params"]["message"] and form not in REPUTATION_FORMS:
                         chunks = [[]]
                     elif values:
                         chunks = [random.sample(values, 10) if len(values) > 10 and form in ("侵权", "取消率") else values[:10]]
@@ -396,9 +485,12 @@ class AppealService:
                         groups.append(previous[digest])
                         continue
                     ids_text = "、".join(ids)
-                    message = "" if ai else (("" if manual else ids_text) + task["params"]["message"] if task["params"]["message"] else
+                    message = "" if ai else (("" if manual and form not in REPUTATION_FORMS else ids_text + "\n") + task["params"]["message"] if task["params"]["message"] else
                         render_appeal_phrase(current["phrases"][key], nickname=random.choice(("Bruce", "Jack", "Lucy", "James")),
                                              order_ids=ids_text, appeal_type=form))
+                    if form in REPUTATION_FORMS:
+                        from bit.appeal_evidence import validate_package_message
+                        message = validate_package_message(message, ids)
                     groups.append({"group_id": digest, "round_number": number, "site_id": site,
                                    "site_code": SITE_INFO[site][0], "site_name": SITE_INFO[site][1],
                                    "form": form, "appeal_kind": form, "identifiers": ids,
@@ -410,7 +502,8 @@ class AppealService:
     @staticmethod
     def _pending_collections(task, current):
         return [{"site_id": site, "form": form} for form in task["params"]["forms"]
-                if form in REPUTATION_FORMS for site in task["params"]["sites"]
+                if form in REPUTATION_FORMS or task["identity"].get("binding_mode") == "browser"
+                for site in task["params"]["sites"]
                 if site + ":" + form not in current["identifiers"]]
 
     def _snapshot(self, task, number=None):
@@ -446,6 +539,11 @@ class AppealService:
                     raise AppealError("请先配置阿里云百炼 API Key")
                 loader = lambda ids: (self.products_loader(task["identity"], group) if self.products_loader else
                                       product_contexts(task["identity"], group, self.token_loader))
+                if task["identity"].get("binding_mode") == "browser":
+                    products = task["rounds"][str(group["round_number"])].get("products", {})
+                    if any(not products.get(item_id, {}).get("title") for item_id in group["identifiers"]):
+                        raise AppealError("当前浏览器尚未读取完整商品标题，请重新采集后生成 AI 话术")
+                    loader = lambda ids: [products[item_id] for item_id in ids]
                 from erp.ai_usage_billing import usage_context
                 with usage_context(task_id=task_id, task_type="ai_appeal", task_name="泽顺插件自动化申诉"):
                     generated = (self.copy_generator or generate_ai_appeal_copy)(group["form"], group["identifiers"], key, product_loader=loader)
@@ -502,6 +600,7 @@ class AppealService:
                       "chat_history": fields["chat_history"], "ai_summary": f"第{group['group_index']}/{group['total_groups']}组：{summary['summary']}", "error": error,
                       "record_scope": "group", "group_index": group["group_index"], "total_groups": group["total_groups"],
                       "task_id": task_id, "round_number": group["round_number"], "token_id": task["identity"]["token_id"],
+                      "binding_mode": task["identity"].get("binding_mode", "oauth"),
                       "organization_key": task["identity"]["organization_key"], "user_id": task["user_id"],
                       "seller_id": task["identity"]["seller_id"], "execution": execution,
                       "executor": {"runtime_role": "browser_extension", "execution_target": "browser_extension",
@@ -545,6 +644,7 @@ class AppealService:
                           "identifiers": [], "success_ids": [], "failed_ids": [], "ai_replies": [], "chat_history": [],
                           "ai_summary": "当前店铺该站点没有可申诉编号。", "error": "", "record_scope": "site",
                           "task_id": task["task_id"], "round_number": int(number), "token_id": identity["token_id"],
+                          "binding_mode": identity.get("binding_mode", "oauth"),
                           "organization_key": identity["organization_key"], "seller_id": identity["seller_id"],
                           "user_id": task["user_id"], "execution": execution,
                           "executor": {"runtime_role": "browser_extension", "execution_target": "browser_extension",

@@ -1,0 +1,16 @@
+[
+  {
+    "id": 16764286,
+    "status": "attributes_incomplete",
+    "category_id": "CBT86978",
+    "attributes": 4,
+    "error": "AI 已尝试补全，仍缺少必填属性：PART_NUMBER；请重试生成或手动补齐",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number",
+        "reason": "原始资料未提供零件编号，不能用商品名称代替"
+      }
+    ]
+  }
+]

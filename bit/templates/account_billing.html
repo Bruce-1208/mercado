@@ -5,11 +5,12 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='account-billing.css') }}?v=20261006-billing-print">
 <link rel="stylesheet" href="{{ url_for('static', filename='print-wallet.css') }}?v=20261006-billing-print">
 <link rel="stylesheet" href="{{ url_for('static', filename='date-filter-controls.css') }}?v=20261008">
-<script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261008"></script>
+<script defer src="{{ url_for('static', filename='date-filter-controls.js') }}?v=20261016-module-ui"></script>
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261008"></script>
 <link rel="stylesheet" href="{{ url_for('static', filename='zeshun-theme.css') }}?v=20261012-system">
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
-    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261016-module-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261016-module-ui">
+    <script defer src="{{ url_for('static', filename='compact-filters.js') }}?v=20261016-module-ui"></script>
 </head>
 <body class="zs-standalone zs-account" data-admin="{{ 'true' if billing_admin else 'false' }}" data-user-id="{{ current_user.id }}">
 <header><strong>ZS · 泽顺运营中心</strong><nav><a href="/">返回工作台</a><a href="/settings/profile">个人资料</a><a href="/logout">退出登录</a></nav></header>

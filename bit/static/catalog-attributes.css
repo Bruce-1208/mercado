@@ -1,0 +1,18 @@
+.zs-attribute-status { margin-top: var(--zs-space-1); color: var(--zs-secondary); font-size: var(--zs-text-small); overflow-wrap: anywhere; }
+.zs-attribute-status small { display: block; color: var(--zs-warning); white-space: normal; }
+.zs-attribute-status[data-status="complete"] { color: var(--zs-success); }
+.zs-attribute-status[data-status="missing"] { color: var(--zs-warning); }
+#catalog-attributes-dialog { box-sizing: border-box; width: min(760px, calc(100vw - var(--zs-space-4))); max-height: 90dvh; padding: var(--zs-space-4); border: 1px solid var(--zs-stroke); border-radius: var(--zs-radius-dialog); color: var(--zs-copy); background: var(--zs-card); overflow: auto; }
+#catalog-attributes-dialog form { display: grid; gap: var(--zs-space-3); }
+#catalog-attributes-dialog header { display: flex; align-items: center; justify-content: space-between; gap: var(--zs-space-2); }
+#catalog-attributes-dialog h3, #catalog-attributes-dialog p { margin: 0; }
+.zs-attribute-controls { display: flex; flex-wrap: wrap; align-items: end; gap: var(--zs-space-2); }
+.zs-attribute-controls label { display: grid; min-width: 0; max-width: 100%; gap: var(--zs-space-1); }
+.zs-attribute-controls :is(input:not([type="checkbox"]),select) { box-sizing: border-box; width: 100%; min-height: var(--zs-height-compact); border: 1px solid var(--zs-stroke); border-radius: var(--zs-radius-control); padding: var(--zs-space-2); background: var(--zs-card); color: var(--zs-copy); }
+.zs-attribute-controls .zs-attribute-checkbox { display: flex; flex-basis: 100%; align-items: center; }
+#catalog-attributes-results { display: grid; gap: var(--zs-space-2); }
+#catalog-attributes-results article { border: 1px solid var(--zs-stroke); border-radius: var(--zs-radius-control); padding: var(--zs-space-3); overflow-wrap: anywhere; }
+#catalog-attributes-dialog :focus-visible { outline: 2px solid var(--zs-brand); outline-offset: 2px; }
+@media(max-width:600px) { .zs-attribute-controls label { width: 100%; } #catalog-attributes-dialog :is(button,select,input:not([type="checkbox"])) { min-height: var(--zs-height-touch); } }
+
+.zs-attribute-controls .zs-attribute-checkbox input { width: auto; flex: 0 0 auto; margin: 0; }

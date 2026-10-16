@@ -1,0 +1,895 @@
+[
+  {
+    "page": "tab-overview",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-orders",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "order-status-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 162.515625
+      },
+      {
+        "id": "order-store-filter-trigger",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 162.515625
+      },
+      {
+        "id": "order-search-input",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 208.96875
+      }
+    ]
+  },
+  {
+    "page": "tab-inventory",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "inventory-stock-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 192.515625
+      },
+      {
+        "id": "inventory-stock-shelf",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      },
+      {
+        "id": "inventory-stock-status",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "positive",
+        "width": 149.734375
+      }
+    ]
+  },
+  {
+    "page": "tab-inventory-stock",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "inventory-stock-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 192.515625
+      },
+      {
+        "id": "inventory-stock-shelf",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      },
+      {
+        "id": "inventory-stock-status",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "positive",
+        "width": 149.734375
+      }
+    ]
+  },
+  {
+    "page": "tab-inventory-logs",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "inventory-log-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 192.515625
+      },
+      {
+        "id": "inventory-log-type",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      },
+      {
+        "id": "inventory-log-shelf",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      }
+    ]
+  },
+  {
+    "page": "tab-inventory-sku",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-inventory-shelves",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-1688-products",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "products-1688-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 231.75
+      },
+      {
+        "id": "products-1688-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 180.25
+      }
+    ]
+  },
+  {
+    "page": "tab-ai-original-products",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "ai-original-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 225.390625
+      },
+      {
+        "id": "ai-original-generator-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 175.296875
+      },
+      {
+        "id": "ai-original-status-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 175.3125
+      }
+    ]
+  },
+  {
+    "page": "tab-mercado-collection",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "mercado-list-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 192.515625
+      },
+      {
+        "id": "mercado-management-category-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      },
+      {
+        "id": "mercado-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      }
+    ]
+  },
+  {
+    "page": "tab-mercado-products",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "mercado-list-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 192.515625
+      },
+      {
+        "id": "mercado-management-category-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      },
+      {
+        "id": "mercado-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 149.734375
+      }
+    ]
+  },
+  {
+    "page": "tab-weight-dimensions-records",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "wdr-filter-salesperson",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 178.65625
+      },
+      {
+        "id": "wdr-filter-source",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 178.671875
+      },
+      {
+        "id": "wdr-filter-store",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 178.671875
+      },
+      {
+        "id": "wdr-filter-date-from",
+        "type": "datetime-local",
+        "tag": "INPUT",
+        "value": "2026-10-10T00:00",
+        "width": 188.5
+      },
+      {
+        "id": "wdr-filter-date-to",
+        "type": "datetime-local",
+        "tag": "INPUT",
+        "value": "",
+        "width": 188.5
+      },
+      {
+        "id": "wdr-filter-category",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 188.5
+      },
+      {
+        "id": "wdr-filter-region",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 188.5
+      },
+      {
+        "id": "wdr-filter-freight-min",
+        "type": "number",
+        "tag": "INPUT",
+        "value": "",
+        "width": 188.5
+      },
+      {
+        "id": "wdr-filter-freight-max",
+        "type": "number",
+        "tag": "INPUT",
+        "value": "",
+        "width": 188.5
+      },
+      {
+        "id": "wdr-filter-date-from-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "custom",
+        "width": 188.5
+      }
+    ]
+  },
+  {
+    "page": "tab-mercado-shipping-standards",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-mercado-publish-records",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "publish-record-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 199.5625
+      },
+      {
+        "id": "publish-record-source",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 155.21875
+      },
+      {
+        "id": "publish-record-status",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 155.21875
+      }
+    ]
+  },
+  {
+    "page": "tab-yandex",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-appeal",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-tasks",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "daily-task-status-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "active",
+        "width": 184
+      },
+      {
+        "id": "daily-task-computer-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 184
+      }
+    ]
+  },
+  {
+    "page": "tab-salesperson-stats",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "salesperson-stats-start-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 558
+      }
+    ]
+  },
+  {
+    "page": "tab-store-analysis",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "store-analysis-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 180.65625
+      },
+      {
+        "id": "store-analysis-group",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 180.671875
+      },
+      {
+        "id": "store-analysis-store",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 180.671875
+      }
+    ]
+  },
+  {
+    "page": "tab-order-analysis",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "after-sale-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 298.125
+      },
+      {
+        "id": "after-sale-date-from-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "custom",
+        "width": 231.875
+      },
+      {
+        "id": "profit-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 298.125
+      },
+      {
+        "id": "profit-date-from-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "custom",
+        "width": 231.875
+      },
+      {
+        "id": "freight-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 298.125
+      },
+      {
+        "id": "freight-date-from-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 231.875
+      }
+    ]
+  },
+  {
+    "page": "tab-ai-video",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "ai-video-creator-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 275
+      },
+      {
+        "id": "ai-video-date-from-preset",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 275
+      },
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 243
+      },
+      {
+        "id": "",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 243
+      },
+      {
+        "id": "",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 370
+      },
+      {
+        "id": "",
+        "type": "date",
+        "tag": "INPUT",
+        "value": "",
+        "width": 370
+      }
+    ]
+  },
+  {
+    "page": "tab-store-links",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "store-link-store-filter-trigger",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 177.734375
+      },
+      {
+        "id": "store-link-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 177.734375
+      },
+      {
+        "id": "store-link-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 228.53125
+      }
+    ]
+  },
+  {
+    "page": "tab-size-charts",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-automation-center",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-clearance-alerts",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-product-diagnosis",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-promotions",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-price-competition",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-ad-analysis",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "ad-analysis-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 173.46875
+      },
+      {
+        "id": "ad-analysis-group",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 173.484375
+      },
+      {
+        "id": "ad-analysis-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 223.03125
+      }
+    ]
+  },
+  {
+    "page": "tab-prohibited-listings",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "prohibited-risk-type-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 148.515625
+      },
+      {
+        "id": "prohibited-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 148.515625
+      },
+      {
+        "id": "prohibited-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 190.96875
+      }
+    ]
+  },
+  {
+    "page": "tab-store-tokens",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "mercado-token-name-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 170
+      },
+      {
+        "id": "mercado-token-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 360
+      }
+    ]
+  },
+  {
+    "page": "tab-pre-sale",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "pre-sale-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 158.859375
+      },
+      {
+        "id": "pre-sale-group",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 158.875
+      },
+      {
+        "id": "pre-sale-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 204.25
+      }
+    ]
+  },
+  {
+    "page": "tab-customer-service",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "customer-service-salesperson",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 158.859375
+      },
+      {
+        "id": "customer-service-group",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 158.875
+      },
+      {
+        "id": "customer-service-search",
+        "type": "text",
+        "tag": "INPUT",
+        "value": "",
+        "width": 204.25
+      }
+    ]
+  },
+  {
+    "page": "tab-funds",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-ai-weight-price",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-zying-collection",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-risk-check",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "risk-result-source",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "product_list,collection_list,pulled,zying",
+        "width": 166.78125
+      },
+      {
+        "id": "risk-result-category",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 166.78125
+      },
+      {
+        "id": "risk-result-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 214.4375
+      }
+    ]
+  },
+  {
+    "page": "tab-infringement-knowledge",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "infringement-knowledge-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 190.171875
+      },
+      {
+        "id": "infringement-knowledge-type-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 147.90625
+      },
+      {
+        "id": "infringement-knowledge-source-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 147.921875
+      }
+    ]
+  },
+  {
+    "page": "tab-infringement-knowledge-knowledge-records-tab",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "infringement-knowledge-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 190.171875
+      },
+      {
+        "id": "infringement-knowledge-type-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 147.90625
+      },
+      {
+        "id": "infringement-knowledge-source-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 147.921875
+      }
+    ]
+  },
+  {
+    "page": "tab-infringement-knowledge-knowledge-sources-tab",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-infringement-knowledge-knowledge-collection-tab",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "knowledge-collection-source",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "zying",
+        "width": 259
+      },
+      {
+        "id": "knowledge-collection-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 333
+      }
+    ]
+  },
+  {
+    "page": "tab-infractions",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-ip-rights",
+    "width": 1024,
+    "fields": []
+  },
+  {
+    "page": "tab-reputation",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "reputation-name-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 184.3125
+      },
+      {
+        "id": "reputation-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 259.21875
+      }
+    ]
+  },
+  {
+    "page": "tab-api-reputation",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "",
+        "type": "button",
+        "tag": "BUTTON",
+        "value": "",
+        "width": 181.390625
+      },
+      {
+        "id": "api-reputation-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 181.390625
+      },
+      {
+        "id": "api-reputation-search",
+        "type": "search",
+        "tag": "INPUT",
+        "value": "",
+        "width": 233.203125
+      }
+    ]
+  },
+  {
+    "page": "tab-ai-appeals",
+    "width": 1024,
+    "fields": [
+      {
+        "id": "ai-appeal-salesperson-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 164
+      },
+      {
+        "id": "ai-appeal-group-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 164
+      },
+      {
+        "id": "ai-appeal-copy-mode-filter",
+        "type": "select-one",
+        "tag": "SELECT",
+        "value": "",
+        "width": 164
+      }
+    ]
+  },
+  {
+    "page": "tab-access",
+    "width": 1024,
+    "fields": []
+  }
+]

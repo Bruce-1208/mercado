@@ -1,0 +1,364 @@
+[
+  {
+    "id": 13088981,
+    "status": "metadata_ready",
+    "category_id": "CBT116631",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 14069594,
+    "status": "metadata_ready",
+    "category_id": "CBT457414",
+    "attributes": 15,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 14069602,
+    "status": "metadata_ready",
+    "category_id": "CBT457414",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 14069603,
+    "status": "metadata_ready",
+    "category_id": "CBT378179",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 14069605,
+    "status": "metadata_ready",
+    "category_id": "CBT378179",
+    "attributes": 3,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16619491,
+    "status": "metadata_ready",
+    "category_id": "CBT418448",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16763284,
+    "status": "metadata_ready",
+    "category_id": "CBT458687",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 13091058,
+    "status": "variations_incomplete",
+    "category_id": "CBT24790",
+    "attributes": 4,
+    "error": "自动映射已尝试 3 次：AI 映射后存在无法区分的变体，未保存；请保留这两组原规格的完整区别：{\"first\": [{\"option_id\": 22, \"source\": {\"name\": \"完整SKU规格\", \"value_name\": \"规格1: 无&一郎 / 规格2: 110\"}}], \"second\": [{\"option_id\": 55, \"source\": {\"name\": \"完整SKU规格\", \"value_name\": \"规格1: 义&勇 / 规格2: 110\"}}], \"collapsed_attributes\": {\"CHARACTER\": {\"id\": \"CHARACTER\", \"name\": \"Character\", \"value_name\": \"Giyu Tomioka\"}, \"SIZE\": {\"id\": \"SIZE\", \"name\": \"Size\", \"value_name\": \"Kids 110 (approx. 110 cm)\"}, \"MODEL\": {\"id\": \"MODEL\", \"name\": \"Model\", \"value_name\": \"Giyu / 110\"}}}",
+    "missing": []
+  },
+  {
+    "id": 16763286,
+    "status": "metadata_ready",
+    "category_id": "CBT456734",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764088,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764089,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16763285,
+    "status": "metadata_ready",
+    "category_id": "CBT457092",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764090,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764093,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 13088985,
+    "status": "variations_incomplete",
+    "category_id": "CBT116631",
+    "attributes": 2,
+    "error": "模型调用中断，本次费用待确认；可重新生成继续，历史预留费用已保留。",
+    "missing": []
+  },
+  {
+    "id": 16764095,
+    "status": "metadata_ready",
+    "category_id": "CBT373111",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764094,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764096,
+    "status": "metadata_ready",
+    "category_id": "CBT127693",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764097,
+    "status": "metadata_ready",
+    "category_id": "CBT458687",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764099,
+    "status": "metadata_ready",
+    "category_id": "CBT458684",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764098,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764100,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764092,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764270,
+    "status": "metadata_ready",
+    "category_id": "CBT388866",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764101,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764272,
+    "status": "metadata_ready",
+    "category_id": "CBT371414",
+    "attributes": 13,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764271,
+    "status": "metadata_ready",
+    "category_id": "CBT373348",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764269,
+    "status": "metadata_ready",
+    "category_id": "CBT5751",
+    "attributes": 7,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764273,
+    "status": "metadata_ready",
+    "category_id": "CBT401907",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764274,
+    "status": "metadata_ready",
+    "category_id": "CBT372145",
+    "attributes": 9,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764277,
+    "status": "metadata_ready",
+    "category_id": "CBT456980",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764275,
+    "status": "metadata_ready",
+    "category_id": "CBT456502",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764276,
+    "status": "metadata_ready",
+    "category_id": "CBT372054",
+    "attributes": 14,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764278,
+    "status": "metadata_ready",
+    "category_id": "CBT403348",
+    "attributes": 6,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764279,
+    "status": "metadata_ready",
+    "category_id": "CBT416792",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764282,
+    "status": "metadata_ready",
+    "category_id": "CBT458661",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764281,
+    "status": "metadata_ready",
+    "category_id": "CBT413526",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764283,
+    "status": "attributes_incomplete",
+    "category_id": "CBT456980",
+    "attributes": 4,
+    "error": "AI 已尝试补全，仍缺少必填属性：PART_NUMBER；请重试生成或手动补齐",
+    "missing": [
+      {
+        "id": "PART_NUMBER",
+        "name": "Part number"
+      }
+    ]
+  },
+  {
+    "id": 16764284,
+    "status": "metadata_ready",
+    "category_id": "CBT388866",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764285,
+    "status": "metadata_ready",
+    "category_id": "CBT373347",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764286,
+    "status": "error",
+    "error": "商品生成锁已失效，已停止付费调用；请刷新后继续"
+  },
+  {
+    "id": 16764287,
+    "status": "metadata_ready",
+    "category_id": "CBT412470",
+    "attributes": 4,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16764280,
+    "status": "metadata_ready",
+    "category_id": "CBT456354",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16943431,
+    "status": "metadata_ready",
+    "category_id": "CBT455862",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  },
+  {
+    "id": 16943230,
+    "status": "metadata_ready",
+    "category_id": "CBT24790",
+    "attributes": 5,
+    "error": "",
+    "missing": []
+  }
+]

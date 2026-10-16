@@ -1,0 +1,1323 @@
+﻿test,file,state,seconds,category,reason,evidence
+tests.test_account_billing::test_browser_admin_flow,tests/test_account_billing.py,failure,1.044,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert '' == '10'
+  
+  - 10",browser-files/test_account_billing.xml
+tests.test_account_integrations::test_account_integration_api_uses_logged_in_user_id,tests/test_account_integrations.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_account_integrations.xml
+tests.test_account_integrations::test_private_account_integrations_reveals_credentials_only_explicitly,tests/test_account_integrations.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_account_integrations.xml
+tests.test_account_integrations::test_plugin_alert_dispatches_email_and_webhook,tests/test_account_integrations.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_account_integrations.xml
+tests.test_ad_profit::test_profit_route_requires_execute_and_store_scope,tests/test_ad_profit.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = post('/api/ad-analysis/profit', json={'row': {'direct_units_available': True, 'token_id': 7, 'site_id': 'MLM', 'item_id': 'MLM123', ...}, 'unit_profit': 30})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",isolated/test_ad_profit.xml
+tests.test_agent_admin_access::test_ordinary_roles_cannot_use_agents_even_with_all_permissions[GET-/api/orders/zying-sync/status-None-member],tests/test_agent_admin_access.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,"assert 200 == 403
+ +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code",isolated/test_agent_admin_access.xml
+tests.test_agent_admin_access::test_ordinary_roles_cannot_use_agents_even_with_all_permissions[GET-/api/orders/zying-sync/status-None-operator],tests/test_agent_admin_access.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"assert 200 == 403
+ +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code",isolated/test_agent_admin_access.xml
+tests.test_agent_admin_access::test_ordinary_roles_cannot_use_agents_even_with_all_permissions[GET-/api/orders/zying-sync/status-None-viewer],tests/test_agent_admin_access.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"assert 200 == 403
+ +  where 200 = <WrapperTestResponse streamed [200 OK]>.status_code",isolated/test_agent_admin_access.xml
+tests.test_ai_original_account_failures::test_account_failure_is_recorded_independently_for_remaining_products,tests/test_ai_original_account_failures.py,failure,0.168,行为/断言差异，待逐项修复或确认预期,"assert [] == [1, 1, 1, 1]
+  
+  Right contains 4 more items, first extra item: 1
+  Use -v to get more diff",isolated/test_ai_original_account_failures.xml
+tests.test_ai_original_autopublish_browser::test_preview_confirm_poll_and_live_status[amazon-1440],tests/test_ai_original_autopublish_browser.py,failure,1.925,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 'material' in ''
+ +  where '' = inner_text()
+ +    where inner_text = <Locator frame=<Frame name= url='http://console.test/'> selector='#aip-schema'>.inner_text
+ +      where <Locator frame=<Frame name= url='http://console.test/'> selector='#aip-schema'> = locator('#aip-schema')
+ +        where locator = <Page url='http://console.test/'>.locator",browser-files/test_ai_original_autopublish_browser.xml
+tests.test_ai_original_autopublish_browser::test_preview_confirm_poll_and_live_status[yandex-390],tests/test_ai_original_autopublish_browser.py,failure,1.24,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 'material' in ''
+ +  where '' = inner_text()
+ +    where inner_text = <Locator frame=<Frame name= url='http://console.test/'> selector='#aip-schema'>.inner_text
+ +      where <Locator frame=<Frame name= url='http://console.test/'> selector='#aip-schema'> = locator('#aip-schema')
+ +        where locator = <Page url='http://console.test/'>.locator",browser-files/test_ai_original_autopublish_browser.xml
+tests.test_ai_original_batch_isolation::test_skip_rule_is_per_platform_and_does_not_depend_on_template[False-mercadolibre],tests/test_ai_original_batch_isolation.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert ''
+ +  where '' = <function original_generation_skip_reason at 0x14179a520>({'id': 1, 'source_type': 'ai_original', 'category_id': 'CBT123', 'source_snapshot_json': {'original_1688': {'title': '...atus': 'completed', 'title_es': 'Saved title', 'title': 'Saved title', 'main_image_url': '/saved-ai-white.jpg', ...}}}}, 'mercadolibre')
+ +    where <function original_generation_skip_reason at 0x14179a520> = products.original_generation_skip_reason",isolated/test_ai_original_batch_isolation.xml
+tests.test_ai_original_batch_isolation::test_skip_rule_is_per_platform_and_does_not_depend_on_template[True-mercadolibre],tests/test_ai_original_batch_isolation.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert ''
+ +  where '' = <function original_generation_skip_reason at 0x14179a520>({'id': 1, 'source_type': 'ai_original', 'category_id': 'CBT123', 'source_snapshot_json': '{""original_1688"": {""title"": ...ved title"", ""title"": ""Saved title"", ""main_image_url"": ""/saved-ai-white.jpg"", ""description_es"": ""Saved description""}}}'}, 'mercadolibre')
+ +    where <function original_generation_skip_reason at 0x14179a520> = products.original_generation_skip_reason",isolated/test_ai_original_batch_isolation.xml
+tests.test_ai_original_batch_isolation::test_completed_preparation_never_calls_ai_even_after_template_changes[mercadolibre],tests/test_ai_original_batch_isolation.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,Failed: successful draft must not call AI,isolated/test_ai_original_batch_isolation.xml
+tests.test_ai_original_batch_isolation::test_all_skipped_route_never_checks_credentials_or_starts_thread,tests/test_ai_original_batch_isolation.py,failure,0.151,行为/断言差异，待逐项修复或确认预期,Failed: all-skipped batches must not initialize generation,isolated/test_ai_original_batch_isolation.xml
+tests.test_ai_original_batch_isolation::test_mixed_batch_skips_success_and_processing_and_deduplicates,tests/test_ai_original_batch_isolation.py,failure,0.157,行为/断言差异，待逐项修复或确认预期,"assert [1, 3, 4] == [3, 4]
+  
+  At index 0 diff: 1 != 3
+  Left contains one more item: 4
+  Use -v to get more diff",isolated/test_ai_original_batch_isolation.xml
+tests.test_ai_original_batch_isolation::test_reread_under_lock_skips_product_completed_by_another_batch,tests/test_ai_original_batch_isolation.py,failure,0.172,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [1] == [(1, {'source......}}}, ...})]
+  
+  At index 0 diff: 1 != (1, {'source_snapshot_json': {'original_1688': {'title': '供应商商品'}, 'ai_original': {'status': 'processing', 'title_es': 'Saved title', 'title': 'Saved title', 'main_image_url': '/saved-ai-white.jpg', 'description_es': 'Saved description', 'error': '', 'generated_by': '', 'target_platform': 'mercadolibre', 'template_id': 'standard'}, 'marketplace_listings': {'mercadolibre': {'status': 'completed', 'title_es': 'Saved title', 'title': 'Saved title', 'main_image_url': '/saved-ai-white.jpg', 'description_es': 'Saved description'}}}, 'review_status': 'unreviewed', 'expected_ai_orig...
+  
+  ...Full output truncated (3 lines hidden), use '-vv' to show",isolated/test_ai_original_batch_isolation.xml
+tests.test_ai_original_category::test_empty_recommendation_does_not_keep_old_category,tests/test_ai_original_category.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: Regex pattern did not match.
+  Expected regex: '有效分类编号'
+  Actual message: ""[Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'""",isolated/test_ai_original_category.xml
+tests.test_ai_original_category::test_category_search_includes_history_and_does_not_repeat_query,tests/test_ai_original_category.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: Regex pattern did not match.
+  Expected regex: '有效分类编号'
+  Actual message: ""[Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'""",isolated/test_ai_original_category.xml
+tests.test_ai_original_category_recovery::test_exhausted_search_is_bounded_and_never_keeps_an_old_category,tests/test_ai_original_category_recovery.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: Regex pattern did not match.
+  Expected regex: '有效分类编号'
+  Actual message: ""[Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json'""",isolated/test_ai_original_category_recovery.xml
+tests.test_ai_original_category_recovery::test_repeated_or_non_english_queries_are_not_sent[  STRING    Lights  ],tests/test_ai_original_category_recovery.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert 0 == 2
+ +  where 0 = len([])",isolated/test_ai_original_category_recovery.xml
+tests.test_ai_original_category_recovery::test_repeated_or_non_english_queries_are_not_sent[\u706f\u4e32],tests/test_ai_original_category_recovery.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert 0 == 2
+ +  where 0 = len([])",isolated/test_ai_original_category_recovery.xml
+tests.test_ai_original_category_recovery::test_repeated_or_non_english_queries_are_not_sent[12345],tests/test_ai_original_category_recovery.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert 0 == 2
+ +  where 0 = len([])",isolated/test_ai_original_category_recovery.xml
+tests.test_ai_original_category_recovery::test_model_account_error_is_not_changed_into_a_category_failure,tests/test_ai_original_category_recovery.py,failure,0.0,行为/断言差异，待逐项修复或确认预期,erp.ai_original_products.OriginalPreparationError: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/runtime_logs/category_paths/CBT.json',isolated/test_ai_original_category_recovery.xml
+tests.test_ai_original_platform_filters::test_list_routes_forward_platform_and_reject_unrecognized_value[api_ai_original_products],tests/test_ai_original_platform_filters.py,failure,0.171,行为/断言差异，待逐项修复或确认预期,AttributeError: 'tuple' object has no attribute 'status_code',isolated/test_ai_original_platform_filters.xml
+tests.test_ai_weight_price::test_server_browser_execution_requires_super_admin,tests/test_ai_weight_price.py,failure,0.018,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert (403 == 200)
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_ai_weight_price.xml
+tests.test_ai_weight_price_performance::test_status_reuses_single_database_connection,tests/test_ai_weight_price_performance.py,failure,0.012,行为/断言差异，待逐项修复或确认预期,"assert 15 == 1
+ +  where 15 = len([True, True, True, True, True, True, ...])",isolated/test_ai_weight_price_performance.xml
+tests.test_appeal_polling::test_pending_jobs_release_response_without_streaming,tests/test_appeal_polling.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_appeal_polling.xml
+tests.test_appeal_polling::test_terminal_logs_drain_all_pages_and_do_not_expose_payload,tests/test_appeal_polling.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = submit(<FlaskClient <Flask 'bit.bit_interface'>>)",isolated/test_appeal_polling.xml
+tests.test_appeal_polling::test_poll_requires_permission_and_owner,tests/test_appeal_polling.py,failure,0.007,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 404 == 200
+ +  where 404 = <WrapperTestResponse streamed [404 NOT FOUND]>.status_code
+ +    where <WrapperTestResponse streamed [404 NOT FOUND]> = get('/api/run_shensu/polling-job/events')
+ +      where get = <FlaskClient <Flask 'bit.bit_interface'>>.get",isolated/test_appeal_polling.xml
+tests.test_appeal_polling::test_queue_maintenance_is_shared_between_viewers,tests/test_appeal_polling.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 404 == 200
+ +  where 404 = <WrapperTestResponse streamed [404 NOT FOUND]>.status_code
+ +    where <WrapperTestResponse streamed [404 NOT FOUND]> = get('/api/run_shensu/polling-job/events')
+ +      where get = <FlaskClient <Flask 'bit.bit_interface'>>.get",isolated/test_appeal_polling.xml
+tests.test_appeal_polling::test_poll_reports_stopping_until_agent_acknowledges,tests/test_appeal_polling.py,failure,0.007,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 404 == 200
+ +  where 404 = <WrapperTestResponse streamed [404 NOT FOUND]>.status_code
+ +    where <WrapperTestResponse streamed [404 NOT FOUND]> = post('/api/run_shensu/stop', json={'task_id': 'polling-job'})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",isolated/test_appeal_polling.xml
+tests.test_appeal_polling::test_large_log_events_are_split_by_byte_budget,tests/test_appeal_polling.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,KeyError: '任务不存在或不属于当前 Agent',isolated/test_appeal_polling.xml
+tests.test_appeal_polling::test_hundred_http_polls_complete_with_four_wsgi_workers,tests/test_appeal_polling.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = submit(<FlaskClient <Flask 'bit.bit_interface'>>, 'http-job-0')",isolated/test_appeal_polling.xml
+tests.test_appeal_recent_failures::test_client_worker_import_does_not_require_server_only_dependencies,tests/test_appeal_recent_failures.py,failure,1.111,交互等待超时，需核对界面及夹具,"AssertionError: Traceback (most recent call last):
+    File ""<string>"", line 14, in <module>
+    File ""/private/tmp/mercado-full-audit-20261012/bit/bit_interface.py"", line 211, in <module>
+      from bit.database_availability import install_database_error_handlers
+    File ""/private/tmp/mercado-full-audit-20261012/bit/database_availability.py"", line 7, in <module>
+      from bit.db_pool import PoolAcquireTimeout
+    File ""/private/tmp/mercado-full-audit-20261012/bit/db_pool.py"", line 20, in <module>
+      from dbutils.pooled_db import PooledDB, TooManyConnections
+    File ""<string>"", line 6, in find_spec
+  ModuleNotFoundError: Agent does not ship dbutils
+  
+assert 1 == 0
+ +  where 1 = CompletedProcess(args=['/Library/Frameworks/Python.framework/Versions/3.12/bin/python3', '-c', '\nimport importlib.abc...edDB, TooManyConnections\n  File ""<string>"", line 6, in find_spec\nModuleNotFoundError: Agent does not ship dbutils\n').returncode",browser-files/test_appeal_recent_failures.xml
+tests.test_billing_print_browser::test_unified_payment_print_details_filters_and_permissions[1440-super_admin],tests/test_billing_print_browser.py,failure,5.878,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#print-wallet-record-date-from"")
+    - locator resolved to <input type=""date"" class=""zs-empty-date"" id=""print-wallet-record-date-from"" data-date-filter-initialized=""true""/>
+    - fill(""2026-10-01"")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms",browser-files/test_billing_print_browser.xml
+tests.test_billing_print_browser::test_unified_payment_print_details_filters_and_permissions[390-enterprise_admin],tests/test_billing_print_browser.py,failure,5.43,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#print-wallet-record-date-from"")
+    - locator resolved to <input type=""date"" class=""zs-empty-date"" id=""print-wallet-record-date-from"" data-date-filter-initialized=""true""/>
+    - fill(""2026-10-01"")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms",browser-files/test_billing_print_browser.xml
+tests.test_billing_print_browser::test_unified_payment_print_details_filters_and_permissions[1440-warehouse],tests/test_billing_print_browser.py,failure,5.432,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#print-wallet-record-date-from"")
+    - locator resolved to <input type=""date"" class=""zs-empty-date"" id=""print-wallet-record-date-from"" data-date-filter-initialized=""true""/>
+    - fill(""2026-10-01"")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms",browser-files/test_billing_print_browser.xml
+tests.test_billing_print_browser::test_unified_payment_print_details_filters_and_permissions[390-member],tests/test_billing_print_browser.py,failure,25.847,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#print-wallet-record-date-from"")
+    - locator resolved to <input type=""date"" class=""zs-empty-date"" id=""print-wallet-record-date-from"" data-date-filter-initialized=""true""/>
+    - fill(""2026-10-01"")
+  - attempting fill action
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and editable
+      - element is not visible
+    - retrying fill action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and editable
+       - element is not visible
+     - retrying fill action
+       - waiting 500ms",browser-files/test_billing_print_browser.xml
+tests.test_bit_appeal_report::test_appeal_record_captures_executor_hostname,tests/test_bit_appeal_report.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'runtime_rol...ame': '', ...} == {'runtime_rol...: 'appeal-pc'}
+  
+  Omitting 3 identical items, use -vv to show
+  Left contains 2 more items:
+  {'agent_id': '', 'agent_name': ''}
+  Use -v to get more diff",isolated/test_bit_appeal_report.xml
+tests.test_bit_check_risk::test_unreviewed_knowledge_neither_blocks_nor_allows_products[manual-pending],tests/test_bit_check_risk.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+  
+  Omitting 2 identical items, use -vv to show
+  Left contains 1 more item:
+  {'borderline': []}
+  Use -v to get more diff",isolated/test_bit_check_risk.xml
+tests.test_bit_check_risk::test_unreviewed_knowledge_neither_blocks_nor_allows_products[auto-blacklist],tests/test_bit_check_risk.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+  
+  Omitting 2 identical items, use -vv to show
+  Left contains 1 more item:
+  {'borderline': []}
+  Use -v to get more diff",isolated/test_bit_check_risk.xml
+tests.test_bit_check_risk::test_unreviewed_knowledge_neither_blocks_nor_allows_products[auto-whitelist],tests/test_bit_check_risk.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+  
+  Omitting 2 identical items, use -vv to show
+  Left contains 1 more item:
+  {'borderline': []}
+  Use -v to get more diff",isolated/test_bit_check_risk.xml
+tests.test_bit_check_risk::test_unreviewed_knowledge_neither_blocks_nor_allows_products[wipo-blacklist],tests/test_bit_check_risk.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,KeyError: 'products',isolated/test_bit_check_risk.xml
+tests.test_bit_check_risk::test_unreviewed_knowledge_neither_blocks_nor_allows_products[wikidata-blacklist],tests/test_bit_check_risk.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'blacklist':...rderline': []} == {'blacklist':...hitelist': []}
+  
+  Omitting 2 identical items, use -vv to show
+  Left contains 1 more item:
+  {'borderline': []}
+  Use -v to get more diff",isolated/test_bit_check_risk.xml
+tests.test_bit_collection_orchestration.CollectionOrchestrationTests::test_concurrent_reputation_page_does_not_switch_global_clash,tests/test_bit_collection_orchestration.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"TypeError: int() argument must be a string, a bytes-like object or a real number, not 'Mock'",browser-files/test_bit_collection_orchestration.xml
+tests.test_bit_daily_task::test_shop_executor_sends_expected_form[\u4fb5\u6743-\u4fb5\u6743],tests/test_bit_daily_task.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]
+  
+  At index 0 diff: ('测试店铺', 'MX', '侵权', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '侵权', '测试话术', {'validate_open': True, 'window_id': 'window-id'})
+  Use -v to get more diff",isolated/test_bit_daily_task.xml
+tests.test_bit_daily_task::test_shop_executor_sends_expected_form[\u7981\u9650\u552e-\u7981\u9650\u552e],tests/test_bit_daily_task.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]
+  
+  At index 0 diff: ('测试店铺', 'MX', '禁限售', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '禁限售', '测试话术', {'validate_open': True, 'window_id': 'window-id'})
+  Use -v to get more diff",isolated/test_bit_daily_task.xml
+tests.test_bit_daily_task::test_shop_executor_sends_expected_form[\u5ef6\u8bef\u7387-\u5ef6\u8bef],tests/test_bit_daily_task.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]
+  
+  At index 0 diff: ('测试店铺', 'MX', '延误', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '延误', '测试话术', {'validate_open': True, 'window_id': 'window-id'})
+  Use -v to get more diff",isolated/test_bit_daily_task.xml
+tests.test_bit_daily_task::test_shop_executor_sends_expected_form[\u53d6\u6d88\u7387-\u53d6\u6d88\u7387],tests/test_bit_daily_task.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]
+  
+  At index 0 diff: ('测试店铺', 'MX', '取消率', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '取消率', '测试话术', {'validate_open': True, 'window_id': 'window-id'})
+  Use -v to get more diff",isolated/test_bit_daily_task.xml
+tests.test_bit_daily_task::test_shop_executor_sends_expected_form[\u6295\u8bc9-\u6295\u8bc9],tests/test_bit_daily_task.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [('测试店铺', 'MX...de': '普通模式'})] == [('测试店铺', 'MX...'window-id'})]
+  
+  At index 0 diff: ('测试店铺', 'MX', '投诉', '测试话术', {'validate_open': True, 'window_id': 'window-id', 'appeal_copy_mode': '普通模式'}) != ('测试店铺', 'MX', '投诉', '测试话术', {'validate_open': True, 'window_id': 'window-id'})
+  Use -v to get more diff",isolated/test_bit_daily_task.xml
+tests.test_bit_funds::test_funds_api_supports_owner_filter,tests/test_bit_funds.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_funds.xml
+tests.test_bit_funds::test_funds_single_shop_api_starts_background_refresh,tests/test_bit_funds.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_funds.xml
+tests.test_bit_funds::test_funds_all_shops_is_limited_to_selected_salesperson,tests/test_bit_funds.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_funds.xml
+tests.test_bit_funds::test_funds_collection_can_be_stopped,tests/test_bit_funds.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_bit_funds.xml
+tests.test_bit_funds::test_manual_funds_api_saves_snapshot,tests/test_bit_funds.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_funds.xml
+tests.test_bit_funds::test_funds_group_filter_api,tests/test_bit_funds.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_funds.xml
+tests.test_bit_high_after_sales::test_high_after_sale_api_passes_filters,tests/test_bit_high_after_sales.py,failure,0.01,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_high_after_sales.xml
+tests.test_bit_high_profits::test_high_profit_api_passes_filters,tests/test_bit_high_profits.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_high_profits.xml
+tests.test_bit_interface_appeal::test_ai_appeal_records_are_enriched_for_filters,tests/test_bit_interface_appeal.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'salespeople...des': ['未记录']} == {'salespeople...s': ['办公室电脑']}
+  
+  Omitting 3 identical items, use -vv to show
+  Left contains 1 more item:
+  {'appeal_copy_modes': ['未记录']}
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_shop_status_ui_refreshes_rows_once_after_login_task_finishes,tests/test_bit_interface_appeal.py,failure,0.006,行为/断言差异，待逐项修复或确认预期,"assert 'JSON.stringify({window_ids: windowIds, workers})' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_shop_status_ui_uses_single_shop_auto_login_action,tests/test_bit_interface_appeal.py,failure,0.009,行为/断言差异，待逐项修复或确认预期,"assert 'JSON.stringify({window_ids: windowIds, workers})' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_console_exposes_all_task_switches_and_shop_group,tests/test_bit_interface_appeal.py,failure,0.01,行为/断言差异，待逐项修复或确认预期,"assert 'id=""daily-task-max-workers"" value=""10"" min=""1"" max=""30""' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_options_returns_all_active_salespeople,tests/test_bit_interface_appeal.py,failure,0.018,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_api_starts_multiple_instances_and_stops_only_selected,tests/test_bit_interface_appeal.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_start_enforces_global_running_limit,tests/test_bit_interface_appeal.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 409
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_status_projects_external_task_when_no_local_task,tests/test_bit_interface_appeal.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_status_keeps_instance_logs_separate,tests/test_bit_interface_appeal.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_stop_endpoint_sets_stop_event,tests/test_bit_interface_appeal.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse 161 bytes [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_daily_task_status_returns_runtime_log,tests/test_bit_interface_appeal.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_selected_sites_run_sequentially_for_every_mode_and_form[\u4fb5\u6743-AI\u5ba2\u670d-60],tests/test_bit_interface_appeal.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [('AI客服', '墨西... '乌拉圭', '侵权')]
+  
+  Right contains 3 more items, first extra item: ('AI客服', '墨西哥', '侵权')
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_selected_sites_run_sequentially_for_every_mode_and_form[\u7981\u9650\u552e-AI\u5ba2\u670d-60],tests/test_bit_interface_appeal.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [('AI客服', '墨西...'乌拉圭', '禁限售')]
+  
+  Right contains 3 more items, first extra item: ('AI客服', '墨西哥', '禁限售')
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_selected_sites_run_sequentially_for_every_mode_and_form[\u5ef6\u8bef-AI\u5ba2\u670d-60],tests/test_bit_interface_appeal.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [('AI客服', '墨西... '乌拉圭', '延误')]
+  
+  Right contains 3 more items, first extra item: ('AI客服', '墨西哥', '延误')
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_selected_sites_run_sequentially_for_every_mode_and_form[\u53d6\u6d88\u7387-AI\u5ba2\u670d-60],tests/test_bit_interface_appeal.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [('AI客服', '墨西...'乌拉圭', '取消率')]
+  
+  Right contains 3 more items, first extra item: ('AI客服', '墨西哥', '取消率')
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_selected_sites_run_sequentially_for_every_mode_and_form[\u6295\u8bc9-AI\u5ba2\u670d-60],tests/test_bit_interface_appeal.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [('AI客服', '墨西... '乌拉圭', '投诉')]
+  
+  Right contains 3 more items, first extra item: ('AI客服', '墨西哥', '投诉')
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_selected_forms_run_in_fixed_order_within_one_round,tests/test_bit_interface_appeal.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [('墨西哥', '延误'...('智利', '取消率')]
+  
+  Right contains 4 more items, first extra item: ('墨西哥', '延误')
+  Use -v to get more diff",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_finite_loop_count_stops_after_configured_rounds[10],tests/test_bit_interface_appeal.py,failure,0.013,行为/断言差异，待逐项修复或确认预期,"assert 0 == (10 * 2)
+ +  where 0 = len([])",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_finite_loop_count_stops_after_configured_rounds[20],tests/test_bit_interface_appeal.py,failure,0.033,行为/断言差异，待逐项修复或确认预期,"assert 0 == (20 * 2)
+ +  where 0 = len([])",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_finite_loop_count_stops_after_configured_rounds[50],tests/test_bit_interface_appeal.py,failure,0.047,行为/断言差异，待逐项修复或确认预期,"assert 0 == (50 * 2)
+ +  where 0 = len([])",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_stop_request_prevents_remaining_sites,tests/test_bit_interface_appeal.py,failure,45.01,行为/断言差异，待逐项修复或确认预期,Failed: Isolated functional test exceeded 45 seconds: tests/test_bit_interface_appeal.py::test_stop_request_prevents_remaining_sites,isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_login_verification_stops_remaining_sites,tests/test_bit_interface_appeal.py,failure,45.005,行为/断言差异，待逐项修复或确认预期,Failed: Isolated functional test exceeded 45 seconds: tests/test_bit_interface_appeal.py::test_login_verification_stops_remaining_sites,isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_stop_api_sets_registered_task_event,tests/test_bit_interface_appeal.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_collection_page_uses_shop_status_style_checkbox_multiselect,tests/test_bit_interface_appeal.py,failure,0.008,行为/断言差异，待逐项修复或确认预期,"assert 'id=""infraction-collection-shops-all"" type=""checkbox""' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_collection_options_returns_active_shop_site_mapping,tests/test_bit_interface_appeal.py,failure,0.006,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_collection_start_passes_selected_scope_and_defaults_to_ten_workers[/api/infractions/collect-_infraction_collect_state-run_infraction_collect_job],tests/test_bit_interface_appeal.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse 58 bytes [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_collection_start_passes_selected_scope_and_defaults_to_ten_workers[/api/reputation/collect-_reputation_collect_state-run_reputation_collect_job],tests/test_bit_interface_appeal.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse 58 bytes [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_collection_start_passes_selected_scope_and_defaults_to_ten_workers[/api/reputation/update-selected-_reputation_collect_state-run_reputation_collect_job],tests/test_bit_interface_appeal.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse 58 bytes [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_collection_start_rejects_shop_site_without_configured_intersection,tests/test_bit_interface_appeal.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 400
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_run_appeal_api_accepts_multiple_site_and_form_parameters,tests/test_bit_interface_appeal.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse 158 bytes [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_run_appeal_api_passes_manual_token_only_to_ai_script_mode,tests/test_bit_interface_appeal.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse 158 bytes [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_appeal::test_run_appeal_api_requires_token_for_ai_script_mode,tests/test_bit_interface_appeal.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 400
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_bit_interface_appeal.xml
+tests.test_bit_interface_mercado_collection::test_workbench_splits_collection_and_product_list_into_separate_modules,tests/test_bit_interface_mercado_collection.py,failure,0.155,行为/断言差异，待逐项修复或确认预期,"assert b'<option value=""500"" selected>500' in b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>'
+ +  where b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>' = <WrapperTestResponse 2047057 bytes [200 OK]>.data",browser-files/test_bit_interface_mercado_collection.xml
+tests.test_bit_interface_mercado_collection::test_collection_quality_pass_retries_only_rows_missing_actual_weight,tests/test_bit_interface_mercado_collection.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,"assert 'hasUsableActualWeight && row.title && row.main_image_url' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",browser-files/test_bit_interface_mercado_collection.xml
+tests.test_bit_interface_mercado_collection::test_playwright_login_setup_starts_background_window,tests/test_bit_interface_mercado_collection.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"assert 400 == 200
+ +  where 400 = <WrapperTestResponse 85 bytes [400 BAD REQUEST]>.status_code",browser-files/test_bit_interface_mercado_collection.xml
+tests.test_bit_interface_zying_collection::test_zying_product_developers_refresh_auth_and_backfill_database,tests/test_bit_interface_zying_collection.py,failure,0.005,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_zying_collection.xml
+tests.test_bit_interface_zying_collection::test_zying_collection_options_refreshes_categories_and_developers_together,tests/test_bit_interface_zying_collection.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_zying_collection.xml
+tests.test_bit_interface_zying_collection::test_zying_collection_start_runs_script_with_database_dedup,tests/test_bit_interface_zying_collection.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_zying_collection.xml
+tests.test_bit_interface_zying_collection::test_zying_login_buttons_open_and_capture_visible_browser,tests/test_bit_interface_zying_collection.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_zying_collection.xml
+tests.test_bit_interface_zying_collection::test_zying_collection_stop_endpoint_sets_safe_stop_event,tests/test_bit_interface_zying_collection.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",isolated/test_bit_interface_zying_collection.xml
+tests.test_bit_inventory::test_inventory_stock_api_passes_filters_to_database_adapter,tests/test_bit_inventory.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_inventory.xml
+tests.test_bit_inventory::test_inventory_movement_api_uses_authenticated_operator,tests/test_bit_inventory.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_inventory.xml
+tests.test_bit_inventory::test_movement_api_passes_person_filters,tests/test_bit_inventory.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_inventory.xml
+tests.test_bit_login_remember::test_zeshun_brand_logo_is_used_on_login_and_workbench,tests/test_bit_login_remember.py,failure,0.006,行为/断言差异，待逐项修复或确认预期,FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/static/images/zeshun-monogram-gold.png',isolated/test_bit_login_remember.xml
+tests.test_bit_login_remember::test_login_uses_fixed_72_hour_permanent_session,tests/test_bit_login_remember.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert False
+ +  where False = <built-in method endswith of str object at 0x1272f4970>('/')
+ +    where <built-in method endswith of str object at 0x1272f4970> = '/mercado/today'.endswith",isolated/test_bit_login_remember.xml
+tests.test_bit_mercado_applications::test_browser_routes_manage_apps_and_change_store_app,tests/test_bit_mercado_applications.py,failure,0.01,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = get('/api/mercado-applications')
+ +      where get = <FlaskClient <Flask 'bit.bit_interface'>>.get",isolated/test_bit_mercado_applications.xml
+tests.test_bit_mercado_applications::test_store_authorization_template_contains_application_management,tests/test_bit_mercado_applications.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"assert 'id=""mercado-token-application""' in '{""code"":""database_unavailable"",""message"":""\\u6570\\u636e\\u5e93\\u6682\\u65f6\\u4e0d\\u53ef\\u7528\\uff0c\\u8bf7\\u7a0d\\u540e\\u91cd\\u8bd5"",""status"":""error""}\n'",isolated/test_bit_mercado_applications.xml
+tests.test_bit_mercado_login::test_connect_reopens_window_when_debugger_port_never_becomes_ready,tests/test_bit_mercado_login.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,RuntimeError: WebDriver 附着失败：Can't find free port (Unable to bind to IPv4 or IPv6),isolated/test_bit_mercado_login.xml
+tests.test_bit_mercado_login::test_connect_retries_when_open_api_times_out,tests/test_bit_mercado_login.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,RuntimeError: WebDriver 附着失败：Can't find free port (Unable to bind to IPv4 or IPv6),isolated/test_bit_mercado_login.xml
+tests.test_bit_mercado_login::test_connect_keeps_window_when_open_api_reports_internal_timeout,tests/test_bit_mercado_login.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,RuntimeError: WebDriver 附着失败：Can't find free port (Unable to bind to IPv4 or IPv6),isolated/test_bit_mercado_login.xml
+tests.test_bit_mercado_reputation::test_console_template_keeps_old_reputation_and_adds_api_panel,tests/test_bit_mercado_reputation.py,failure,0.014,行为/断言差异，待逐项修复或确认预期,"assert '账号状态' in '\n                            <thead>\n                                <tr>\n                                    <th>...ass=""empty-state"" colspan=""16"">正在加载最新声誉数据...</td></tr>\n                            </tbody>\n                        '
+ +  where '\n                            <thead>\n                                <tr>\n                                    <th>...ass=""empty-state"" colspan=""16"">正在加载最新声誉数据...</td></tr>\n                            </tbody>\n                        ' = <built-in method group of re.Match object at 0x140b9c430>(1)
+ +    where <built-in method group of re.Match object at 0x140b9c430> = <re.Match object; span=(735314, 738426), match='<table class=""reputation-table reputation-data-ta>.group",browser-files/test_bit_mercado_reputation.xml
+tests.test_bit_mercado_reputation::test_reputation_open_browser_status_surfaces_agent_browser_error,tests/test_bit_mercado_reputation.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",browser-files/test_bit_mercado_reputation.xml
+tests.test_bit_mercado_tokens::test_browser_routes_return_metadata_and_accept_management_actions,tests/test_bit_mercado_tokens.py,failure,0.024,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_mercado_tokens.xml
+tests.test_bit_mercado_tokens::test_console_template_contains_store_token_module,tests/test_bit_mercado_tokens.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_mercado_tokens.xml
+tests.test_bit_order_management::test_workbench_contains_order_management_ui,tests/test_bit_order_management.py,failure,0.14,行为/断言差异，待逐项修复或确认预期,"assert b'\xe6\x89\x93\xe5\x8c\x85\xe5\x8d\x95\xe5\x8f\xb7\xe5\x92\x8c\xe5\xad\x90\xe8\xae\xa2\xe5\x8d\x95\xe5\x8f\xb7\xe9\x83\xbd\xe6\x94\xaf\xe6\x8c\x81\xe6\x90\x9c\xe7\xb4\xa2' in b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>'
+ +  where b'\xe6\x89\x93\xe5\x8c\x85\xe5\x8d\x95\xe5\x8f\xb7\xe5\x92\x8c\xe5\xad\x90\xe8\xae\xa2\xe5\x8d\x95\xe5\x8f\xb7\xe9\x83\xbd\xe6\x94\xaf\xe6\x8c\x81\xe6\x90\x9c\xe7\xb4\xa2' = <built-in method encode of str object at 0x11cc622b0>('utf-8')
+ +    where <built-in method encode of str object at 0x11cc622b0> = '打包单号和子订单号都支持搜索'.encode
+ +  and   b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>' = <WrapperTestResponse 2039149 bytes [200 OK]>.data",isolated/test_bit_order_management.xml
+tests.test_bit_order_management::test_order_management_displays_pack_number_without_exposing_child_number,tests/test_bit_order_management.py,failure,0.014,行为/断言差异，待逐项修复或确认预期,"assert b""copyOrderNumber('${encodedDisplayNumber}', this)"" in b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>'
+ +  where b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>' = <WrapperTestResponse 2039149 bytes [200 OK]>.data",isolated/test_bit_order_management.xml
+tests.test_bit_order_management::test_order_api_passes_filters_and_pagination,tests/test_bit_order_management.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: db_list_orders(country='巴西', status='找货', salesperson='张三', group_name='精品组', search='2000014667', start_date='2026-08-01', end_date='2026-08-23', origin='token', freight_variance='', page=2, page_size=25)
+Actual: db_list_orders(country='巴西', status='找货', salesperson='张三', group_name='精品组', search='2000014667', remark_search='', start_date='2026-08-01', end_date='2026-08-23', origin='token', freight_variance='', sort_by='ordered_at', sort_dir='desc', page=2, page_size=25)",isolated/test_bit_order_management.xml
+tests.test_bit_order_management::test_bulk_update_orders_supports_status_and_complete_purchase_order,tests/test_bit_order_management.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: bulk_update_orders(['20001', '20002'], operator_id=1, operator_name='测试用户', workflow_status='配货', purchase_order='CG-20260824-01', purchase_tracking='SF123456', logistics_company='shunfeng', purchase_cost='88.50', purchase_remark='采购备注')
+Actual: bulk_update_orders(['20001', '20002'], allowed_token_ids=None, operator_id=1, operator_name='测试用户', workflow_status='配货', purchase_order='CG-20260824-01', purchase_tracking='SF123456', logistics_company='shunfeng', purchase_cost='88.50', purchase_remark='采购备注')",isolated/test_bit_order_management.xml
+tests.test_bit_order_management::test_purchase_tracking_sync_rejects_selected_order_without_purchase_number,tests/test_bit_order_management.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,AssertionError: assert '尚未填写采购订单号' in '所选订单均未填写采购订单号',isolated/test_bit_order_management.xml
+tests.test_bit_order_management::test_non_warehouse_cannot_manually_set_waiting_to_ship_status,tests/test_bit_order_management.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,TypeError: Object of type MagicMock is not JSON serializable,isolated/test_bit_order_management.xml
+tests.test_bit_order_sync::test_mysql_bulk_update_changes_only_authorized_store_orders,tests/test_bit_order_sync.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,ValueError: 请选择有效的订单状态,isolated/test_bit_order_sync.xml
+tests.test_bit_prohibited_listings::test_prohibited_listing_ui_and_list_route,tests/test_bit_prohibited_listings.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_prohibited_listings.xml
+tests.test_bit_prohibited_listings::test_prohibited_listing_export_keeps_filters_and_exports_all_pages,tests/test_bit_prohibited_listings.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_prohibited_listings.xml
+tests.test_bit_prohibited_listings::test_manual_prohibited_sync_route_can_target_one_store,tests/test_bit_prohibited_listings.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 202
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_prohibited_listings.xml
+tests.test_bit_prohibited_listings::test_all_store_prohibited_sync_ignores_selected_ids,tests/test_bit_prohibited_listings.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 202
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_prohibited_listings.xml
+tests.test_bit_prohibited_listings::test_salesperson_sync_resolves_authorized_store_ids,tests/test_bit_prohibited_listings.py,failure,0.005,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 202
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_prohibited_listings.xml
+tests.test_bit_store_link_video::test_upload_route_and_missing_file,tests/test_bit_store_link_video.py,failure,0.106,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = post('/api/store-links/1/video')
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",isolated/test_bit_store_link_video.xml
+tests.test_bit_store_links::test_remote_update_pushes_price_package_and_net_proceeds_then_updates_local,tests/test_bit_store_links.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 'error' == 'success'
+  
+  - success
+  + error",isolated/test_bit_store_links.xml
+tests.test_bit_store_links::test_sync_run_records_three_day_clock_for_completed_store,tests/test_bit_store_links.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"pymysql.err.OperationalError: (2003, ""Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)"")",isolated/test_bit_store_links.xml
+tests.test_bit_store_links::test_store_sync_processes_multiple_stores_in_parallel,tests/test_bit_store_links.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"pymysql.err.OperationalError: (2003, ""Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)"")",isolated/test_bit_store_links.xml
+tests.test_bit_store_links::test_list_store_links_filters_site_and_defaults_to_sales_descending[Toys],tests/test_bit_store_links.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert '`remote_json`' not in '\n         ...            '
+  
+  '`remote_json`' is contained here:
+    ull_links.`remote_json`),
+                               full_links.`remote_json`, '{}'), '$.pictures') AS pictures,
+                           full_links.`status`, full_links.`price`, full_links.`currency_id`,
+                           full_links.`available_quantity`, full_links.`sold_quantity`,
+                           visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,...
+  
+  ...Full output truncated (27 lines hidden), use '-vv' to show",isolated/test_bit_store_links.xml
+"tests.test_bit_store_links::test_list_store_links_filters_site_and_defaults_to_sales_descending[MLA2,MLM2]",tests/test_bit_store_links.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert '`remote_json`' not in '\n         ...            '
+  
+  '`remote_json`' is contained here:
+    ull_links.`remote_json`),
+                               full_links.`remote_json`, '{}'), '$.pictures') AS pictures,
+                           full_links.`status`, full_links.`price`, full_links.`currency_id`,
+                           full_links.`available_quantity`, full_links.`sold_quantity`,
+                           visits.`total_visits`, visits.`visits_updated_at`, visits.`visits_error`,...
+  
+  ...Full output truncated (27 lines hidden), use '-vv' to show",isolated/test_bit_store_links.xml
+tests.test_bit_store_links::test_workbench_store_link_ui_and_routes,tests/test_bit_store_links.py,failure,0.152,行为/断言差异，待逐项修复或确认预期,"assert b'\xe6\xaf\x8f 3 \xe5\xa4\xa9\xe8\x87\xaa\xe5\x8a\xa8\xe5\x90\x8c\xe6\xad\xa5\xe9\x93\xbe\xe6\x8e\xa5\xe7\x8a\xb6\xe6\x80\x81' in b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>'
+ +  where b'\xe6\xaf\x8f 3 \xe5\xa4\xa9\xe8\x87\xaa\xe5\x8a\xa8\xe5\x90\x8c\xe6\xad\xa5\xe9\x93\xbe\xe6\x8e\xa5\xe7\x8a\xb6\xe6\x80\x81' = <built-in method encode of str object at 0x1410268b0>('utf-8')
+ +    where <built-in method encode of str object at 0x1410268b0> = '每 3 天自动同步链接状态'.encode
+ +  and   b'<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\...re-link-salesperson""></script>\n    <script src=""/static/store-link-metrics.js?v=20261012""></script>\n</body>\n</html>' = <WrapperTestResponse 2039149 bytes [200 OK]>.data",isolated/test_bit_store_links.xml
+tests.test_bit_store_links::test_store_link_salesperson_passes_through_public_route_and_database_modes,tests/test_bit_store_links.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_bit_store_links.xml
+tests.test_bit_zying_desktop_export_mysql::test_filter_verification_retries_transient_empty_salesperson,tests/test_bit_zying_desktop_export_mysql.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,AttributeError: <module 'pywinauto' from '/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/pywinauto/__init__.py'> has no attribute 'Desktop',isolated/test_bit_zying_desktop_export_mysql.xml
+tests.test_bit_zying_desktop_export_mysql::test_scaled_coordinates_follow_actual_window_size,tests/test_bit_zying_desktop_export_mysql.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,AttributeError: <module 'ctypes' from '/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/ctypes/__init__.py'> has no attribute 'windll',isolated/test_bit_zying_desktop_export_mysql.xml
+tests.test_bit_zying_desktop_export_mysql::test_example_json_config_is_valid_and_has_combined_parameters,tests/test_bit_zying_desktop_export_mysql.py,failure,0.0,行为/断言差异，待逐项修复或确认预期,FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/mercado-full-audit-20261012/bit/zying_export_config.example.json',isolated/test_bit_zying_desktop_export_mysql.xml
+tests.test_browser_extension_management_categories::test_destination_categories_use_extension_login_and_standard_rows,tests/test_browser_extension_management_categories.py,failure,0.011,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_collection_saves_selected_destination[product-23_0],tests/test_browser_extension_management_categories.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_collection_saves_selected_destination[product-23_1],tests/test_browser_extension_management_categories.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_collection_saves_selected_destination[product- 23 ],tests/test_browser_extension_management_categories.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_collection_saves_selected_destination[request-23_0],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_collection_saves_selected_destination[request-23_1],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_collection_saves_selected_destination[request- 23 ],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[True],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[False],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[0],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[-1],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[1.5],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[23.0],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[wrong],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[9223372036854775808],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_invalid_destination_rejected_before_creating_collection_task[99],tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_zying_start_keeps_source_and_destination_categories_independent,tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_zying_start_rejects_deleted_destination_before_launch,tests/test_browser_extension_management_categories.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_mercado_destination_and_existing_product_change_in_one_transaction,tests/test_browser_extension_management_categories.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,AssertionError: assert 'enterprise' == 23,browser-files/test_browser_extension_management_categories.xml
+tests.test_browser_extension_management_categories::test_zying_destination_is_written_only_with_valid_product_rows,tests/test_browser_extension_management_categories.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,AssertionError: assert 'enterprise' == 23,browser-files/test_browser_extension_management_categories.xml
+tests.test_capacity_optimizations::test_web_and_private_worker_roundtrip_over_real_http,tests/test_capacity_optimizations.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,PermissionError: [Errno 1] Operation not permitted,isolated/test_capacity_optimizations.xml
+tests.test_capacity_optimizations::test_hundred_agent_heartbeats_over_http_with_four_workers,tests/test_capacity_optimizations.py,failure,0.006,行为/断言差异，待逐项修复或确认预期,PermissionError: [Errno 1] Operation not permitted,isolated/test_capacity_optimizations.xml
+tests.test_catalog_visibility::test_collection_has_the_same_enterprise_visibility[member-expected0],tests/test_catalog_visibility.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,sqlite3.OperationalError: no such table: workbench_users,isolated/test_catalog_visibility.xml
+tests.test_catalog_visibility::test_collection_has_the_same_enterprise_visibility[enterprise_admin-expected1],tests/test_catalog_visibility.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,sqlite3.OperationalError: no such table: workbench_users,isolated/test_catalog_visibility.xml
+tests.test_claim_chat_workflow::test_claim_translation_view_permission,tests/test_claim_chat_workflow.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_claim_chat_workflow.xml
+tests.test_claim_chat_workflow::test_attachment_view_route_returns_private_image[image/jpeg],tests/test_claim_chat_workflow.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_claim_chat_workflow.xml
+tests.test_claim_chat_workflow::test_attachment_view_route_returns_private_image[image/jpeg; charset=binary],tests/test_claim_chat_workflow.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_claim_chat_workflow.xml
+tests.test_claim_chat_workflow::test_attachment_view_route_returns_private_image[image/avif],tests/test_claim_chat_workflow.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_claim_chat_workflow.xml
+tests.test_claim_chat_workflow::test_attachment_view_route_returns_private_image[image/bmp],tests/test_claim_chat_workflow.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_claim_chat_workflow.xml
+tests.test_collection_ai_agent::test_default_dispatches_real_agent_job_and_rejects_duplicate,tests/test_collection_ai_agent.py,failure,0.011,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'required_role': 'enterprise_admin', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_server_permission_and_admin_dispatch,tests/test_collection_ai_agent.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = launch(<FlaskClient <Flask 'bit.bit_interface'>>, execution_target='server')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_offline_agent_returns_error_and_releases_batch,tests/test_collection_ai_agent.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 409
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = launch(<FlaskClient <Flask 'bit.bit_interface'>>, agent_id='agent-missing')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_claim_callback_identity_and_completion,tests/test_collection_ai_agent.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = launch(<FlaskClient <Flask 'bit.bit_interface'>>)",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_dead_agent_is_reported_and_can_restart,tests/test_collection_ai_agent.py,failure,0.007,行为/断言差异，待逐项修复或确认预期,TypeError: 'NoneType' object is not subscriptable,isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_server_edge_runs_whole_batch_with_actor_scope,tests/test_collection_ai_agent.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = launch(<FlaskClient <Flask 'bit.bit_interface'>>, execution_target='server')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_dispatch_function_also_restores_existing_browser_actions,tests/test_collection_ai_agent.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_batch_unblocks_login_and_preserves_history[running],tests/test_collection_ai_agent.py,failure,0.012,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_batch_unblocks_login_and_preserves_history[blocked],tests/test_collection_ai_agent.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_batch_unblocks_login_and_preserves_history[stopped],tests/test_collection_ai_agent.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_batch_unblocks_login_and_preserves_history[failed],tests/test_collection_ai_agent.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_batch_unblocks_login_and_preserves_history[completed],tests/test_collection_ai_agent.py,failure,0.014,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_works_when_agent_offline,tests/test_collection_ai_agent.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code
+ +    where <Response 104 bytes [403 FORBIDDEN]> = awp_control('terminate')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_controls_users_job_on_previous_agent,tests/test_collection_ai_agent.py,failure,0.012,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code
+ +    where <Response 104 bytes [403 FORBIDDEN]> = awp_control('terminate')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_admin_termination_cleans_job_owner_state_only,tests/test_collection_ai_agent.py,failure,0.01,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <Response 98 bytes [403 FORBIDDEN]>.status_code
+ +    where <Response 98 bytes [403 FORBIDDEN]> = awp_control('terminate')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_employee_cannot_terminate_another_owners_job,tests/test_collection_ai_agent.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 409
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code
+ +    where <Response 104 bytes [403 FORBIDDEN]> = awp_control('terminate')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_endpoint_clears_stale_running_status,tests/test_collection_ai_agent.py,failure,0.022,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent'}
+assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_orphan_without_selected_agent,tests/test_collection_ai_agent.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code
+ +    where <Response 104 bytes [403 FORBIDDEN]> = awp_control('terminate', agent_id='')",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_start_reaps_expired_worker_without_visiting_agent_list[False],tests/test_collection_ai_agent.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_start_reaps_expired_worker_without_visiting_agent_list[True],tests/test_collection_ai_agent.py,failure,0.01,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_start_preserves_live_worker_and_exposes_blocking_job,tests/test_collection_ai_agent.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 409
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_login_job_without_batch[False],tests/test_collection_ai_agent.py,failure,0.01,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_collection_ai_agent::test_terminate_login_job_without_batch[True],tests/test_collection_ai_agent.py,failure,0.01,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'status': 'error'}
+assert 403 == 200
+ +  where 403 = <Response 104 bytes [403 FORBIDDEN]>.status_code",isolated/test_collection_ai_agent.xml
+tests.test_commercial_hardening::test_agent_credential_cannot_reach_workbench_account_api,tests/test_commercial_hardening.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"assert 308 == 403
+ +  where 308 = <WrapperTestResponse streamed [308 PERMANENT REDIRECT]>.status_code",isolated/test_commercial_hardening.xml
+tests.test_common_date_filters_browser::test_collection_salesperson_and_date_queries_and_reset[1440],tests/test_common_date_filters_browser.py,failure,1.103,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert ('salesperson' not in {'limit': ['100'], 'offset': ['0'], 'include_total': ['1'], 'salesperson': ['业务乙'], ...})",browser-files/test_common_date_filters_browser.xml
+tests.test_common_date_filters_browser::test_collection_salesperson_and_date_queries_and_reset[390],tests/test_common_date_filters_browser.py,failure,1.206,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert ('salesperson' not in {'limit': ['100'], 'offset': ['0'], 'include_total': ['1'], 'salesperson': ['业务乙'], ...})",browser-files/test_common_date_filters_browser.xml
+tests.test_common_date_filters_browser::test_collection_salesperson_and_date_queries_and_reset[320],tests/test_common_date_filters_browser.py,failure,1.311,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert ('salesperson' not in {'limit': ['100'], 'offset': ['0'], 'include_total': ['1'], 'salesperson': ['业务乙'], ...})",browser-files/test_common_date_filters_browser.xml
+tests.test_console_navigation::test_navigation_search_collapse_and_permissions,tests/test_console_navigation.py,failure,7.377,交互等待超时，需核对界面及夹具,playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.,browser-files/test_console_navigation.xml
+tests.test_console_navigation::test_mobile_navigation_focus_escape_and_backdrop,tests/test_console_navigation.py,failure,26.047,行为/断言差异，待逐项修复或确认预期,"assert False
+ +  where False = evaluate(""getComputedStyle(document.body).overflow !== 'hidden'"")
+ +    where evaluate = <Page url='http://console.test/'>.evaluate",browser-files/test_console_navigation.xml
+tests.test_console_preload_browser::test_every_real_console_module_is_registered,tests/test_console_preload_browser.py,failure,0.681,已复现：新增模块缺少统一预加载注册,"AssertionError: assert {'1688-produc...i-video', ...} == {'1688-produc...i-video', ...}
+  
+  Extra items in the left set:
+  'product-diagnosis'
+  'automation-center'
+  'price-competition'
+  Use -v to get more diff",browser-files/test_console_preload_browser.xml
+tests.test_console_ui_browser::test_reputation_defaults_to_site_seven_day_orders_and_toggles_sort,tests/test_console_ui_browser.py,failure,0.964,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 16 == 17
+ +  where 16 = count()
+ +    where count = <Locator frame=<Frame name= url='http://console.test/'> selector='.reputation-data-table thead th'>.count
+ +      where <Locator frame=<Frame name= url='http://console.test/'> selector='.reputation-data-table thead th'> = locator('.reputation-data-table thead th')
+ +        where locator = <Page url='http://console.test/'>.locator",browser-files/test_console_ui_browser.xml
+tests.test_console_ui_browser::test_standard_size_chart_library_download_and_measured_rows,tests/test_console_ui_browser.py,failure,0.859,行为/断言差异，待逐项修复或确认预期,"playwright._impl._errors.Error: Locator.click: Error: strict mode violation: locator("".sc-reference-summary"") resolved to 2 elements:
+    1) <summary class=""sc-reference-summary"">查看或维护单个分类模板</summary> aka get_by_text(""查看或维护单个分类模板"")
+    2) <summary class=""sc-reference-summary"">自定义模板辅助：品类与尺码填写参考</summary> aka get_by_text(""自定义模板辅助：品类与尺码填写参考"")
+
+Call log:
+  - waiting for locator(""#size-charts-frame"").content_frame.locator("".sc-reference-summary"")",browser-files/test_console_ui_browser.xml
+tests.test_console_ui_browser::test_standard_shoe_sizes_use_official_numeric_units_without_conversion,tests/test_console_ui_browser.py,failure,0.785,行为/断言差异，待逐项修复或确认预期,"playwright._impl._errors.Error: Locator.click: Error: strict mode violation: locator("".sc-reference-summary"") resolved to 2 elements:
+    1) <summary class=""sc-reference-summary"">查看或维护单个分类模板</summary> aka get_by_text(""查看或维护单个分类模板"")
+    2) <summary class=""sc-reference-summary"">自定义模板辅助：品类与尺码填写参考</summary> aka get_by_text(""自定义模板辅助：品类与尺码填写参考"")
+
+Call log:
+  - waiting for locator(""#size-charts-frame"").content_frame.locator("".sc-reference-summary"")",browser-files/test_console_ui_browser.xml
+tests.test_console_ui_browser::test_filled_builtin_download_save_and_upload_to_other_store,tests/test_console_ui_browser.py,failure,5.724,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.select_option: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#size-charts-frame"").content_frame.locator(""#sc-builtin-select"")
+    - locator resolved to <select id=""sc-builtin-select"" class=""sc-builtin-select"">…</select>
+  - attempting select option action
+    2 × waiting for element to be visible and enabled
+      - element is not visible
+    - retrying select option action
+    - waiting 20ms
+    2 × waiting for element to be visible and enabled
+      - element is not visible
+    - retrying select option action
+      - waiting 100ms
+    10 × waiting for element to be visible and enabled
+       - element is not visible
+     - retrying select option action
+       - waiting 500ms",browser-files/test_console_ui_browser.xml
+tests.test_console_ui_browser::test_reputation_store_notices_appear_in_matching_warning_cell,tests/test_console_ui_browser.py,failure,35.235,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert '原有告警' == '原有告警\n\n店铺提醒...t>文本</script>'
+  
+  - 原有告警
+  ?     -
+  + 原有告警
+  - 
+  - 店铺提醒
+  - 完整内容 <script>文本</script>",browser-files/test_console_ui_browser.xml
+tests.test_employee_tasks::test_registered_app_login_and_rpc_scope,tests/test_employee_tasks.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_employee_tasks.xml
+tests.test_erp_mercadolibre_collection_store::test_product_list_applies_status_range_and_date_filters_in_database,tests/test_erp_mercadolibre_collection_store.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,StopIteration,isolated/test_erp_mercadolibre_collection_store.xml
+tests.test_erp_mercadolibre_collection_store::test_list_materializes_only_ids_before_loading_full_page[erp_mercadolibre_products-list_product_items],tests/test_erp_mercadolibre_collection_store.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert '(SELECT `id` FROM `erp_mercadolibre_products` WHERE' in 'SELECT /*+ MAX_EXECUTION_TIME(8000) */ `erp_mercadolibre_products`.*, category.`name` AS `management_category_name`, ...ON category.`id` = `erp_mercadolibre_products`.`management_category_id` ORDER BY `erp_mercadolibre_products`.`id` DESC'",isolated/test_erp_mercadolibre_collection_store.xml
+tests.test_local_agent_interface::test_console_download_enroll_heartbeat_and_list,tests/test_local_agent_interface.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_console_renders_agent_as_default_appeal_execution_target,tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_public_appeal_is_queued_for_selected_agent_and_streamed,tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_public_stop_marks_agent_job_for_cancellation,tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_task_uses_agent_queue_and_reports_logs[appeal_types0],tests/test_local_agent_interface.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_task_uses_agent_queue_and_reports_logs[appeal_types1],tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_agent_stop_reaches_the_selected_job[False],tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_agent_stop_reaches_the_selected_job[True],tests/test_local_agent_interface.py,failure,0.005,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_agent_rejects_unavailable_executor[agent-missing-capabilities0-None],tests/test_local_agent_interface.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 409
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_agent_rejects_unavailable_executor[agent-old-capabilities1-None],tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 409
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_agent_rejects_unavailable_executor[agent-offline-capabilities2-1],tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 409
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_task_operator_can_enroll_and_list_daily_agents,tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_console_downloads_macos_agent_package,tests/test_local_agent_interface.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_console_rejects_unknown_agent_download_platform,tests/test_local_agent_interface.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_agent_endpoints_do_not_control_appeal_jobs,tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 404
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = get('/api/tasks/daily/status?execution_target=agent&task_id=appeal-other-job')
+ +      where get = <FlaskClient <Flask 'bit.bit_interface'>>.get",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_page_defaults_to_the_appropriate_executor[server-agent],tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_interface::test_daily_page_defaults_to_the_appropriate_executor[client-local],tests/test_local_agent_interface.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_agent_interface.xml
+tests.test_local_agent_open_store::test_open_store_worker_saves_actionable_error_result,tests/test_local_agent_open_store.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'status': 'e...浏览器 API 无法连接'} == {'status': 'e...浏览器 API 无法连接'}
+  
+  Omitting 2 identical items, use -vv to show
+  Left contains 1 more item:
+  {'worker_error': '本机比特浏览器 API 无法连接'}
+  Use -v to get more diff",isolated/test_local_agent_open_store.xml
+tests.test_local_agent_worker::test_daily_worker_runs_with_shared_process_controls[False],tests/test_local_agent_worker.py,failure,0.111,行为/断言差异，待逐项修复或确认预期,EOFError,isolated/test_local_agent_worker.xml
+tests.test_local_agent_worker::test_daily_worker_runs_with_shared_process_controls[True],tests/test_local_agent_worker.py,failure,0.094,行为/断言差异，待逐项修复或确认预期,EOFError,isolated/test_local_agent_worker.xml
+tests.test_local_agent_worker::test_daily_worker_releases_lock_on_business_failure,tests/test_local_agent_worker.py,failure,0.098,行为/断言差异，待逐项修复或确认预期,EOFError,isolated/test_local_agent_worker.xml
+tests.test_local_executor_auth::test_logged_in_user_can_get_and_verify_token_without_db_secret,tests/test_local_executor_auth.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_executor_auth.xml
+tests.test_local_executor_auth::test_token_issuance_still_requires_the_requested_permission,tests/test_local_executor_auth.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_executor_auth.xml
+tests.test_local_executor_auth::test_distinct_server_and_client_keys_integrate_through_real_bridge,tests/test_local_executor_auth.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_local_executor_auth.xml
+tests.test_mercado_attribute_preflight_browser::test_preflight_shows_reports_and_invalidates_after_settings_change,tests/test_mercado_attribute_preflight_browser.py,failure,6.13,交互等待超时，需核对界面及夹具,playwright._impl._errors.TimeoutError: Page.wait_for_function: Timeout 5000ms exceeded.,timeouts-recheck.xml
+tests.test_mercado_attribute_preflight_browser::test_user_can_complete_a_missing_attribute_and_recheck[1440],tests/test_mercado_attribute_preflight_browser.py,failure,5.585,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_label(""型号"", exact=True)",timeouts-recheck.xml
+tests.test_mercado_attribute_preflight_browser::test_user_can_complete_a_missing_attribute_and_recheck[390],tests/test_mercado_attribute_preflight_browser.py,failure,5.753,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.fill: Timeout 5000ms exceeded.
+Call log:
+  - waiting for get_by_label(""型号"", exact=True)",timeouts-recheck.xml
+tests.test_mercado_attribute_preflight_routes::test_preview_checks_account_access_before_reading_products,tests/test_mercado_attribute_preflight_routes.py,failure,0.015,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_attribute_preflight_routes.xml
+tests.test_mercado_attribute_preflight_routes::test_preview_persists_server_generated_draft_and_returns_only_report_and_revision,tests/test_mercado_attribute_preflight_routes.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_attribute_preflight_routes.xml
+tests.test_mercado_attribute_preflight_routes::test_preview_rejects_unbounded_work,tests/test_mercado_attribute_preflight_routes.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_attribute_preflight_routes.xml
+tests.test_mercado_attribute_preflight_routes::test_publish_loads_owned_server_draft_and_passes_it_to_worker,tests/test_mercado_attribute_preflight_routes.py,failure,0.006,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'code': 'database_unavailable', 'message': '数据库暂时不可用，请稍后重试', 'status': 'error'}
+assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_attribute_preflight_routes.xml
+tests.test_mercado_communications::test_pre_sale_aggregate_queries_stores_with_thread_pool,tests/test_mercado_communications.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_aggregate_queries_claim_stores_with_thread_pool,tests/test_mercado_communications.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_aggregate_keeps_single_store_failure_isolated,tests/test_mercado_communications.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_view_can_read_but_cannot_reply,tests/test_mercado_communications.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_view_can_read_pre_sale_summary,tests/test_mercado_communications.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_view_can_request_pre_sale_translation,tests/test_mercado_communications.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_pre_sale_workbench_module_has_filters_table_pagination_and_reply,tests/test_mercado_communications.py,failure,0.01,行为/断言差异，待逐项修复或确认预期,"assert '线程完成查询' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_manager_can_send_claim_message,tests/test_mercado_communications.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_claim_browser_requires_exact_store_binding,tests/test_mercado_communications.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"requests.exceptions.ConnectionError: HTTPConnectionPool(host='127.0.0.1', port=54345): Max retries exceeded with url: /browser/list (Caused by NewConnectionError(""HTTPConnection(host='127.0.0.1', port=54345): Failed to establish a new connection: Functional regression blocks business-service networking""))",isolated/test_mercado_communications.xml
+tests.test_mercado_communications::test_customer_service_supports_owner_group_aggregation_and_row_store_replies,tests/test_mercado_communications.py,failure,0.006,行为/断言差异，待逐项修复或确认预期,"assert 'customerServiceAllRows = await customerServiceLoadPostSale(stores, search)' in '<!DOCTYPE html>\n<html lang=""zh-CN"" data-ui-version=""2026-10-04-responsive-ui"">\n<head>\n    <meta charset=""UTF-8"">\n...  <script src=""{{ url_for(\'static\', filename=\'store-link-metrics.js\') }}?v=20261012""></script>\n</body>\n</html>\n'",isolated/test_mercado_communications.xml
+tests.test_mercado_infraction_dashboard::test_independent_dashboard_page_and_data_api,tests/test_mercado_infraction_dashboard.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_infraction_dashboard.xml
+tests.test_mercado_infraction_dashboard::test_dashboard_sync_endpoint_starts_background_job,tests/test_mercado_infraction_dashboard.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 202
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_mercado_infraction_dashboard.xml
+tests.test_mercado_infraction_dashboard::test_pppi_refresh_requests_authoritative_browser_snapshot,tests/test_mercado_infraction_dashboard.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 202
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_mercado_infraction_dashboard.xml
+tests.test_mercado_infraction_dashboard::test_overview_auto_sync_switch_is_persisted_through_db_api,tests/test_mercado_infraction_dashboard.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_mercado_infraction_dashboard.xml
+tests.test_mercado_infraction_dashboard::test_ip_rights_export_keeps_filters_and_exports_all_pages,tests/test_mercado_infraction_dashboard.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_mercado_infraction_dashboard.xml
+tests.test_mercado_infraction_dashboard::test_infraction_export_keeps_group_filter_and_store_drilldown,tests/test_mercado_infraction_dashboard.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_mercado_infraction_dashboard.xml
+tests.test_mercado_infringement_browser::test_both_lists_render_clickable_risk_and_single_item_detection[collection],tests/test_mercado_infringement_browser.py,failure,1.478,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 14 == 15
+ +  where 14 = count()
+ +    where count = <Locator frame=<Frame name= url='http://console.test/'> selector='#mercado-list-head th'>.count
+ +      where <Locator frame=<Frame name= url='http://console.test/'> selector='#mercado-list-head th'> = locator('#mercado-list-head th')
+ +        where locator = <Page url='http://console.test/'>.locator",browser-files/test_mercado_infringement_browser.xml
+tests.test_mercado_infringement_routes::test_public_start_detail_and_task_ownership,tests/test_mercado_infringement_routes.py,failure,0.035,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_mercado_infringement_routes.xml
+tests.test_mercado_infringement_routes::test_review_requires_evidence_scope_and_uses_authenticated_actor,tests/test_mercado_infringement_routes.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = post('/api/mercado/infringement/items/products/1/review', json={'decision': 'released', 'reason': 'yes'})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",isolated/test_mercado_infringement_routes.xml
+tests.test_mercado_official_news::test_news_and_store_reminders_have_separate_routes_and_permissions,tests/test_mercado_official_news.py,failure,0.009,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_mercado_official_news.xml
+tests.test_mercado_official_news::test_reminders_panel_is_inside_reputation_page,tests/test_mercado_official_news.py,failure,0.138,行为/断言差异，待逐项修复或确认预期,"assert None
+ +  where None = select_one('#tab-reputation #reputation-mercado-notices')
+ +    where select_one = <!DOCTYPE html>\n\n<html data-ui-version=""2026-10-04-responsive-ui"" lang=""zh-CN"">\n<head>\n<meta charset=""utf-8""/>\n<meta c...</script>\n<script src=""{{ url_for('static', filename='store-link-metrics.js') }}?v=20261012""></script>\n</body>\n</html>\n.select_one",isolated/test_mercado_official_news.xml
+tests.test_mercado_product_developers::test_public_directory_uses_current_users_product_scope[None-expected0],tests/test_mercado_product_developers.py,failure,0.166,行为/断言差异，待逐项修复或确认预期,AssertionError: Expected 'mock' to be called once. Called 0 times.,isolated/test_mercado_product_developers.xml
+tests.test_mercado_product_developers::test_public_directory_uses_current_users_product_scope[tokens1-expected1],tests/test_mercado_product_developers.py,failure,0.163,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: mock(token_ids=[])
+Actual: mock()",isolated/test_mercado_product_developers.xml
+tests.test_mercado_product_developers::test_public_directory_uses_current_users_product_scope[tokens2-expected2],tests/test_mercado_product_developers.py,failure,0.153,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: mock(token_ids=[7, 9])
+Actual: mock()",isolated/test_mercado_product_developers.xml
+tests.test_mercado_product_developers::test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[True-?organization_key=wuhan-zeshun],tests/test_mercado_product_developers.py,failure,0.149,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: mock(token_ids=[7, 9])
+Actual: mock()",isolated/test_mercado_product_developers.xml
+tests.test_mercado_product_developers::test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[False-],tests/test_mercado_product_developers.py,failure,0.149,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: mock(token_ids=[7, 9])
+Actual: mock()",isolated/test_mercado_product_developers.xml
+tests.test_mercado_product_developers::test_selected_company_and_ordinary_user_directory_keep_the_original_product_scope[False-?organization_key=wuhan-zeshun],tests/test_mercado_product_developers.py,failure,0.156,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: mock(token_ids=[7, 9])
+Actual: mock()",isolated/test_mercado_product_developers.xml
+tests.test_model_balance::test_balances_api_only_uses_logged_in_accounts_saved_tokens,tests/test_model_balance.py,failure,0.018,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_model_balance.xml
+tests.test_order_product_detail_routes::test_public_detail_forwards_stages_and_keeps_authorization[-False-False],tests/test_order_product_detail_routes.py,failure,0.012,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_order_product_detail_routes.xml
+tests.test_order_product_detail_routes::test_public_detail_forwards_stages_and_keeps_authorization[&translate=1-True-False],tests/test_order_product_detail_routes.py,failure,0.005,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_order_product_detail_routes.xml
+tests.test_order_product_detail_routes::test_public_detail_forwards_stages_and_keeps_authorization[&translate=0&refresh=1-False-True],tests/test_order_product_detail_routes.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_order_product_detail_routes.xml
+tests.test_order_product_detail_routes::test_display_exchange_rate_returns_dated_snapshot,tests/test_order_product_detail_routes.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_order_product_detail_routes.xml
+tests.test_order_product_detail_routes::test_display_exchange_rate_failure_is_explicit,tests/test_order_product_detail_routes.py,failure,0.005,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 502
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_order_product_detail_routes.xml
+tests.test_order_product_detail_routes::test_fast_detail_stage_is_forwarded,tests/test_order_product_detail_routes.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_order_product_detail_routes.xml
+tests.test_order_warehouse_browser::test_employee_warehouse_binding_required_and_submitted,tests/test_order_warehouse_browser.py,failure,1.344,行为/断言差异，待逐项修复或确认预期,"playwright._impl._errors.Error: Page.wait_for_function: TypeError: Cannot read properties of null (reading 'hidden')
+    at eval (eval at predicate (eval at evaluate (:291:30)), <anonymous>:1:44)
+    at eval (<anonymous>)
+    at predicate (eval at evaluate (:291:30), <anonymous>:3:36)
+    at next (eval at evaluate (:291:30), <anonymous>:25:29)
+    at eval (eval at evaluate (:291:30), <anonymous>:38:9)
+    at UtilityScript.evaluate (<anonymous>:293:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)",browser-files/test_order_warehouse_browser.xml
+tests.test_pdd_orders_browser.DetailBrowserTests::test_launch_and_reuse_dynamic_edge_port,tests/test_pdd_orders_browser.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe,browser-files/test_pdd_orders_browser.xml
+tests.test_pdd_orders_browser.DetailBrowserTests::test_two_orders_and_logistics_export,tests/test_pdd_orders_browser.py,failure,0.134,行为/断言差异，待逐项修复或确认预期,RuntimeError: 找不到 Microsoft Edge，请用 --edge-path 指定 msedge.exe,browser-files/test_pdd_orders_browser.xml
+tests.test_pre_sale_products::test_view_only_user_can_read_product_information,tests/test_pre_sale_products.py,failure,0.013,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_pre_sale_products.xml
+tests.test_product_detail_drawers_browser::test_product_workspaces_share_drawers_and_keep_list_state[1440],tests/test_product_detail_drawers_browser.py,failure,5.27,已独立复现：图片错误处理器空引用,"assert not [""Cannot read properties of null (reading 'parentElement')""]",focused-browser.xml
+tests.test_product_detail_drawers_browser::test_product_workspaces_share_drawers_and_keep_list_state[390],tests/test_product_detail_drawers_browser.py,failure,3.122,已独立复现：图片错误处理器空引用,"assert not [""Cannot read properties of null (reading 'parentElement')""]",focused-browser.xml
+tests.test_product_list_query_routing::test_ordinary_list_loads_once_and_keeps_existing_filters[products],tests/test_product_list_query_routing.py,failure,0.164,行为/断言差异，待逐项修复或确认预期,KeyError: 'token_ids',isolated/test_product_list_query_routing.xml
+tests.test_product_list_query_routing::test_product_single_page_flag_reaches_storage,tests/test_product_list_query_routing.py,failure,0.175,行为/断言差异，待逐项修复或确认预期,KeyError: 'token_ids',isolated/test_product_list_query_routing.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens0-0-expected_ids0-3],tests/test_product_list_scoped_page.py,failure,0.002,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens1-2-expected_ids1-3],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens2-3-expected_ids2-3],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens3-1-expected_ids3-4],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens4-0-expected_ids4-1],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens5-0-expected_ids5-0],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_exact_total_and_page_preserve_scope_and_empty_offsets[tokens6-0-expected_ids6-0],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_additional_filter_keeps_total_and_page_consistent,tests/test_product_list_scoped_page.py,failure,0.002,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens0-0-expected_ids0-True],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens1-2-expected_ids1-False],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens2-3-expected_ids2-False],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens3-1-expected_ids3-True],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens4-0-expected_ids4-False],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens5-0-expected_ids5-False],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[tokens6-0-expected_ids6-False],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_skips_count_and_preserves_permissions[None-0-expected_ids7-True],tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_single_page_with_filter_keeps_scope,tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_product_list_scoped_page::test_matching_keyword_still_loads_authorized_product_page,tests/test_product_list_scoped_page.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: erp_mercadolibre_products.owner_name,isolated/test_product_list_scoped_page.xml
+tests.test_publish_concurrency::test_shared_settings_permissions_and_roundtrip,tests/test_publish_concurrency.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 401 == 403
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code
+ +    where <WrapperTestResponse streamed [401 UNAUTHORIZED]> = get('/api/publish-concurrency')
+ +      where get = <FlaskClient <Flask 'bit.bit_interface'>>.get",isolated/test_publish_concurrency.xml
+tests.test_publish_concurrency::test_all_roles_publish_with_shared_default[super_admin],tests/test_publish_concurrency.py,failure,0.011,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_publish_concurrency.xml
+tests.test_publish_concurrency::test_all_roles_publish_with_shared_default[admin],tests/test_publish_concurrency.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_publish_concurrency.xml
+tests.test_publish_concurrency::test_all_roles_publish_with_shared_default[member],tests/test_publish_concurrency.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_publish_concurrency.xml
+tests.test_publish_concurrency::test_all_roles_publish_with_shared_default[custom],tests/test_publish_concurrency.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,KeyError: 'data',isolated/test_publish_concurrency.xml
+tests.test_purchase_net_proceeds_persistence::test_collection_refresh_updates_capture_without_overwriting_purchase_product,tests/test_purchase_net_proceeds_persistence.py,failure,0.007,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: newer.organization_key,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_persistence::test_zying_recollection_refreshes_source_without_erasing_purchase_target[True],tests/test_purchase_net_proceeds_persistence.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_persistence::test_zying_recollection_refreshes_source_without_erasing_purchase_target[False],tests/test_purchase_net_proceeds_persistence.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_persistence::test_pulled_listing_import_keeps_purchase_value_and_metadata,tests/test_purchase_net_proceeds_persistence.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,sqlite3.OperationalError: no such table: mercado_store_site_settings,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_persistence::test_ai_recollection_and_inflight_worker_keep_purchase_metadata_and_override,tests/test_purchase_net_proceeds_persistence.py,failure,0.003,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: organization_key,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_persistence::test_collection_measurement_edit_keeps_matching_product_purchase_target,tests/test_purchase_net_proceeds_persistence.py,failure,0.001,测试数据库结构落后于当前查询,sqlite3.OperationalError: no such column: c.organization_key,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_persistence::test_readding_collection_capture_keeps_product_purchase_and_refreshes_other_source_data,tests/test_purchase_net_proceeds_persistence.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,sqlite3.OperationalError: table erp_mercadolibre_products has no column named organization_key,isolated/test_purchase_net_proceeds_persistence.xml
+tests.test_purchase_net_proceeds_routes::test_purchase_ratio_internal_route_forwards_to_transaction,tests/test_purchase_net_proceeds_routes.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: mock(['ORDER-1'], allowed_token_ids=[11], operator_id=8, operator_name='采购员', purchase_cost='70', purchase_net_proceeds_ratio=200)
+Actual: mock(['ORDER-1'], allowed_token_ids=[11], allowed_warehouse=None, operator_id=8, operator_name='采购员', purchase_cost='70', purchase_net_proceeds_ratio=200)",isolated/test_purchase_net_proceeds_routes.xml
+tests.test_purchase_tracking_sync::test_plugin_direct_start_and_result_routes,tests/test_purchase_tracking_sync.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '当前账号没有执行该操作的权限', 'required_permissions': ['order_analysis.execute'], 'status': 'error'}
+assert 403 == 202
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_purchase_tracking_sync.xml
+tests.test_reputation_browser_sync::test_agent_browser_sync_does_not_enqueue_a_job,tests/test_reputation_browser_sync.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': '只有企业管理员可以使用 Agent', 'required_role': 'enterprise_admin', 'status': 'error'}
+assert 403 == 410
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",browser-files/test_reputation_browser_sync.xml
+tests.test_reputation_browser_sync::test_old_browser_job_completion_cannot_overwrite_api_data,tests/test_reputation_browser_sync.py,failure,0.006,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: {'message': 'Agent 凭证无效', 'status': 'error'}
+assert 401 == 200
+ +  where 401 = <WrapperTestResponse streamed [401 UNAUTHORIZED]>.status_code",browser-files/test_reputation_browser_sync.xml
+tests.test_shipment_compensation::test_saved_records_recompute_stale_freight_and_use_same_filter_for_count_and_rows,tests/test_shipment_compensation.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"assert False
+ +  where False = <built-in method endswith of str object at 0x13edd1600>((""`wdr_source_type` = %s AND COALESCE((SELECT COALESCE((SELECT SUM(adjustment.amount) FROM JSON_TABLE(\n        CASE WH...d_json, '$.shipment_id'))\n        AND costs.token_id = zying_weight_dimensions_records.wdr_store_token_id), 0) <= %s "" + 'ORDER BY `wdr_freight_changed_at` DESC, `id` DESC LIMIT %s OFFSET %s'))
+ +    where <built-in method endswith of str object at 0x13edd1600> = ""SELECT `order_number`, `record_json`, `execution_logs_json` , (SELECT costs.payload_json FROM mercado_shipment_costs ... ORDER BY COALESCE(NULLIF(TRIM(REPLACE(`order_time`, 'T', ' ')), ''), '0000-00-00') DESC, `id` DESC LIMIT %s OFFSET %s"".endswith",isolated/test_shipment_compensation.xml
+tests.test_shop_status_access::test_execution_agent_list_does_not_leak_shop_status,tests/test_shop_status_access.py,failure,0.001,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",isolated/test_shop_status_access.xml
+tests.test_store_link_audit::test_history_endpoint_requires_platform_admin,tests/test_store_link_audit.py,failure,0.014,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = get('/api/store-links/operation-logs')
+ +      where get = <FlaskClient <Flask 'bit.bit_interface'>>.get",isolated/test_store_link_audit.xml
+tests.test_sync_visibility::test_workers_identify_targets_active_stores_and_failed_results[bit_store_link_sync-run_store_link_sync],tests/test_sync_visibility.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"pymysql.err.OperationalError: (2003, ""Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)"")",isolated/test_sync_visibility.xml
+tests.test_weight_dimensions_browser_recovery::test_missing_login_retains_recovery_page_and_releases_lock[False],tests/test_weight_dimensions_browser_recovery.py,failure,0.005,行为/断言差异，待逐项修复或确认预期,"AssertionError: expected call not found.
+Expected: goto('https://meli.zying.net/#/login', wait_until='domcontentloaded')
+Actual: goto('https://meli.zying.net/#/login', wait_until='commit', timeout=10000)",browser-files/test_weight_dimensions_browser_recovery.xml
+tests.test_weight_dimensions_stop::test_stop_route_dispatches_owned_agent_cancellation,tests/test_weight_dimensions_stop.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,AttributeError: 'tuple' object has no attribute 'get_json',isolated/test_weight_dimensions_stop.xml
+tests.test_workbench_profile::test_profile_load_update_and_scope_are_account_bound,tests/test_workbench_profile.py,failure,0.088,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert 'no-store, no...st-revalidate' == 'no-store'
+  
+  - no-store
+  + no-store, no-cache, must-revalidate",isolated/test_workbench_profile.xml
+tests.test_workbench_runtime_interface::test_database_health_requires_shared_token_for_remote_clients,tests/test_workbench_runtime_interface.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'connection_...le': 'server'} == {'role': 'ser...cal': 3, ...}}
+  
+  Omitting 3 identical items, use -vv to show
+  Left contains 1 more item:
+  {'database_probe': {'checked_at': '2026-10-12T08:40:47.847544+00:00',
+                      'detail': '检测失败：连接或查询未成功',
+                      'name': '业务数据库',
+                      'status': 'error'}}
+  Use -v to get more diff",isolated/test_workbench_runtime_interface.xml
+tests.test_workbench_runtime_interface::test_public_workbench_issues_short_lived_local_executor_token,tests/test_workbench_runtime_interface.py,failure,0.006,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_workbench_runtime_interface.xml
+tests.test_workbench_runtime_interface::test_local_executor_bridge_only_accepts_loopback_client_requests,tests/test_workbench_runtime_interface.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert 308 == 403
+ +  where 308 = <WrapperTestResponse streamed [308 PERMANENT REDIRECT]>.status_code",isolated/test_workbench_runtime_interface.xml
+tests.test_workbench_runtime_interface::test_server_mode_starts_reputation_and_order_sync_schedulers,tests/test_workbench_runtime_interface.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"pymysql.err.OperationalError: (2003, ""Can't connect to MySQL server on '127.0.0.1' (Functional regression blocks business-service networking)"")",isolated/test_workbench_runtime_interface.xml
+tests.test_yandex_unified_order_routes::test_list_negative_store_is_scoped_without_leaking_other_stores,tests/test_yandex_unified_order_routes.py,failure,0.014,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_yandex_unified_order_routes.xml
+tests.test_yandex_unified_order_routes::test_unauthorized_yandex_sync_does_not_start,tests/test_yandex_unified_order_routes.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_yandex_unified_order_routes.xml
+tests.test_yandex_unified_order_routes::test_yandex_sync_returns_durable_progress,tests/test_yandex_unified_order_routes.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 202
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_yandex_unified_order_routes.xml
+tests.test_yandex_unified_order_routes::test_yandex_cannot_be_sent_to_mercado_label_api,tests/test_yandex_unified_order_routes.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 400
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_yandex_unified_order_routes.xml
+tests.test_yandex_unified_order_routes::test_other_organizations_cannot_see_yandex_logs,tests/test_yandex_unified_order_routes.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_yandex_unified_order_routes.xml
+tests.test_yandex_unified_orders_browser::test_yandex_is_in_default_list_and_platform_filter_preserves_negative_store[1440],tests/test_yandex_unified_orders_browser.py,failure,6.376,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator("".order-origin-button[data-origin=\""yandex\""]"")
+    - locator resolved to <button type=""button"" data-origin=""yandex"" class=""order-origin-button"" onclick=""setOrderOrigin('yandex')"">…</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+    - waiting for element to be visible, enabled and stable",browser-files/test_yandex_unified_orders_browser.xml
+tests.test_yandex_unified_orders_browser::test_yandex_is_in_default_list_and_platform_filter_preserves_negative_store[390],tests/test_yandex_unified_orders_browser.py,failure,5.79,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator("".order-origin-button[data-origin=\""yandex\""]"")
+    - locator resolved to <button type=""button"" data-origin=""yandex"" class=""order-origin-button"" onclick=""setOrderOrigin('yandex')"">…</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+    - waiting for element to be visible, enabled and stable",browser-files/test_yandex_unified_orders_browser.xml
+tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests::test_workbench_contains_yandex_tab,tests/test_yandex_workbench_integration.py,failure,0.01,行为/断言差异，待逐项修复或确认预期,AssertionError: 503 != 200,isolated/test_yandex_workbench_integration.xml
+tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests::test_yandex_proxy_forwards_to_local_service,tests/test_yandex_workbench_integration.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,AssertionError: 503 != 200,isolated/test_yandex_workbench_integration.xml
+tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests::test_yandex_proxy_rewrites_assets_for_an_existing_process,tests/test_yandex_workbench_integration.py,failure,0.003,行为/断言差异，待逐项修复或确认预期,"AssertionError: 'href=""/yandex-console/static/styles.css""' not found in '{""code"":""database_unavailable"",""message"":""\\u6570\\u636e\\u5e93\\u6682\\u65f6\\u4e0d\\u53ef\\u7528\\uff0c\\u8bf7\\u7a0d\\u540e\\u91cd\\u8bd5"",""status"":""error""}\n'",isolated/test_yandex_workbench_integration.xml
+tests.test_yandex_workbench_integration.YandexWorkbenchIntegrationTests::test_yandex_start_returns_embedded_url,tests/test_yandex_workbench_integration.py,failure,0.002,行为/断言差异，待逐项修复或确认预期,AssertionError: 503 != 200,isolated/test_yandex_workbench_integration.xml
+tests.test_zeshun_browser_extension::test_1688_search_results_expose_per_card_collection_buttons,tests/test_zeshun_browser_extension.py,failure,0.015,行为/断言差异，待逐项修复或确认预期,"assert 'document.querySelectorAll("".search-offer-wrapper"")' in '""use strict"";\n\n(function () {\n  // A tab can keep the previous isolated-world content script after the\n  // exten...tener(\'focus\', preferencesFocusListener);\n    };\n    refreshUi();\n    mountCollectionPreferences();\n  }\n})();\n'",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_weight_price_pause_email_waits_ten_minutes_and_is_one_shot,tests/test_zeshun_browser_extension.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert 'AI_WEIGHT_PRICE_PAUSE_NOTICE_MS = 10 * 60 * 1000' in '""use strict"";\n\nimportScripts(""zying-page.js"");\nimportScripts(""zying-order-page.js"");\nimportScripts(""zying-order-r...ed),\n    status: Number(error.status) || 0,\n    error: error.message || String(error)\n  }));\n  return true;\n});\n'",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_integrated_ai_weight_price_page_points_launch_to_extension,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_integrated_ai_weight_price_is_read_only_from_other_terminals,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_list_card_collection_automatically_collects_eligible_products,tests/test_zeshun_browser_extension.py,failure,0.001,行为/断言差异，待逐项修复或确认预期,"assert 'type === ""READ_PRODUCT_LIST"" || type === ""EXTRACT_BATCH_PRODUCT""' in '""use strict"";\n\n// Runs in the extension service worker, independently of the popup\'s lifetime.\nconst PRODUCT_BATC...wait Promise.all([...run.tabs].map(id => closeProductBatchTab(run, id)));\n  }\n  return getProductBatchStatus();\n}\n'",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_login_returns_signed_short_lived_session,tests/test_zeshun_browser_extension.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_account_integration_settings_route_never_returns_api_keys,tests/test_zeshun_browser_extension.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_collect_requires_login_and_writes_one_quick_item,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_collect_routes_1688_to_ai_original_products,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 201
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_ai_original_source_image_proxy_allows_only_1688_cdn,tests/test_zeshun_browser_extension.py,failure,0.004,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_ai_original_image_proxy_canonicalizes_1688_resize_url,tests/test_zeshun_browser_extension.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_starts_zying_collection_from_current_browser_credential,tests/test_zeshun_browser_extension.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_starts_zying_infringement_with_fixed_title_batches,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_zying_options_uses_developers_from_current_page,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_zying_options_falls_back_to_known_developers,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_browser_extension_starts_ai_weight_price_on_local_workstation,tests/test_zeshun_browser_extension.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_weight_price_extension_login_and_resume_routes,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code
+ +    where <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]> = post(('/api/browser-extension/ai-weight-price/client/' + 'login/open'), json={}, headers={'Authorization': 'Bearer eyJpZCI6NywidXNlcm5hbWUiOiJjb2xsZWN0b3IiLCJhY2Nlc3NfdmVyc2lvbiI6MH0.asyewg.YEWBr08K4pJXgkkU7qRqFcI6R7w'})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_zying_options_fresh_developers_override_cached_response,tests/test_zeshun_browser_extension.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_browser_extension::test_collection_ai_endpoint_requires_execute_and_queues_for_current_actor,tests/test_zeshun_browser_extension.py,failure,0.006,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 403 == 200
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code",browser-files/test_zeshun_browser_extension.xml
+tests.test_zeshun_order_analysis::test_freight_endpoint_passes_filters,tests/test_zeshun_order_analysis.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zeshun_order_analysis.xml
+tests.test_zeshun_popup_browser::test_start_and_busy_controls,tests/test_zeshun_popup_browser.py,error,5.555,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+    - waiting for element to be visible, enabled and stable""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_yandex_collection_starts_and_reopens_results,tests/test_zeshun_popup_browser.py,error,5.124,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_resume_requires_acknowledgement_and_keeps_range,tests/test_zeshun_popup_browser.py,error,5.172,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_start_hint_explains_login_permission_and_cursor,tests/test_zeshun_popup_browser.py,error,5.226,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_weight_price_can_run_in_test_mode_when_erp_writeback_is_disabled,tests/test_zeshun_popup_browser.py,error,5.153,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_supplier_login_keeps_state_without_reloading_status,tests/test_zeshun_popup_browser.py,error,5.134,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_weight_price_shows_current_category_and_execution_terminal,tests/test_zeshun_popup_browser.py,error,5.127,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+    - waiting for element to be visible, enabled and stable""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_categories_use_names_and_keep_ids_in_values,tests/test_zeshun_popup_browser.py,error,5.331,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_weight_price_categories_use_zying_fields,tests/test_zeshun_popup_browser.py,error,5.167,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_weight_price_can_select_product_developer,tests/test_zeshun_popup_browser.py,error,5.133,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_page_extractor_handles_custom_fields_react_labels_and_empty_inner_options,tests/test_zeshun_popup_browser.py,error,5.167,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_page_extractor_reads_developers_from_loaded_zying_bridge,tests/test_zeshun_popup_browser.py,error,5.173,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_zying_modes_reuse_logged_in_tab_and_forward_page_developers,tests/test_zeshun_popup_browser.py,error,5.146,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_auth_state_does_not_wait_for_purchase_network,tests/test_zeshun_popup_browser.py,failure,0.144,行为/断言差异，待逐项修复或确认预期,"playwright._impl._errors.Error: Page.evaluate: TypeError: chrome.storage[area].set is not a function
+    at /private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:113:54
+    at new Promise (<anonymous>)
+    at storageSet (/private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:113:10)
+    at migrateConsoleUrlDefault (/private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:149:9)
+    at settings (/private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:131:18)
+    at async state (/private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:1882:18)
+    at async <anonymous>:317:30",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_yandex_background_uses_bridge_and_opens_the_matching_run,tests/test_zeshun_popup_browser.py,failure,0.423,行为/断言差异，待逐项修复或确认预期,"playwright._impl._errors.Error: Page.evaluate: Error: 仅超级管理员可以使用 Yandex 采集
+    at requireYandexAdmin (/private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:655:53)
+    at async startYandexSearch (/private/tmp/mercado-full-audit-20261012/browser_extension/zeshun_collector/background.js:659:3)
+    at async eval (eval at evaluate (:291:30), <anonymous>:13:23)
+    at async <anonymous>:317:30",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_product_batch_inputs_search_and_start,tests/test_zeshun_popup_browser.py,failure,0.45,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'type': 'STA...': None, ...}} == {'type': 'STA...s': 1.5, ...}}
+  
+  Omitting 2 identical items, use -vv to show
+  Differing items:
+  {'params': {'price_mode': 'original', 'max_items': 17, 'success_rest_seconds': 1.5, 'management_category_id': None, ...}} != {'params': {'max_items': 17, 'concurrency_mode': 'normal', 'concurrency': 5, 'success_rest_seconds': 1.5, ...}}
+  Use -v to get more diff",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_batch_collection_reads_zying_511_closed_shadow_root,tests/test_zeshun_popup_browser.py,failure,0.239,行为/断言差异，待逐项修复或确认预期,"AssertionError: {'ok': False, 'error': ""Cannot read properties of undefined (reading 'listingId')"", 'retryable': None, 'status': None, ...}
+assert False is True",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_real_chromium_extension_api_reads_closed_shadow_root,tests/test_zeshun_popup_browser.py,failure,1.978,行为/断言差异，待逐项修复或确认预期,"AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}
+assert False is True",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_real_extension_decodes_zying_protected_svg_metrics_across_isolated_worlds,tests/test_zeshun_popup_browser.py,failure,1.449,行为/断言差异，待逐项修复或确认预期,"AssertionError: {'ok': False, 'error': '请先登录泽顺控制台账号', 'retryable': False, 'status': 401, ...}
+assert False is True",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_zying_collection_opens_web_login_and_validates_cursor_limit,tests/test_zeshun_popup_browser.py,error,5.147,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_background_open_zying_login_navigates_existing_tab_to_login_route,tests/test_zeshun_popup_browser.py,failure,0.125,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [7, {'active': True}] == [7, {'url': '...ctive': True}]
+  
+  At index 1 diff: {'active': True} != {'url': 'https://meli.zying.net/#/login', 'active': True}
+  Use -v to get more diff",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_ai_weight_price_open_login_returns_before_slow_status_request,tests/test_zeshun_popup_browser.py,failure,0.35,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert {'timeout': True} == {'ok': True, ...isting': True}
+  
+  Left contains 1 more item:
+  {'timeout': True}
+  Right contains 3 more items:
+  {'existing': True, 'ok': True, 'tab_id': 7}
+  Use -v to get more diff",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_zying_infringement_starts_with_product_cursor_and_pending_only_copy,tests/test_zeshun_popup_browser.py,error,5.172,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+    - waiting for element to be visible, enabled and stable""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_zying_developers_refresh_live_selector_without_webpack,tests/test_zeshun_popup_browser.py,error,5.319,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_zying_product_collection_forwards_selected_category_and_developer,tests/test_zeshun_popup_browser.py,error,5.174,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    10 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_zying_product_tab_preferred_over_active_login,tests/test_zeshun_popup_browser.py,error,5.207,旧插件入口夹具无法初始化,"failed on setup with ""playwright._impl._errors.TimeoutError: Locator.click: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""#weight-price-mode"")
+    - locator resolved to <button hidden="""" type=""button"" class=""mode-tab"" id=""weight-price-mode"">核重核价</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    9 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 500ms
+    - waiting for element to be visible, enabled and stable""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_shared_zying_read_waits_for_categories_before_developers,tests/test_zeshun_popup_browser.py,failure,0.645,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == [{'id': '18', 'name': '开发甲'}]
+  
+  Right contains one more item: {'id': '18', 'name': '开发甲'}
+  Use -v to get more diff",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_1688_list_does_not_restore_known_wrong_stale_metrics,tests/test_zeshun_popup_browser.py,failure,0.203,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert ['8 g', '长：5 ... 高：7 cm', '—'] == ['—', '—', '—']
+  
+  At index 0 diff: '8 g' != '—'
+  Use -v to get more diff",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_1688_variant_detail_displays_actual_weight_and_package,tests/test_zeshun_popup_browser.py,failure,0.155,行为/断言差异，待逐项修复或确认预期,"assert '10 × 8 × 4 cm' in '<div class=""p1688-variant-wrap""><table><thead><tr><th>变体</th><th>SKU（选填）</th><th>库存</th><th>采购价</th><th>重量</th><th>包装... 宽：8 cm · 高：4 cm</td><td>—</td><td>—</td><td><div class=""p1688-variant-images"">—</div></td></tr></tbody></table></div>'",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_popup_browser::test_1688_list_redirect_cannot_submit_another_product,tests/test_zeshun_popup_browser.py,failure,0.184,行为/断言差异，待逐项修复或确认预期,"assert '跳转到了其他商品' in ""Cannot read properties of undefined (reading 'local')""",browser-files/test_zeshun_popup_browser.xml
+tests.test_zeshun_runtime_recovery_browser::test_real_extension_reload_reinjects_and_refreshes_old_page,tests/test_zeshun_runtime_recovery_browser.py,failure,13.485,交互等待超时，需核对界面及夹具,"playwright._impl._errors.TimeoutError: Locator.evaluate: Timeout 5000ms exceeded.
+Call log:
+  - waiting for locator(""extensions-toolbar #devMode"")",timeouts-recheck.xml
+tests.test_zying_collection_item_limit::test_extension_package_contains_current_count_limit_sources,tests/test_zying_collection_item_limit.py,failure,0.004,行为/断言差异，待逐项修复或确认预期,FileNotFoundError: 泽顺插件缺少文件：icons/icon16.png,isolated/test_zying_collection_item_limit.xml
+tests.test_zying_critical_capture::test_plugin_start_uses_authenticated_salesperson,tests/test_zying_critical_capture.py,failure,0.008,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_critical_capture.xml
+tests.test_zying_extension_options_fast::test_web_selector_refresh_preserves_page_developer_sync,tests/test_zying_extension_options_fast.py,failure,0.009,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_extension_options_fast::test_page_only_refresh_uses_history_without_api_or_redundant_sync,tests/test_zying_extension_options_fast.py,failure,0.003,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_extension_options_fast::test_page_only_refresh_uses_cached_directory_without_history,tests/test_zying_extension_options_fast.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_extension_options_fast::test_history_failure_keeps_current_categories_available,tests/test_zying_extension_options_fast.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_extension_options_fast::test_page_only_cache_does_not_suppress_legacy_directory_lookup,tests/test_zying_extension_options_fast.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_extension_options_fast::test_web_options_still_require_extension_login_and_view_permission,tests/test_zying_extension_options_fast.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 403
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_extension_options_fast::test_worker_start_seeds_page_developers_before_starting_collection,tests/test_zying_extension_options_fast.py,failure,0.002,权限/订阅/依赖隔离相关，不能直接判为线上故障,"assert 503 == 200
+ +  where 503 = <WrapperTestResponse streamed [503 SERVICE UNAVAILABLE]>.status_code",isolated/test_zying_extension_options_fast.xml
+tests.test_zying_order_sync::test_default_agent_permission_and_filtered_payload,tests/test_zying_order_sync.py,failure,0.005,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 400
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = post('/api/orders/zying-sync/start', json={})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_agent_login_owner_scope_persistence_and_stop_blocks_writes,tests/test_zying_order_sync.py,failure,3.007,行为/断言差异，待逐项修复或确认预期,AssertionError: 后台订单准备完成后没有创建 Agent 任务,browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_agent_stop_allows_new_computer_before_old_agent_acknowledges[False],tests/test_zying_order_sync.py,failure,0.007,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 202
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = post('/api/orders/zying-sync/start', json={'agent_id': 'agent-001'})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_agent_stop_allows_new_computer_before_old_agent_acknowledges[True],tests/test_zying_order_sync.py,failure,0.006,权限/订阅/依赖隔离相关，不能直接判为线上故障,"AssertionError: assert 403 == 202
+ +  where 403 = <WrapperTestResponse streamed [403 FORBIDDEN]>.status_code
+ +    where <WrapperTestResponse streamed [403 FORBIDDEN]> = post('/api/orders/zying-sync/start', json={'agent_id': 'agent-001'})
+ +      where post = <FlaskClient <Flask 'bit.bit_interface'>>.post",browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_agent_timeout_roundtrip_is_skipped_once,tests/test_zying_order_sync.py,failure,3.016,行为/断言差异，待逐项修复或确认预期,AssertionError: 后台订单准备完成后没有创建 Agent 任务,browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_stale_progress_releases_agent_despite_fresh_heartbeat,tests/test_zying_order_sync.py,failure,3.009,行为/断言差异，待逐项修复或确认预期,AssertionError: 后台订单准备完成后没有创建 Agent 任务,browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_compact_agent_response_preserves_server_result_history,tests/test_zying_order_sync.py,failure,3.032,行为/断言差异，待逐项修复或确认预期,AssertionError: 后台订单准备完成后没有创建 Agent 任务,browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync::test_agent_login_required_restores_confirmation_and_preserves_progress,tests/test_zying_order_sync.py,failure,3.01,行为/断言差异，待逐项修复或确认预期,AssertionError: 后台订单准备完成后没有创建 Agent 任务,browser-files/test_zying_order_sync.xml
+tests.test_zying_order_sync_browser::test_non_super_admin_can_choose_computer_but_not_server[operator],tests/test_zying_order_sync_browser.py,failure,0.603,行为/断言差异，待逐项修复或确认预期,"AssertionError: assert [] == ['本机 Agent']
+  
+  Right contains one more item: '本机 Agent'
+  Use -v to get more diff",browser-files/test_zying_order_sync_browser.xml

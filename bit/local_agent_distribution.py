@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import os
 import zipfile
@@ -10,6 +11,36 @@ from pathlib import Path
 
 
 SUPPORTED_AGENT_PLATFORMS = frozenset(("windows", "macos"))
+
+
+def load_agent_client_update(project_root, target_platform):
+    """Serve only a binary matching its published build metadata.
+
+    Read a single immutable snapshot; a build replaced during download cannot
+    mix the advertised digest with another executable. No enrollment secrets or
+    local configuration are included in this endpoint.
+    """
+    from agent_update import architecture, version_tuple, MAX_BINARY_BYTES
+    root = Path(project_root)
+    target = normalize_agent_platform(target_platform)
+    executable = next((path for path in _executable_candidates(root, target) if path.is_file()), None)
+    if executable is None:
+        raise ValueError("服务端尚未发布正式 Agent 程序")
+    try:
+        metadata = json.loads((root / "dist" / f"{target}-agent-build.json").read_text())
+        version = metadata["agent_version"]
+        version_tuple(version)
+        content = executable.read_bytes()
+        digest = hashlib.sha256(content).hexdigest()
+        if not content or len(content) > MAX_BINARY_BYTES or digest != metadata.get("exe_sha256"):
+            raise ValueError("Agent 程序与发布校验信息不一致，请等待管理员完成发布")
+        arch = architecture(metadata.get("architecture") or ("x86_64" if target == "windows" else ""))
+        if arch not in ("x86_64", "arm64"):
+            raise ValueError("Agent 发布信息缺少有效的 CPU 架构")
+    except (OSError, KeyError, TypeError) as exc:
+        raise ValueError("Agent 发布信息不完整，请等待管理员完成发布") from exc
+    return {"version": version, "platform": target, "architecture": arch,
+            "sha256": digest, "size": len(content)}, content
 
 
 def published_agent_version(project_root, platform_name):
@@ -266,6 +297,8 @@ def _build_windows_archive(archive, project_root, executable_path):
             (project_root / "local_agent.py").read_bytes(),
         )
         _writestr(archive, "requirements-agent.txt", "requests>=2.31,<3\n")
+        if (project_root / "agent_update.py").is_file():
+            _writestr(archive, "agent_update.py", (project_root / "agent_update.py").read_bytes())
     _writestr(archive, "start-agent.bat", _windows_start_script(has_executable))
     for action in ("install", "uninstall", "unblock"):
         _writestr(archive, f"{action}-agent.bat", _windows_powershell_launcher(f"{action}-agent.ps1"))
@@ -290,6 +323,8 @@ def _build_macos_archive(archive, project_root, executable_path):
             (project_root / "local_agent.py").read_bytes(),
         )
         _writestr(archive, "requirements-agent.txt", "requests>=2.31,<3\n")
+        if (project_root / "agent_update.py").is_file():
+            _writestr(archive, "agent_update.py", (project_root / "agent_update.py").read_bytes())
     _writestr(archive, "run-agent.sh", _macos_run_script(has_executable), executable=True)
     _writestr(archive, "start-agent.command", _macos_start_script(), executable=True)
     _writestr(archive, "install-agent.command", _macos_install_script(), executable=True)

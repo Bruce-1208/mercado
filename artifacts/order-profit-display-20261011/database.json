@@ -1,0 +1,36 @@
+[
+  {
+    "rows": [
+      {
+        "id": "2000018921884806",
+        "balance_cny": 26.77,
+        "cost": null,
+        "income": 50.46,
+        "profit": 26.77
+      }
+    ],
+    "summary": {
+      "balance_cny": 26.77,
+      "cost": 0,
+      "profit": 26.77,
+      "cost_missing_count": 1.0
+    }
+  },
+  {
+    "rows": [
+      {
+        "id": "2000018921550462",
+        "balance_cny": 2.21,
+        "cost": 23.74,
+        "income": 22.42,
+        "profit": -21.53
+      }
+    ],
+    "summary": {
+      "balance_cny": 2.21,
+      "cost": 23.74,
+      "profit": -21.53,
+      "cost_missing_count": 0
+    }
+  }
+]

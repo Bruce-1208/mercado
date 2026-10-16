@@ -187,7 +187,7 @@ def test_partial_failure_and_user_isolation():
 
 
 @pytest.mark.usefixtures("isolated_legacy_console_user")
-def test_route_scopes_filters_and_status(monkeypatch):
+def test_retired_start_route_rejects_browser_sync(monkeypatch):
     from bit import bit_interface as app_module
     from bit.zying_order_sync import manager
     app_module.app.config.update(TESTING=True, SECRET_KEY="test-secret")
@@ -199,13 +199,10 @@ def test_route_scopes_filters_and_status(monkeypatch):
     captured = []
     monkeypatch.setattr(manager, "start", lambda *args: captured.append(args) or {"running": True})
     result = client.post("/api/orders/zying-sync/start?store_id=7&store_id=99&salesperson=A&salesperson=B&status=待采&page=3", json={"execution_target": "server"})
-    assert result.status_code == 202
-    owner, filters, options, reader, writer = captured[0]
-    assert owner == 71
-    assert filters["store_ids"] == [7]
-    assert filters["salespeople"] == ["A", "B"]
-    assert filters["status"] == "待采"
-    assert client.post("/api/orders/zying-sync/start?store_id=99", json={}).status_code == 400
+    assert result.status_code == 410
+    assert not captured
+    assert client.post("/api/orders/zying-sync/start", json={"execution_target": "agent"}).status_code == 410
+    assert "Excel" in result.json["message"] and "插件" in result.json["message"]
     assert app_module._required_workbench_permissions("/api/orders/zying-sync/start", "POST") == ("order_analysis.execute",)
     assert app_module.app.test_client().post("/api/orders/zying-sync/start").status_code == 401
 
@@ -291,7 +288,7 @@ def test_login_confirmation_gates_writes_and_is_owner_scoped():
 
 
 @pytest.mark.usefixtures("isolated_legacy_console_user")
-def test_start_failure_returns_json_and_edge_is_mandatory(monkeypatch):
+def test_retired_start_never_launches_browser(monkeypatch):
     from bit import bit_interface as app_module
     from bit.zying_order_sync import manager
     app_module.app.config.update(TESTING=True, SECRET_KEY="test-secret")
@@ -301,14 +298,12 @@ def test_start_failure_returns_json_and_edge_is_mandatory(monkeypatch):
     monkeypatch.setattr(app_module, "_authorized_token_ids_for_user", lambda: {7})
     monkeypatch.setattr(app_module, "workbench_user_own_store_only", lambda *args: False)
     def start(*args):
-        assert args[2] == {"browser_type": "edge", "require_login": True}
-        raise RuntimeError("worker failed")
+        pytest.fail("Retired route must not launch a browser")
     monkeypatch.setattr(manager, "start", start)
     response = client.post("/api/orders/zying-sync/start", json={"browser_type": "bitbrowser", "execution_target": "server"})
-    assert response.status_code == 500
+    assert response.status_code == 410
     assert response.is_json
     assert response.json["status"] == "error"
-    assert client.post("/api/orders/zying-sync/confirm-login").status_code == 400
     assert app_module.app.test_client().post("/api/orders/zying-sync/confirm-login").status_code == 401
 
 
@@ -337,7 +332,7 @@ def agent_routes(monkeypatch, tmp_path, isolated_legacy_console_user, subscribed
     app_module.app.config.update(TESTING=True, SECRET_KEY="test-secret")
     client = app_module.app.test_client()
     with client.session_transaction() as session:
-        session["workbench_user"] = {"id": 71, "username": "operator", "role_key": "operator"}
+        session["workbench_user"] = {"id": 71, "username": "operator", "role_key": "enterprise_admin"}
     return app_module, client, store, calls
 
 
@@ -352,28 +347,22 @@ def wait_for_agent_job(store, owner=71):
     raise AssertionError("后台订单准备完成后没有创建 Agent 任务")
 
 
-def test_default_agent_permission_and_filtered_payload(agent_routes):
-    app_module, client, store, calls = agent_routes
-    assert client.post("/api/orders/zying-sync/start", json={"execution_target": "server"}).status_code == 403
-    assert client.post("/api/orders/zying-sync/start", json={}).status_code == 400
-    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "offline-agent"}).status_code == 403
-    response = client.post("/api/orders/zying-sync/start?store_id=7&store_id=99", json={"agent_id": "agent-001"})
-    assert response.status_code == 202
-    assert response.json["data"]["phase"] == "loading"
-    job = wait_for_agent_job(store)
-    assert job["job_type"] == "zying_order_sync"
-    assert job["created_by_id"] == 71
-    assert job["payload"]["rows"] == [{"id": "2000001", "order_number": "2000001", "pack_id": None}]
-    assert not calls
-    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-001"}).status_code == 400
-    assert client.post("/api/orders/zying-sync/stop").json["data"]["phase"] == "stopped"
-    assert store.get_job(job["job_id"])["cancel_requested"]
+def seed_legacy_agent_job(agent_routes, agent_id="agent-001"):
+    """Existing jobs remain readable/stoppable after retiring the start route."""
+    from bit import zying_order_sync as sync
+    app_module, _, store, _ = agent_routes
+    sync.agent_sync.start_preparing(
+        71, agent_id, {"store_ids": [7]}, app_module.db_list_orders, store,
+        required_version=app_module.current_local_agent_bundle,
+        created_by_id=71, created_by_name="operator",
+    )
+    return wait_for_agent_job(store)
 
 
 def test_agent_login_owner_scope_persistence_and_stop_blocks_writes(agent_routes, monkeypatch):
     app_module, client, store, calls = agent_routes
     from bit import zying_order_sync as sync
-    response = client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-001"})
+    seed_legacy_agent_job(agent_routes, 'agent-001')
     job_id = wait_for_agent_job(store)["job_id"]
     store.claim_job("agent-001")
     path = "/api/local-agents/zying-sync/" + job_id
@@ -385,7 +374,7 @@ def test_agent_login_owner_scope_persistence_and_stop_blocks_writes(agent_routes
     row = {"action": "row", "order_id": "2000001", "detail": detail()}
     assert outsider.post(path, headers=headers, json=row).status_code == 400
     with outsider.session_transaction() as session:
-        session["workbench_user"] = {"id": 72, "username": "other"}
+        session["workbench_user"] = {"id": 72, "username": "other", "role_key": "enterprise_admin"}
     assert outsider.post("/api/orders/zying-sync/confirm-login").status_code == 400
     assert outsider.get("/api/orders/zying-sync/status").json["data"]["phase"] == "idle"
     outsider.post("/api/orders/zying-sync/stop")
@@ -421,7 +410,7 @@ def test_agent_login_owner_scope_persistence_and_stop_blocks_writes(agent_routes
 def test_agent_stop_allows_new_computer_before_old_agent_acknowledges(agent_routes, legacy_stop):
     app_module, client, store, calls = agent_routes
     store.heartbeat("agent-002", name="另一台电脑", capabilities=["daily_task"], owner_user_id=71)
-    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-001"}).status_code == 202
+    seed_legacy_agent_job(agent_routes, 'agent-001')
     job_id = wait_for_agent_job(store)["job_id"]
     store.claim_job("agent-001")
     if legacy_stop:
@@ -430,7 +419,7 @@ def test_agent_stop_allows_new_computer_before_old_agent_acknowledges(agent_rout
         assert client.post("/api/orders/zying-sync/stop").json["data"]["running"] is False
     state = client.get("/api/orders/zying-sync/status").json["data"]
     assert state["running"] is False and state["phase"] == "stopped"
-    assert client.post("/api/orders/zying-sync/start", json={"agent_id": "agent-002"}).status_code == 202
+    seed_legacy_agent_job(agent_routes, 'agent-002')
     headers = {"X-Internal-Token": "agent-001"}
     # The old worker may still be alive, but it cannot write or resurrect the job.
     late = client.post(f"/api/local-agents/zying-sync/{job_id}", headers=headers,
@@ -499,7 +488,7 @@ def test_agent_worker_executes_browser_and_reports_rows():
     assert actions[-1]["detail"] == detail()
 
 
-def test_server_option_only_rendered_for_super_admin():
+def test_browser_sync_options_removed_for_all_roles():
     from pathlib import Path
     from jinja2 import Environment
     html = Path("bit/templates/index.html").read_text()
@@ -508,7 +497,8 @@ def test_server_option_only_rendered_for_super_admin():
     template = Environment().from_string(fragment)
     for role in ["operator", "enterprise_admin", "super_admin"]:
         rendered = template.render(current_user={"role_key": role})
-        assert ('value="server"' in rendered) == (role == "super_admin")
+        assert 'value="server"' not in rendered
+        assert 'id="order-zying-agent"' not in rendered
         assert 'id="order-zying-stop"' in rendered
 
 
@@ -625,7 +615,7 @@ def test_stopped_server_cleanup_cannot_unlock_new_job(release_mode):
 def test_agent_timeout_roundtrip_is_skipped_once(agent_routes):
     from bit.zying_order_sync import run_agent_sync
     app_module, client, store, writes = agent_routes
-    client.post('/api/orders/zying-sync/start', json={"agent_id": "agent-001"})
+    seed_legacy_agent_job(agent_routes, 'agent-001')
     job = wait_for_agent_job(store)
     store.claim_job('agent-001')
     @contextmanager
@@ -655,7 +645,7 @@ def test_agent_timeout_roundtrip_is_skipped_once(agent_routes):
 def test_stale_progress_releases_agent_despite_fresh_heartbeat(agent_routes):
     from bit.zying_order_sync import SYNC_PROGRESS_TIMEOUT
     app_module, client, store, writes = agent_routes
-    client.post('/api/orders/zying-sync/start', json={"agent_id": "agent-001"})
+    seed_legacy_agent_job(agent_routes, 'agent-001')
     job = wait_for_agent_job(store)
     store.claim_job('agent-001')
     state = {"phase": "syncing", "total": 1252, "completed": 75,
@@ -672,7 +662,7 @@ def test_stale_progress_releases_agent_despite_fresh_heartbeat(agent_routes):
                       json={"action": "row", "order_id": "2000001", "detail": detail()})
     assert late.json['data']['stop'] is True
     assert not writes
-    assert client.post('/api/orders/zying-sync/start', json={"agent_id": "agent-001"}).status_code == 202
+    seed_legacy_agent_job(agent_routes, 'agent-001')
 
 
 def test_agent_batches_ten_orders_and_stops_on_result_response():
@@ -722,7 +712,7 @@ def test_larger_search_batch_splits_overflow_without_losing_orders():
 
 def test_compact_agent_response_preserves_server_result_history(agent_routes):
     _, client, store, _ = agent_routes
-    client.post('/api/orders/zying-sync/start', json={'agent_id': 'agent-001'})
+    seed_legacy_agent_job(agent_routes, 'agent-001')
     job = wait_for_agent_job(store)
     store.claim_job('agent-001')
     path = '/api/local-agents/zying-sync/' + job['job_id']
@@ -793,7 +783,7 @@ def test_agent_recovers_control_transport_failure_but_does_not_replay_write():
 
 def test_agent_login_required_restores_confirmation_and_preserves_progress(agent_routes):
     _, client, store, _ = agent_routes
-    client.post('/api/orders/zying-sync/start', json={'agent_id': 'agent-001'})
+    seed_legacy_agent_job(agent_routes, 'agent-001')
     job = wait_for_agent_job(store)
     store.claim_job('agent-001')
     path = '/api/local-agents/zying-sync/' + job['job_id']

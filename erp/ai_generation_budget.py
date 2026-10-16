@@ -336,6 +336,11 @@ class BudgetedChat:
             entry["state"] = "unknown"
             # Provider exception text may contain credentials or request data.
             entry["error_type"] = type(exc).__name__
+            from erp.ai_original_products import original_model_account_error, OriginalModelAccountError
+            account_error = original_model_account_error(exc)
+            if account_error:
+                self._save()
+                raise OriginalModelAccountError(account_error) from exc
             message = ("模型调用中断，本次费用待确认；可重新生成继续，历史预留费用已保留。"
                        if not self.enforce_cap else
                        "模型调用未取得可确认用量，已保留本次预算并停止重试；请核对账单后人工处理。")

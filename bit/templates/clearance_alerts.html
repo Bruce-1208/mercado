@@ -9,8 +9,9 @@
 <script defer src="{{ url_for('static', filename='date-filter-display.js') }}?v=20261007"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='clearance-alerts.css') }}?v=20261001-1">
     <script defer src="{{ url_for('static', filename='workbench-ui.js') }}?v=20261007-date-filters"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261012-system">
-    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261012-system">
+    <link rel="stylesheet" href="{{ url_for('static', filename='erp-density.css') }}?v=20261016-module-ui">
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-system.css') }}?v=20261016-module-ui">
+    <script defer src="{{ url_for('static', filename='compact-filters.js') }}?v=20261016-module-ui"></script>
 </head>
 <body class="zs-standalone{{ ' ca-embedded' if embedded else '' }}">
   <main id="clearance-alerts" class="ca-shell" data-can-manage="{{ 'true' if can_manage else 'false' }}">

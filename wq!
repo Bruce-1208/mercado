@@ -1,0 +1,16 @@
+autoload -Uz compinit && compinit
+source "/Users/a11/.openclaw/completions/openclaw.zsh"
+export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
+export LDFLAGS="-L/opt/homebrew/opt/mysql@8.0/lib"
+export CPPFLAGS="-I/opt/homebrew/opt/mysql@8.0/include"
+export DEEPSEEK_API_KEY="sk-3cb874f769c345729375c1bfa11247ae"
+# pnpm
+export PNPM_HOME="/Users/a11/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME/bin:"*) ;;
+  *) export PATH="$PNPM_HOME/bin:$PATH" ;;
+esac
+# pnpm end
+:
+export OPENAI_API_KEY="sk-ws-H.PRXDXEM.OqsS.MEUCIQDVQLAnvDZO28sMQMmbWAMMB-zGmS7M-Q-nHREbEmEGvgIgYb0jps-IorotdpU77DRgNiNBIIRhCMqCHVCtrG6af1s"
+export DASHSCOPE_API_KEY="sk-ws-H.PRXDXEM.OqsS.MEUCIQDVQLAnvDZO28sMQMmbWAMMB-zGmS7M-Q-nHREbEmEGvgIgYb0jps-IorotdpU77DRgNiNBIIRhCMqCHVCtrG6af1s"

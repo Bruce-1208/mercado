@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-10",
+  "scope": "仅 CSS 与模板样式引入，未修改业务 JavaScript 或后端。",
+  "viewports": [
+    1440,
+    1024,
+    390
+  ],
+  "console_checks": 117,
+  "standalone_and_yandex_checks": 78,
+  "document_overflow": 0,
+  "regression": "34 passed + 4 payment interaction cases passed after expanding the existing advanced date filter",
+  "existing_test_failures": "7 failures reproduced with the pre-change shared styles: 3 size-chart selectors/closed sections, 1 reputation data expectation, 3 navigation expectations. Billing legacy test also fills a date inside a closed advanced filter; the same workflow passes when expanded.",
+  "limits": "离线模板与模拟数据检查；未连接生产业务 API，未重启服务。"
+}

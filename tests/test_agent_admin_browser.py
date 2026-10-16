@@ -63,7 +63,7 @@ def test_agent_controls_and_after_sales_launch(console_browser, role):
         assert len(status_calls) == 2
         assert '已打开授权店铺' in page.locator('.claim-browser-status').inner_text()
     else:
-        page.evaluate('loadExecutionAgents(); loadDailyTaskAgents(); loadCustomerServiceAgents(); loadZyingOrderAgents();')
+        page.evaluate('loadExecutionAgents(); loadDailyTaskAgents(); loadCustomerServiceAgents();')
         assert not calls
         assert page.locator('#customer-service-agent').count() == 0
         assert page.locator('#appeal-execution-target option[value="agent"]').count() == 0

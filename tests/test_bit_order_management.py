@@ -46,7 +46,7 @@ def test_workbench_contains_order_management_ui():
     assert b'data-origin="token"' in response.data
     assert "打包单号和子订单号都支持搜索".encode("utf-8") in response.data
     assert "下单时间（北京时间）".encode("utf-8") in response.data
-    assert "预计利润 / 利润率".encode("utf-8") in response.data
+    assert "预计利润率".encode("utf-8") in response.data
     assert "手续费".encode("utf-8") in response.data
     assert "运费".encode("utf-8") in response.data
     assert "结余".encode("utf-8") in response.data

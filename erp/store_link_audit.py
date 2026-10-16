@@ -7,6 +7,7 @@ import contextvars
 import functools
 import inspect
 import json
+import logging
 import os
 from pathlib import Path
 import sqlite3
@@ -41,6 +42,23 @@ def safe(value):
 
 def connect():
     path = Path(os.environ.get("MERCADO_STORE_LINK_AUDIT_PATH") or Path(__file__).resolve().parents[1] / "runtime_logs" / "store_link_operations.sqlite3")
+    # Keep the damaged journal intact for recovery. Once selected, all processes
+    # use the same replacement, including history readers and mirrored events.
+    recovery = path.with_name(path.stem + ".recovery" + path.suffix)
+    if recovery.exists():
+        return _connect_path(recovery)
+    try:
+        return _connect_path(path)
+    except sqlite3.DatabaseError as exc:
+        if getattr(exc, "sqlite_errorcode", 0) & 0xff not in {
+            sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB,
+        }:
+            raise
+        logging.error("Store-link audit database damaged: %s; retaining original and using %s", path, recovery)
+        return _connect_path(recovery)
+
+
+def _connect_path(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path, timeout=30)
     try:

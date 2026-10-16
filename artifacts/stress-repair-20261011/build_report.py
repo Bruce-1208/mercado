@@ -1,0 +1,22 @@
+from pathlib import Path
+import html,json
+p=Path(__file__).parent
+load=lambda name:json.loads((p/name).read_text())
+stress=load('isolated-stress.json');burst=load('burst-and-recovery.json');eq=load('order-equivalence.json');deploy=load('deployment.json')
+rows=[]
+for version,stages in stress['runs'].items():
+ for s in stages:
+  rows.append('<tr>'+''.join(f'<td>{html.escape(str(v))}</td>' for v in [version,s['slots'],s['rps_limit'],s['duration_seconds'],s['requests'],s['failed'],s['actual_rps'],round(s['per_endpoint']['orders']['p95_ms']/1000,3),s['stop']])+'</tr>')
+after=stress['runs']['after'];count=sum(s['requests'] for s in after)+burst['requests'];failed=sum(s['failed'] for s in after)+burst['failed']
+before=load('orders-before.json');updated=load('orders-after.json')
+report=f'''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>压力测试问题修复与验证</title><style>body{{font:16px/1.7 system-ui,sans-serif;background:#f2f5f8;color:#183147;margin:0}}main{{max-width:1100px;margin:auto;padding:32px}}section{{background:white;border-radius:12px;padding:24px;margin:20px 0}}h1{{font-size:28px}}h2{{font-size:20px}}table{{border-collapse:collapse;width:100%;font-size:14px}}td,th{{padding:10px;border-bottom:1px solid #dce5ee;text-align:left}}th{{background:#eef4f8}}.alert{{background:#fff1d6;border-left:5px solid #d49926;padding:16px}}.scroll{{overflow:auto}}code{{background:#eef2f5;padding:2px 5px}}a{{color:#0068a0}}</style><main>
+<h1>压力测试问题修复与验证</h1><p>2026-10-11 · 北京时间 · 对照 report_yali.html</p>
+<section><h2>当前结论</h2><p>订单查询与并发等待路径的代码修复已完成；Web 已重载，登录页返回 200，其余四个后台进程 PID 未变。完成隔离压力复测，共 {count} 次修复后请求，失败 {failed} 次。未执行生产订单增删、磁盘迁移或生产数据库高并发压力测试。</p><p class="alert"><strong>硬件故障仍未解决：</strong>MySQL 外置盘在北京时间 22:45:42、22:55:35 报 Device not configured，导致 MySQL 崩溃，分别在 22:46:15、22:56:07 恢复。第二次与原报告三次 500 完全吻合。用户确认没有主动拔插或休眠。503 故障响应无法修复磁盘掉线；需检查外置存储连接、供电、硬盘盒或设备本身，并在可靠备份和稳定存储具备后进行生产复测。此次没有迁移、修复或删除原数据库。</p></section>
+<section><h2>代码修复</h2><ul><li>运费 SQL 先判断是否有确认的实际运费，再解析 JSON 内发货状态；金额和状态判定规则保留。</li><li>移除全量订单筛选临时表的三个每请求重建索引，保留必要的页表与汇率表连接方式。</li><li>订单查询所需建表检查和旧版迁移仅在每进程、每物理数据库首次成功初始化后缓存，避免每次 GET 重复执行。初始化失败不缓存。</li><li>订单缓存使用按查询键的并发合并；移除哈希碰撞导致的跨筛选/跨用户等待，大对象复制移到全局锁外。原有 10 秒有效期、64 项上限、权限范围和写后失效保留。</li><li>鉴权与六个列表入口遇到明确的数据库连接故障返回 503/database_unavailable；不泄漏底层错误，不清除登录会话，不跳过鉴权。数据库恢复后下一次请求可重新读取。只读请求带 Retry-After，写请求不会被自动重放。</li></ul></section>
+<section><h2>订单实库只读 SQL 抽测</h2><div class="scroll"><table><tr><th>指标</th><th>修改前</th><th>修改后</th></tr><tr><td>完整列表含汇总，50 条</td><td>{before['elapsed_ms']/1000:.3f} 秒</td><td>{updated['elapsed_ms']/1000:.3f} 秒</td></tr><tr><td>可见订单总数</td><td>{before['total']}</td><td>{updated['total']}</td></tr></table></div><p>单次串行 SQL 抽测；仅 SELECT 和连接私有的临时表操作，禁用建表初始化/后台任务。不含线上鉴权、网络、压缩和浏览器耗时，不能直接与原报告端到端 p95 比较。</p></section>
+<section><h2>隔离复测：修改前后同条件比较</h2><p>独立 MySQL 位于内置盘，80,000 条生成的模拟订单；使用实际订单路由/SQL，32 个 HTTP 线程、6 个数据库连接，三页轮换。请求组成是 1/6 订单、5/6 轻量数据库探针，<strong>并非原报告六个生产接口</strong>。没有真实产品大表、后台同步或公网链路。复用原有短缓存；这些结果不能用来承诺生产用户数。</p><div class="scroll"><table><tr><th>版本</th><th>槽位</th><th>RPS上限</th><th>实际秒数</th><th>请求</th><th>失败</th><th>实际RPS</th><th>订单p95秒</th><th>停止原因</th></tr>{''.join(rows)}</table></div><p>槽位为客户端上限，并不代表始终占满。修复后最高档只有少量请求同时等待；另外执行独立 40 请求同时到达的冷缓存测试。</p></section>
+<section><h2>40 请求突增与连接恢复</h2><p>实际观测到客户端同时在途 {burst['actual_peak_client_inflight']}；{burst['requests']} 次订单请求，失败 {burst['failed']}，p95 {burst['p95_ms']/1000:.3f} 秒，最大 {burst['max_ms']/1000:.3f} 秒。三个不同页码，包含相同查询的请求合并。不是 40 个不同复杂查询或长时间稳定并发验收。</p><p>仅终止本测试自有的隔离数据库连接后，连接池重新获取连接成功：{burst['idle_socket_recovery']}。未停止生产 MySQL。</p></section>
+<section><h2>正确性与回归</h2><p>{len(eq)} 组新旧完整查询结果全部一致：分页、成本/利润排序、权限店铺/空权限、仓库、搜索、Yandex、运费差异、业务员、日期和单独汇总。相关集中回归 193 项全部通过；扩展订单测试另有 7 项既存失败，移除本次 SQL/接口修改后同样复现（旧页面文案/脚本断言和模拟数据问题），未修改这些断言。</p><p>Web 重载：{deploy['terminated_web_pid']} → {deploy['after']['5000'][0]}；其余后台进程未变。生产六接口完整重测需等待外置盘掉线问题解决。</p></section>
+<section><h2>证据文件</h2><p><a href="storage-evidence.json">存储故障时间线</a> · <a href="orders-before.json">订单优化前</a> · <a href="orders-after.json">订单优化后</a> · <a href="order-equivalence.json">结果一致性</a> · <a href="isolated-stress.json">隔离阶梯原始结果</a> · <a href="burst-and-recovery.json">突增与恢复结果</a> · <a href="deployment.json">Web 重载验证</a></p></section></main></html>'''
+(p/'verification.html').write_text(report)
+print(json.dumps({'after_requests':count,'failed':failed,'sql_reduction_percent':round((1-updated['elapsed_ms']/before['elapsed_ms'])*100,1),'report':str(p/'verification.html')}))

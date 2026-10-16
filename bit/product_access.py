@@ -67,6 +67,10 @@ def can_view(row, user):
             and (row.get('visibility') != 'private' or is_admin(user) or owns(row, user)))
 
 
+def can_operate(row, user):
+    return can_view(row, user) and (is_admin(user) or owns(row, user))
+
+
 def predicate(table, user=None):
     user = user or actor()
     if not user:

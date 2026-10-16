@@ -2,6 +2,8 @@
 (() => {
     "use strict";
 
+    const pickerAnchors = new WeakMap();
+
     function filterOptions(picker) {
         const query = (picker.querySelector('.zs-picker-search input')?.value || '').trim().toLocaleLowerCase();
         const rows = [...picker.querySelectorAll('.market-multi-option')];
@@ -56,6 +58,7 @@
         const trigger = picker.querySelector('.market-multi-trigger');
         if (!panel || !trigger) return;
         const rect = trigger.getBoundingClientRect();
+        pickerAnchors.set(picker, {left: rect.left, top: rect.top});
         const margin = 12;
         const width = Math.min(Math.max(rect.width, 300), window.innerWidth - margin * 2);
         const below = window.innerHeight - rect.bottom - margin - 6;
@@ -102,7 +105,14 @@
     // Fixed panels must close when their anchor moves, but remain open while scrolling options.
     document.addEventListener('scroll', event => {
         if (event.target instanceof Element && event.target.closest('.market-multi-panel')) return;
-        window.closeMercadoPublishPickers?.();
+        document.querySelectorAll('.market-multi-picker.open').forEach(picker => {
+            const anchor = pickerAnchors.get(picker);
+            const rect = picker.querySelector('.market-multi-trigger')?.getBoundingClientRect();
+            // A queued scroll event from focusing/opening an anchor need not move it.
+            if (anchor && rect && Math.abs(anchor.left - rect.left) < 1 && Math.abs(anchor.top - rect.top) < 1) return;
+            picker.classList.remove('open');
+            picker.querySelector('.market-multi-trigger')?.setAttribute('aria-expanded', 'false');
+        });
     }, true);
     window.addEventListener('resize', () => window.closeMercadoPublishPickers?.());
     window.ZeshunUI = {preparePicker, openPicker};

@@ -78,11 +78,13 @@ def render_appeal_phrase(template, nickname="", order_ids="", appeal_type=""):
 
     nickname = str(nickname or "").strip()
     identifiers = str(order_ids or "").strip()
+    if appeal_type in {"延误", "延误率", "取消率", "投诉"}:
+        text = text.replace("销售单号", "包裹号").replace("订单编号", "包裹号")
     had_order_placeholder = "{order_ids}" in text
     text = text.replace("{nickname}", nickname).replace("{order_ids}", identifiers)
 
     if identifiers and not had_order_placeholder:
-        prefix = f"销售单号：{identifiers}\n" if appeal_type == "投诉" else identifiers
+        prefix = f"包裹号：{identifiers}\n" if appeal_type == "投诉" else identifiers
         text = prefix + text
     return text
 
